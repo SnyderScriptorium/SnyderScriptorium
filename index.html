@@ -13,9 +13,12 @@
     font-size: 1.1rem;
     line-height: 1.6;
     margin: 0;
-    padding: 20px;
-
-.top-left-logo {
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 80px);
+  }
+  .top-left-logo {
     width: 170px;
     position: absolute;
     top: 25px;    /* Pushed down a little bit */
@@ -60,27 +63,35 @@
     font-size: 1.25rem;
     line-height: 1.7;
   }
+  footer {
+    text-align: center;
+    margin-top: 40px;
+    font-size: 0.9rem;
+  }
 </style>
 </head>
 <body>
 
 <img src="logo3.png" alt="Snyder Scriptorium Logo" class="top-left-logo">
 
-<h1>Snyder Scriptorium</h1>
-<h2>K.W. Snyder Writing</h2>
+<div class="main-content">
+  <h1>Snyder Scriptorium</h1>
+  <h2>K.W. Snyder Writing</h2>
 
-<div class="nav-menu">
-  <a href="about.html">About</a>
-  <a href="theblog.html">The Blog</a>
-  <a href="thescriptorium.html">The Scriptorium</a>
-  <a href="merchstore.html">Merch Store</a>
+  <div class="nav-menu">
+    <a href="about.html">About</a>
+    <a href="theblog.html">The Blog</a>
+    <a href="thescriptorium.html">The Scriptorium</a>
+    <a href="merchstore.html">Merch Store</a>
+  </div>
+
+  <div class="content-section">
+    <p>This site is under construction while I build out the bookstore, merch shop, and blog.</p>
+  </div>
 </div>
 
-<div class="content-section">
-  <p>This site is under construction while I build out the bookstore, merch shop, and blog.</p>
-</div>
 <footer>
-  <p>&copy; 2026 Snyder Scriptorium &nbsp;|&nbsp; <a href="admin.html" style="color: #C9A86A; text-decoration: none; opacity: 0.6; font-weight: 500;">Admin</a></p>
+  <p>&copy; 2026 Snyder Scriptorium &nbsp;|&nbsp; <a href="admin.html" style="color: #5C4033; text-decoration: none; font-weight: 600;">Admin</a></p>
 </footer>
 
 </body>
