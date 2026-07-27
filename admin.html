@@ -47,6 +47,16 @@
   button:hover {
     background-color: #4A3525;
   }
+  .secondary-btn {
+    background-color: transparent;
+    color: #5C4033;
+    border: 1px solid #5C4033;
+    margin-left: 10px;
+  }
+  .secondary-btn:hover {
+    background-color: #5C4033;
+    color: white;
+  }
   .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -106,6 +116,10 @@
     location.reload();
   }
 
+  function goToHome() {
+    window.location.href = 'index.html';
+  }
+
   function generatePost() {
     const title = document.getElementById('post-title').value;
     const category = document.getElementById('post-category').value;
@@ -149,14 +163,20 @@
     <h2>Scriptorium Backend Access</h2>
     <p>Please enter your master password to unlock the studio dashboard.</p>
     <input type="password" id="password-input" placeholder="Enter password...">
-    <button type="button" onclick="checkPassword()">Log In</button>
+    <div style="margin-top: 15px;">
+      <button type="button" onclick="checkPassword()">Log In</button>
+      <button type="button" onclick="goToHome()" class="secondary-btn">Return to Home</button>
+    </div>
   </div>
 
   <!-- ADMIN DASHBOARD -->
   <div id="admin-dashboard">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <h2 style="margin: 0;">Welcome Home, Editor</h2>
-      <button type="button" onclick="logoutAdmin()" style="padding: 6px 14px; font-size: 0.9rem;">Log Out</button>
+      <div>
+        <button type="button" onclick="logoutAdmin()" style="padding: 6px 14px; font-size: 0.9rem;">Log Out</button>
+        <button type="button" onclick="goToHome()" class="secondary-btn" style="padding: 6px 14px; font-size: 0.9rem;">Go to Home</button>
+      </div>
     </div>
     
     <!-- Stats Section -->
