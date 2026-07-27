@@ -102,9 +102,8 @@
   }
 
   function logoutAdmin() {
-    document.getElementById('password-input').value = '';
-    document.getElementById('admin-dashboard').style.display = 'none';
-    document.getElementById('login-screen').style.display = 'block';
+    // Reloads the page from scratch to instantly clear the session and lock the door
+    location.reload();
   }
 
   function generatePost() {
@@ -150,14 +149,14 @@
     <h2>Scriptorium Backend Access</h2>
     <p>Please enter your master password to unlock the studio dashboard.</p>
     <input type="password" id="password-input" placeholder="Enter password...">
-    <button onclick="checkPassword()">Log In</button>
+    <button type="button" onclick="checkPassword()">Log In</button>
   </div>
 
   <!-- ADMIN DASHBOARD -->
   <div id="admin-dashboard">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <h2 style="margin: 0;">Welcome Home, Editor</h2>
-      <button onclick="logoutAdmin()" style="padding: 6px 14px; font-size: 0.9rem;">Log Out</button>
+      <button type="button" onclick="logoutAdmin()" style="padding: 6px 14px; font-size: 0.9rem;">Log Out</button>
     </div>
     
     <!-- Stats Section -->
@@ -188,7 +187,7 @@
     <label>Post Content:</label>
     <textarea id="blog-editor"></textarea>
 
-    <button onclick="generatePost()" style="margin-top: 20px;">Generate Post File Code</button>
+    <button type="button" onclick="generatePost()" style="margin-top: 20px;">Generate Post File Code</button>
 
     <h4 style="margin-top: 25px;">Generated Post Code (Copy & Save into your repository):</h4>
     <textarea id="output-code" readonly placeholder="Your generated HTML code will appear here after clicking generate..."></textarea>
