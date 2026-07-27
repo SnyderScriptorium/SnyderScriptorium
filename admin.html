@@ -47,16 +47,6 @@
   button:hover {
     background-color: #4A3525;
   }
-  .secondary-btn {
-    background-color: transparent;
-    color: #5C4033;
-    border: 1px solid #5C4033;
-    margin-left: 10px;
-  }
-  .secondary-btn:hover {
-    background-color: #5C4033;
-    color: white;
-  }
   .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -94,12 +84,10 @@
 <script>
   function checkPassword() {
     const pass = document.getElementById('password-input').value;
-    // SET YOUR SECRET PASSWORD HERE:
     if (pass === 'scriptorium123') {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('admin-dashboard').style.display = 'block';
       
-      // Initialize TinyMCE Editor
       tinymce.init({
         selector: '#blog-editor',
         height: 400,
@@ -112,7 +100,6 @@
   }
 
   function logoutAdmin() {
-    // Reloads the page from scratch to instantly clear the session and lock the door
     location.reload();
   }
 
@@ -125,7 +112,6 @@
     const category = document.getElementById('post-category').value;
     const content = tinymce.get('blog-editor').getContent();
 
-    // Template for the individual blog post file
     const postHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -165,7 +151,7 @@
     <input type="password" id="password-input" placeholder="Enter password...">
     <div style="margin-top: 15px;">
       <button type="button" onclick="checkPassword()">Log In</button>
-      <button type="button" onclick="goToHome()" class="secondary-btn">Return to Home</button>
+      <button type="button" onclick="goToHome()" style="background-color: transparent; color: #5C4033; border: 1px solid #5C4033; margin-left: 10px;">Return to Home</button>
     </div>
   </div>
 
@@ -174,8 +160,8 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <h2 style="margin: 0;">Welcome Home, Editor</h2>
       <div>
-        <button type="button" onclick="logoutAdmin()" style="padding: 6px 14px; font-size: 0.9rem;">Log Out</button>
-        <button type="button" onclick="goToHome()" class="secondary-btn" style="padding: 6px 14px; font-size: 0.9rem;">Go to Home</button>
+        <button type="button" onclick="logoutAdmin()" style="padding: 6px 14px; font-size: 0.9rem; margin-right: 8px;">Log Out</button>
+        <button type="button" onclick="goToHome()" style="background-color: transparent; color: #5C4033; border: 1px solid #5C4033; padding: 6px 14px; font-size: 0.9rem;">Go to Home</button>
       </div>
     </div>
     
