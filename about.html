@@ -17,10 +17,9 @@
     display: flex;
     flex-direction: column;
     min-height: 90vh;
-    position: relative; /* Allows the logo to position relative to the page */
+    position: relative;
   }
   
-  /* Mobile logo styling (centered at the top on phones) */
   .top-left-logo {
     width: 110px;
     height: 110px;
@@ -42,7 +41,7 @@
     font-weight: 300;
     font-size: clamp(2.2rem, 6vw, 3.5rem);
     line-height: 1.2;
-    margin: 0 0 5px 0;
+    margin: 0 0 25px 0;
   }
 
   .nav-menu {
@@ -74,7 +73,6 @@
     font-size: 0.9rem;
   }
 
-  /* Desktop layout: locks the logo to the top-left corner */
   @media (min-width: 800px) {
     body {
       padding: 40px;
@@ -92,14 +90,12 @@
 </head>
 <body>
 
-<!-- Logo is now outside .main-content so it can anchor freely -->
 <a href="index.html">
   <img src="logo3.png" alt="Snyder Scriptorium Logo" class="top-left-logo">
 </a>
 
 <div class="main-content">
   <h1>About</h1>
-
 
   <div class="nav-menu">
     <a href="index.html">The Hearth</a>
