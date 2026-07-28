@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Scriptorium Control Panel</title>
-<!-- Load TinyMCE with your personal free API key -->
-<script src="https://cdn.tiny.cloud/1/zamq0gmyv2nhfwyvw69gh21uw4lyvsve8vb38fjrmeggd5sm/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+<!-- Load TinyMCE via open cdnjs to avoid domain key restrictions -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.2/tinymce.min.js" referrerpolicy="origin"></script>
 <style>
   body {
     background-color: #E8D9B5;
@@ -82,26 +82,39 @@
   }
 </style>
 <script>
+  // Automatically log in on page load if session is active
+  window.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('scriptorium_logged_in') === 'true') {
+      unlockDashboard();
+    }
+  });
+
   function checkPassword() {
     const pass = document.getElementById('password-input').value;
     if (pass === 'scriptorium123') {
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('admin-dashboard').style.display = 'block';
-      
-      tinymce.init({
-        selector: '#blog-editor',
-        height: 400,
-        plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
-        toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help'
-      });
-      
-      updateDraftCount();
+      localStorage.setItem('scriptorium_logged_in', 'true');
+      unlockDashboard();
     } else {
       alert('Incorrect master password.');
     }
   }
 
+  function unlockDashboard() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-dashboard').style.display = 'block';
+    
+    tinymce.init({
+      selector: '#blog-editor',
+      height: 400,
+      plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
+      toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help'
+    });
+    
+    updateDraftCount();
+  }
+
   function logoutAdmin() {
+    localStorage.removeItem('scriptorium_logged_in');
     location.reload();
   }
 
