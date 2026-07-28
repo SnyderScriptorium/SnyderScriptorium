@@ -1,56 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snyder Scriptorium</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
   body {
     background-color: #E8D9B5;
     color: #3A3A3A;
     font-family: "Playfair Display", serif;
     font-size: 1.1rem;
     line-height: 1.6;
-    margin: 0;
-    padding: 20px; /* Reduced from 40px to give more room on mobile edges */
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    min-height: calc(100vh - 40px);
-    box-sizing: border-box;
+    min-height: 100vh;
   }
   
+  .header-container {
+    text-align: center;
+    width: 100%;
+    margin-top: 10px;
+  }
+
   .top-left-logo {
-    width: 120px; /* Scaled down slightly for mobile screens */
-    max-width: 30vw;
+    width: 110px;
+    height: 110px;
+    object-fit: cover;
     border-radius: 50%;
     border: 2px solid #5C4033;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    margin: 0 auto 15px auto; /* Centers the logo nicely at the top on phones */
+    margin: 0 auto 15px auto;
     display: block;
   }
 
   .main-content {
     flex: 1;
-    text-align: center;
   }
 
   h1 {
     color: #2F4F2F;
     font-weight: 300;
-    font-size: clamp(2rem, 8vw, 3.5rem); /* Scales smoothly based on phone width */
+    font-size: clamp(2.2rem, 6vw, 3.5rem);
     line-height: 1.2;
-    margin-top: 10px;
+    margin: 0 0 5px 0;
   }
 
   h2 {
     color: #5C4033;
     font-weight: 300;
-    font-size: clamp(1.1rem, 4vw, 1.8rem);
+    font-size: clamp(1.1rem, 3vw, 1.8rem);
     line-height: 1.3;
-    margin-top: -5px;
+    margin: 0 0 25px 0;
   }
 
   .nav-menu {
-    margin-top: 25px;
+    text-align: center;
+    margin-top: 20px;
     font-size: 1.1rem;
     display: flex;
     justify-content: center;
-    flex-wrap: wrap; /* Automatically wraps links to a new line if the phone screen is too narrow */
-    gap: 15px; /* Replaces rigid side margins with clean, responsive spacing */
+    flex-wrap: wrap;
+    gap: 15px;
   }
 
   .nav-menu a {
@@ -60,29 +78,68 @@
   }
 
   .content-section {
-    margin-top: 30px;
+    text-align: center;
+    margin-top: 35px;
     font-size: 1.15rem;
     line-height: 1.7;
-    padding: 0 15px;
+    padding: 0 10px;
   }
 
   footer {
     text-align: center;
     margin-top: 40px;
     font-size: 0.9rem;
+    padding-bottom: 20px;
   }
 
-  /* Desktop layout tweak: puts the logo back in the top-left corner on larger screens */
-  @media (min-width: 768px) {
+  /* Desktop layout: switches logo back to absolute top-left corner on bigger screens */
+  @media (min-width: 800px) {
     body {
       padding: 40px;
     }
+    .header-container {
+      position: relative;
+      min-height: 120px;
+      margin-top: 0;
+    }
     .top-left-logo {
-      width: 170px;
       position: absolute;
-      top: 25px;
-      left: 25px;
+      top: 0;
+      left: 0;
+      width: 150px;
+      height: 150px;
       margin: 0;
+    }
+    h1 {
+      padding-top: 15px;
     }
   }
 </style>
+</head>
+<body>
+
+<div class="main-content">
+  <div class="header-container">
+    <img src="logo3.png" alt="Snyder Scriptorium Logo" class="top-left-logo">
+    <h1>Snyder Scriptorium</h1>
+    <h2>K.W. Snyder Writing</h2>
+  </div>
+
+  <div class="nav-menu">
+    <a href="about.html">About</a>
+    <a href="theblog.html">The Blog</a>
+    <a href="thescriptorium.html">The Scriptorium</a>
+    <a href="merchstore.html">Merch Store</a>
+  </div>
+
+  <div class="content-section">
+    <p>This site is under construction while I build out the bookstore, merch shop, and blog.</p>
+  </div>
+</div>
+
+<footer>
+  <p>&copy; 2026 Snyder Scriptorium &nbsp;|&nbsp; <a href="admin.html" style="color: #5C4033; text-decoration: none; font-weight: 600;">Admin</a></p>
+</footer>
+
+</body>
+</html>
