@@ -243,7 +243,7 @@
   }
 
   function switchTab(tabId) {
-    const tabs = ['editor-tab', 'drafts-tab', 'manuscript-tab', 'stats-tab'];
+    const tabs = ['editor-tab', 'drafts-tab', 'manuscript-tab', 'stats-tab','about-tab'];
     tabs.forEach(t => {
       document.getElementById(t).style.display = (t === tabId) ? 'block' : 'none';
       const btn = document.getElementById('btn-' + t.replace('-tab', ''));
