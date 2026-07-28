@@ -130,7 +130,7 @@ function unlockDashboard() {
     tinymce.init({
       selector: '#blog-editor',
       height: 400,
-      plugins: 'advlist lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount paste',
+      plugins: 'advlist lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
       toolbar: 'undo redo | formatselect | bold italic backcolor | link | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
       paste_as_text: true,
       smart_paste: false,
@@ -141,6 +141,7 @@ function unlockDashboard() {
     
     updateDraftCount();
   }
+  
   function logoutAdmin() {
     sessionStorage.removeItem('scriptorium_logged_in');
     sessionStorage.removeItem('scriptorium_active_session');
