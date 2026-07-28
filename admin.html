@@ -94,6 +94,8 @@
         plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
         toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help'
       });
+      
+      updateDraftCount();
     } else {
       alert('Incorrect master password.');
     }
@@ -107,10 +109,115 @@
     window.location.href = 'index.html';
   }
 
+  // --- Tab Switching Logic ---
+  function switchTab(tabId) {
+    document.getElementById('editor-tab').style.display = 'none';
+    document.getElementById('drafts-tab').style.display = 'none';
+    document.getElementById('stats-tab').style.display = 'none';
+    
+    document.getElementById('btn-editor').style.backgroundColor = '#E8D9B5';
+    document.getElementById('btn-editor').style.color = '#5C4033';
+    document.getElementById('btn-editor').style.border = '1px solid #5C4033';
+
+    document.getElementById('btn-drafts').style.backgroundColor = '#E8D9B5';
+    document.getElementById('btn-drafts').style.color = '#5C4033';
+    document.getElementById('btn-drafts').style.border = '1px solid #5C4033';
+
+    document.getElementById('btn-stats').style.backgroundColor = '#E8D9B5';
+    document.getElementById('btn-stats').style.color = '#5C4033';
+    document.getElementById('btn-stats').style.border = '1px solid #5C4033';
+    
+    document.getElementById(tabId).style.display = 'block';
+    
+    const activeBtn = document.getElementById('btn-' + tabId.replace('-tab', ''));
+    activeBtn.style.backgroundColor = '#5C4033';
+    activeBtn.style.color = '#ffffff';
+    activeBtn.style.border = 'none';
+
+    if (tabId === 'drafts-tab') {
+      loadDraftsList();
+    }
+  }
+
+  // --- Draft Management Logic ---
+  function saveDraft() {
+    const title = document.getElementById('post-title').value || "Untitled Draft";
+    const category = document.getElementById('post-category').value;
+    const content = tinymce.get('blog-editor').getContent();
+    const date = new Date().toLocaleDateString();
+
+    const draft = { title, category, content, date };
+    
+    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+    drafts.push(draft);
+    localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
+
+    alert('Draft saved successfully!');
+    updateDraftCount();
+  }
+
+  function loadDraftsList() {
+    const container = document.getElementById('drafts-container');
+    const drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+    
+    if (drafts.length === 0) {
+      container.innerHTML = '<p id="no-drafts-msg" style="color: #666;">No drafts saved yet.</p>';
+      return;
+    }
+
+    let html = '';
+    drafts.forEach((draft, index) => {
+      html += `
+        <div style="background: #E8D9B5; padding: 15px; border-radius: 6px; border: 1px solid #5C4033; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="margin: 0 0 5px 0; color: #5C4033;">${draft.title}</h3>
+            <small style="color: #555;">Saved on: ${draft.date} | Category: ${draft.category}</small>
+          </div>
+          <div>
+            <button type="button" onclick="loadDraftToEditor(${index})" style="background-color: #5C4033; margin-right: 5px; padding: 6px 12px; font-size: 0.9rem;">Resume</button>
+            <button type="button" onclick="deleteDraft(${index})" style="background-color: #a94442; padding: 6px 12px; font-size: 0.9rem;">Delete</button>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
+  function loadDraftToEditor(index) {
+    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+    const draft = drafts[index];
+
+    document.getElementById('post-title').value = draft.title;
+    document.getElementById('post-category').value = draft.category;
+    tinymce.get('blog-editor').setContent(draft.content);
+
+    switchTab('editor-tab');
+  }
+
+  function deleteDraft(index) {
+    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+    drafts.splice(index, 1);
+    localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
+    loadDraftsList();
+    updateDraftCount();
+  }
+
+  function updateDraftCount() {
+    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+    const countEl = document.getElementById('draft-count');
+    if (countEl) countEl.innerText = drafts.length;
+  }
+
   function generatePost() {
     const title = document.getElementById('post-title').value;
     const category = document.getElementById('post-category').value;
     const content = tinymce.get('blog-editor').getContent();
+
+    let categoryName = "Journal";
+    if (category === "curations") categoryName = "Book Curations";
+    else if (category === "reviews") categoryName = "Book Reviews";
+    else if (category === "curiosity") categoryName = "Curiosity Cabinet";
+    else if (category === "fiction") categoryName = "K. W. Snyder Writing";
 
     const postHTML = `<!DOCTYPE html>
 <html lang="en">
@@ -128,7 +235,7 @@
 </style>
 </head>
 <body>
-  <a href="${category}.html" class="back-link">&larr; Back to ${category}</a>
+  <a href="${category}.html" class="back-link">&larr; Back to ${categoryName}</a>
   <h1>${title}</h1>
   <div class="date">${new Date().toLocaleDateString()}</div>
   <div class="post-content">
@@ -157,47 +264,72 @@
 
   <!-- ADMIN DASHBOARD -->
   <div id="admin-dashboard">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h2 style="margin: 0;">Welcome Home, Editor</h2>
-      <div>
+    
+    <!-- Tab Navigation Bar -->
+    <div style="display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #5C4033; padding-bottom: 15px; flex-wrap: wrap; align-items: center;">
+      <button type="button" onclick="switchTab('editor-tab')" id="btn-editor" style="background-color: #5C4033; color: #fff; border: none;">Write & Publish</button>
+      <button type="button" onclick="switchTab('drafts-tab')" id="btn-drafts" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Drafts (<span id="draft-count">0</span>)</button>
+      <button type="button" onclick="switchTab('stats-tab')" id="btn-stats" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Analytics</button>
+      
+      <div style="margin-left: auto;">
         <button type="button" onclick="logoutAdmin()" style="padding: 6px 14px; font-size: 0.9rem; margin-right: 8px;">Log Out</button>
         <button type="button" onclick="goToHome()" style="background-color: transparent; color: #5C4033; border: 1px solid #5C4033; padding: 6px 14px; font-size: 0.9rem;">Go to Home</button>
       </div>
     </div>
-    
-    <!-- Stats Section -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <h3>Total Posts Published</h3>
-        <p>12</p>
+
+    <!-- TAB 1: COMPOSE / EDITOR -->
+    <div id="editor-tab" class="admin-tab-content">
+      <h2 style="margin-top: 0;">Compose New Blog Post</h2>
+      
+      <label>Post Title:</label>
+      <input type="text" id="post-title" placeholder="Enter post title...">
+
+      <label>Select Category Page:</label>
+      <select id="post-category">
+        <option value="curations">Book Curations</option>
+        <option value="reviews">Book Reviews</option>
+        <option value="curiosity">Curiosity Cabinet</option>
+        <option value="fiction">K. W. Snyder Writing</option>
+      </select>
+      
+      <label>Post Content:</label>
+      <textarea id="blog-editor"></textarea>
+
+      <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
+        <button type="button" onclick="generatePost()">Generate Post File Code</button>
+        <button type="button" onclick="saveDraft()" style="background-color: #7A6B5D;">Save as Draft</button>
       </div>
-      <div class="stat-card">
-        <h3>Active Categories</h3>
-        <p>3</p>
+
+      <h4 style="margin-top: 25px;">Generated Post Code (Copy & Save into your repository):</h4>
+      <textarea id="output-code" readonly placeholder="Your generated HTML code will appear here after clicking generate..."></textarea>
+    </div>
+
+    <!-- TAB 2: DRAFTS -->
+    <div id="drafts-tab" class="admin-tab-content" style="display: none;">
+      <h2 style="margin-top: 0;">Saved Drafts</h2>
+      <p style="color: #555; font-style: italic;">Unfinished writings stored safely in your browser.</p>
+      <div id="drafts-container" style="display: grid; gap: 15px; margin-top: 20px;">
+        <p id="no-drafts-msg" style="color: #666;">No drafts saved yet.</p>
       </div>
     </div>
 
-    <hr style="border: 0; border-top: 1px solid #5C4033; margin: 30px 0;">
+    <!-- TAB 3: ANALYTICS -->
+    <div id="stats-tab" class="admin-tab-content" style="display: none;">
+      <h2 style="margin-top: 0;">Audience Analytics</h2>
+      <p style="color: #555; font-style: italic;">Track daily, weekly, and monthly readership growth.</p>
+      
+      <div class="stats-grid" style="margin-top: 20px;">
+        <div class="stat-card">
+          <h3>Today's Views</h3>
+          <p>0</p>
+        </div>
+        <div class="stat-card">
+          <h3>This Month</h3>
+          <p>0</p>
+        </div>
+      </div>
+    </div>
 
-    <h3>Compose New Blog Post</h3>
-    <label>Post Title:</label>
-    <input type="text" id="post-title" placeholder="Enter post title...">
-
- <label>Select Category Page:</label>
-    <select id="post-category">
-      <option value="curations">Book Curations</option>
-      <option value="reviews">Book Reviews</option>
-      <option value="curiosity">Curiosity Cabinet</option>
-      <option value="fiction">K. W. Snyder Writing</option>
-    </select>
-    
-    <label>Post Content:</label>
-    <textarea id="blog-editor"></textarea>
-
-    <button type="button" onclick="generatePost()" style="margin-top: 20px;">Generate Post File Code</button>
-
-    <h4 style="margin-top: 25px;">Generated Post Code (Copy & Save into your repository):</h4>
-    <textarea id="output-code" readonly placeholder="Your generated HTML code will appear here after clicking generate..."></textarea>
   </div>
 
 </body>
