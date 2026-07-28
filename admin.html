@@ -122,6 +122,7 @@
       btn.innerText = 'Show';
     }
   }
+
 function unlockDashboard() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-dashboard').style.display = 'block';
@@ -133,7 +134,9 @@ function unlockDashboard() {
       toolbar: 'undo redo | formatselect | bold italic backcolor | link | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
       paste_as_text: true,
       smart_paste: false,
-      browser_spellcheck: true
+      browser_spellcheck: true,
+      url_converter: false,
+      link_assume_external_scheme: false
     });
     
     updateDraftCount();
