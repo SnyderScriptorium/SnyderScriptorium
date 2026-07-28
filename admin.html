@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Scriptorium Control Panel</title>
-<!-- Load TinyMCE via open cdnjs to avoid domain key restrictions -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.2/tinymce.min.js" referrerpolicy="origin"></script>
 <style>
   body {
     background-color: #E8D9B5;
@@ -15,7 +13,7 @@
     padding: 40px;
   }
   .login-container, #admin-dashboard {
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
     background: #FDFBF7;
     padding: 30px;
@@ -23,7 +21,7 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   }
   #admin-dashboard {
-    display: none; /* Hidden until password is correct */
+    display: none;
   }
   input[type="password"], input[type="text"], select {
     width: 100%;
@@ -47,6 +45,46 @@
   }
   button:hover {
     background-color: #4A3525;
+  }
+  /* Custom Editor Toolbar Styling */
+  .custom-toolbar {
+    display: flex;
+    gap: 5px;
+    background: #f4eee1;
+    padding: 8px;
+    border: 1px solid #5C4033;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    flex-wrap: wrap;
+  }
+  .custom-toolbar button {
+    background: #fff;
+    color: #5C4033;
+    border: 1px solid #5C4033;
+    padding: 5px 12px;
+    font-size: 0.9rem;
+    border-radius: 3px;
+  }
+  .custom-toolbar button:hover {
+    background: #E8D9B5;
+  }
+  /* Custom Editor Box Styling */
+  .custom-editor-box {
+    width: 100%;
+    height: 400px;
+    background: #fff;
+    border: 1px solid #5C4033;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    padding: 15px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    font-family: sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    outline: none;
+    margin-bottom: 20px;
   }
   .stats-grid {
     display: grid;
@@ -84,7 +122,6 @@
   }
 </style>
 <script>
-  // Survive refreshes, but require clean login if window was closed or session ended
   window.addEventListener('DOMContentLoaded', () => {
     if (sessionStorage.getItem('scriptorium_logged_in') === 'true' && sessionStorage.getItem('scriptorium_active_session') === 'yes') {
       unlockDashboard();
@@ -95,7 +132,6 @@
     sessionStorage.setItem('scriptorium_active_session', 'yes');
   });
 
-  // Clear active session flag the moment the window/tab closes
   window.addEventListener('beforeunload', () => {
     sessionStorage.removeItem('scriptorium_active_session');
   });
@@ -127,30 +163,36 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-dashboard').style.display = 'block';
     
-    tinymce.init({
-      selector: '#blog-editor',
-      height: 400,
-      plugins: 'advlist lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
-      toolbar: 'undo redo | formatselect | bold italic backcolor | link | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
-      paste_as_text: true,
-      smart_paste: false,
-      browser_spellcheck: true,
-      url_converter: false,
-      link_assume_external_scheme: false,
-      // Completely block auto-linking on paste/type unless the toolbar link button is pressed
-      forced_root_block: 'p',
-      setup: function (editor) {
-        editor.on('paste', function (e) {
-          e.preventDefault();
-          var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-          editor.insertContent(editor.dom.encode(text));
-        });
-      }
-    });
-    
+    // Attach pure text-only paste filter to both custom editable boxes
+    setupPlaintextPaste('blog-editor');
+    setupPlaintextPaste('manuscript-editor');
+
     updateDraftCount();
+    updateManuscriptCount();
   }
-  
+
+  // Force pure text paste on custom editable divs
+  function setupPlaintextPaste(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.addEventListener('paste', function(e) {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, text);
+    });
+  }
+
+  function formatText(command) {
+    document.execCommand(command, false, null);
+  }
+
+  function insertCustomLink(editorId) {
+    const url = prompt("Enter the link URL (e.g., https://example.com):");
+    if (url) {
+      document.execCommand('createLink', false, url);
+    }
+  }
+
   function logoutAdmin() {
     sessionStorage.removeItem('scriptorium_logged_in');
     sessionStorage.removeItem('scriptorium_active_session');
@@ -165,48 +207,38 @@
 
   // --- Tab Switching Logic ---
   function switchTab(tabId) {
-    document.getElementById('editor-tab').style.display = 'none';
-    document.getElementById('drafts-tab').style.display = 'none';
-    document.getElementById('stats-tab').style.display = 'none';
-    
-    document.getElementById('btn-editor').style.backgroundColor = '#E8D9B5';
-    document.getElementById('btn-editor').style.color = '#5C4033';
-    document.getElementById('btn-editor').style.border = '1px solid #5C4033';
+    const tabs = ['editor-tab', 'drafts-tab', 'manuscript-tab', 'stats-tab'];
+    tabs.forEach(t => {
+      document.getElementById(t).style.display = (t === tabId) ? 'block' : 'none';
+      const btn = document.getElementById('btn-' + t.replace('-tab', ''));
+      if (t === tabId) {
+        btn.style.backgroundColor = '#5C4033';
+        btn.style.color = '#ffffff';
+        btn.style.border = 'none';
+      } else {
+        btn.style.backgroundColor = '#E8D9B5';
+        btn.style.color = '#5C4033';
+        btn.style.border = '1px solid #5C4033';
+      }
+    });
 
-    document.getElementById('btn-drafts').style.backgroundColor = '#E8D9B5';
-    document.getElementById('btn-drafts').style.color = '#5C4033';
-    document.getElementById('btn-drafts').style.border = '1px solid #5C4033';
-
-    document.getElementById('btn-stats').style.backgroundColor = '#E8D9B5';
-    document.getElementById('btn-stats').style.color = '#5C4033';
-    document.getElementById('btn-stats').style.border = '1px solid #5C4033';
-    
-    document.getElementById(tabId).style.display = 'block';
-    
-    const activeBtn = document.getElementById('btn-' + tabId.replace('-tab', ''));
-    activeBtn.style.backgroundColor = '#5C4033';
-    activeBtn.style.color = '#ffffff';
-    activeBtn.style.border = 'none';
-
-    if (tabId === 'drafts-tab') {
-      loadDraftsList();
-    }
+    if (tabId === 'drafts-tab') loadDraftsList();
+    if (tabId === 'manuscript-tab') loadManuscriptsList();
   }
 
-  // --- Draft Management Logic ---
+  // --- Blog Draft Logic ---
   function saveDraft() {
     const title = document.getElementById('post-title').value || "Untitled Draft";
     const category = document.getElementById('post-category').value;
-    const content = tinymce.get('blog-editor').getContent();
+    const content = document.getElementById('blog-editor').innerHTML;
     const date = new Date().toLocaleDateString();
 
     const draft = { title, category, content, date };
-    
     let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
     drafts.push(draft);
     localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
 
-    alert('Draft saved successfully!');
+    alert('Blog draft saved successfully!');
     updateDraftCount();
   }
 
@@ -215,7 +247,7 @@
     const drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
     
     if (drafts.length === 0) {
-      container.innerHTML = '<p id="no-drafts-msg" style="color: #666;">No drafts saved yet.</p>';
+      container.innerHTML = '<p style="color: #666;">No drafts saved yet.</p>';
       return;
     }
 
@@ -243,7 +275,7 @@
 
     document.getElementById('post-title').value = draft.title;
     document.getElementById('post-category').value = draft.category;
-    tinymce.get('blog-editor').setContent(draft.content);
+    document.getElementById('blog-editor').innerHTML = draft.content;
 
     switchTab('editor-tab');
   }
@@ -265,7 +297,7 @@
   function generatePost() {
     const title = document.getElementById('post-title').value;
     const category = document.getElementById('post-category').value;
-    const content = tinymce.get('blog-editor').getContent();
+    const content = document.getElementById('blog-editor').innerHTML;
 
     let categoryName = "Journal";
     if (category === "curations") categoryName = "Book Curations";
@@ -301,6 +333,72 @@
     document.getElementById('output-code').value = postHTML;
     alert('Post generated successfully! Copy the code below, create a new HTML file for your post, and push it to GitHub.');
   }
+
+  // --- Manuscript / Book Storage Logic (No Google Docs Needed!) ---
+  function saveManuscript() {
+    const title = document.getElementById('manuscript-title').value || "Untitled Manuscript";
+    const content = document.getElementById('manuscript-editor').innerHTML;
+    const date = new Date().toLocaleDateString();
+
+    const book = { title, content, date };
+    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
+    manuscripts.push(book);
+    localStorage.setItem('scriptorium_manuscripts', JSON.stringify(manuscripts));
+
+    alert('Book/Manuscript saved safely to your browser storage!');
+    updateManuscriptCount();
+  }
+
+  function loadManuscriptsList() {
+    const container = document.getElementById('manuscripts-container');
+    const manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
+    
+    if (manuscripts.length === 0) {
+      container.innerHTML = '<p style="color: #666;">No books saved yet.</p>';
+      return;
+    }
+
+    let html = '';
+    manuscripts.forEach((book, index) => {
+      html += `
+        <div style="background: #E8D9B5; padding: 15px; border-radius: 6px; border: 1px solid #5C4033; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="margin: 0 0 5px 0; color: #5C4033;">${book.title}</h3>
+            <small style="color: #555;">Last saved: ${book.date}</small>
+          </div>
+          <div>
+            <button type="button" onclick="loadManuscriptToEditor(${index})" style="background-color: #5C4033; margin-right: 5px; padding: 6px 12px; font-size: 0.9rem;">Open Book</button>
+            <button type="button" onclick="deleteManuscript(${index})" style="background-color: #a94442; padding: 6px 12px; font-size: 0.9rem;">Delete</button>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
+  function loadManuscriptToEditor(index) {
+    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
+    const book = manuscripts[index];
+
+    document.getElementById('manuscript-title').value = book.title;
+    document.getElementById('manuscript-editor').innerHTML = book.content;
+
+    switchTab('manuscript-tab');
+  }
+
+  function deleteManuscript(index) {
+    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
+    manuscripts.splice(index, 1);
+    localStorage.setItem('scriptorium_manuscripts', JSON.stringify(manuscripts));
+    loadManuscriptsList();
+    updateManuscriptCount();
+  }
+
+  function updateManuscriptCount() {
+    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
+    const countEl = document.getElementById('manuscript-count');
+    if (countEl) countEl.innerText = manuscripts.length;
+  }
 </script>
 </head>
 <body>
@@ -327,7 +425,8 @@
     <!-- Tab Navigation Bar -->
     <div style="display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #5C4033; padding-bottom: 15px; flex-wrap: wrap; align-items: center;">
       <button type="button" onclick="switchTab('editor-tab')" id="btn-editor" style="background-color: #5C4033; color: #fff; border: none;">Write & Publish</button>
-      <button type="button" onclick="switchTab('drafts-tab')" id="btn-drafts" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Drafts (<span id="draft-count">0</span>)</button>
+      <button type="button" onclick="switchTab('drafts-tab')" id="btn-drafts" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Blog Drafts (<span id="draft-count">0</span>)</button>
+      <button type="button" onclick="switchTab('manuscript-tab')" id="btn-manuscript" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Manuscripts (<span id="manuscript-count">0</span>)</button>
       <button type="button" onclick="switchTab('stats-tab')" id="btn-stats" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Analytics</button>
       
       <div style="margin-left: auto;">
@@ -336,8 +435,8 @@
       </div>
     </div>
 
-    <!-- TAB 1: COMPOSE / EDITOR -->
-    <div id="editor-tab" class="admin-tab-content">
+    <!-- TAB 1: BLOG COMPOSE / EDITOR -->
+    <div id="editor-tab">
       <h2 style="margin-top: 0;">Compose New Blog Post</h2>
       
       <label>Post Title:</label>
@@ -352,7 +451,15 @@
       </select>
       
       <label>Post Content:</label>
-      <textarea id="blog-editor"></textarea>
+      <!-- Custom Built-from-Scratch Text Box -->
+      <div class="custom-toolbar">
+        <button type="button" onclick="formatText('bold')"><b>B</b></button>
+        <button type="button" onclick="formatText('italic')"><i>I</i></button>
+        <button type="button" onclick="formatText('insertUnorderedList')">Bullet List</button>
+        <button type="button" onclick="insertCustomLink()">Link</button>
+        <button type="button" onclick="formatText('removeFormat')">Clear Format</button>
+      </div>
+      <div id="blog-editor" class="custom-editor-box" contenteditable="true"></div>
 
       <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
         <button type="button" onclick="generatePost()">Generate Post File Code</button>
@@ -363,17 +470,46 @@
       <textarea id="output-code" readonly placeholder="Your generated HTML code will appear here after clicking generate..."></textarea>
     </div>
 
-    <!-- TAB 2: DRAFTS -->
-    <div id="drafts-tab" class="admin-tab-content" style="display: none;">
-      <h2 style="margin-top: 0;">Saved Drafts</h2>
+    <!-- TAB 2: BLOG DRAFTS -->
+    <div id="drafts-tab" style="display: none;">
+      <h2 style="margin-top: 0;">Saved Blog Drafts</h2>
       <p style="color: #555; font-style: italic;">Unfinished writings stored safely in your browser.</p>
       <div id="drafts-container" style="display: grid; gap: 15px; margin-top: 20px;">
-        <p id="no-drafts-msg" style="color: #666;">No drafts saved yet.</p>
+        <p style="color: #666;">No drafts saved yet.</p>
       </div>
     </div>
 
-    <!-- TAB 3: ANALYTICS -->
-    <div id="stats-tab" class="admin-tab-content" style="display: none;">
+    <!-- TAB 3: PERSONAL BOOK / MANUSCRIPT WRITER (Google Docs Alternative) -->
+    <div id="manuscript-tab" style="display: none;">
+      <h2 style="margin-top: 0;">Book & Manuscript Studio</h2>
+      <p style="color: #555; font-style: italic;">Write whole books, short stories, or chapters here without worrying about Google Drive storage caps.</p>
+      
+      <label>Book / Chapter Title:</label>
+      <input type="text" id="manuscript-title" placeholder="Enter book title or chapter name...">
+
+      <label>Manuscript Content:</label>
+      <!-- Custom Built-from-Scratch Manuscript Box -->
+      <div class="custom-toolbar">
+        <button type="button" onclick="formatText('bold')"><b>B</b></button>
+        <button type="button" onclick="formatText('italic')"><i>I</i></button>
+        <button type="button" onclick="formatText('insertUnorderedList')">Bullet List</button>
+        <button type="button" onclick="insertCustomLink()">Link</button>
+        <button type="button" onclick="formatText('removeFormat')">Clear Format</button>
+      </div>
+      <div id="manuscript-editor" class="custom-editor-box" style="height: 500px;" contenteditable="true"></div>
+
+      <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
+        <button type="button" onclick="saveManuscript()">Save Book Progress</button>
+      </div>
+
+      <h3 style="margin-top: 35px; border-top: 1px solid #5C4033; padding-top: 20px;">Your Saved Books & Stories</h3>
+      <div id="manuscripts-container" style="display: grid; gap: 15px; margin-top: 15px;">
+        <p style="color: #666;">No books saved yet.</p>
+      </div>
+    </div>
+
+    <!-- TAB 4: ANALYTICS -->
+    <div id="stats-tab" style="display: none;">
       <h2 style="margin-top: 0;">Audience Analytics</h2>
       <p style="color: #555; font-style: italic;">Track daily, weekly, and monthly readership growth.</p>
       
