@@ -33,6 +33,7 @@
     border-radius: 4px;
     background: #fff;
     font-family: inherit;
+    box-sizing: border-box;
   }
   button {
     background-color: #5C4033;
@@ -79,6 +80,7 @@
     background: #2b2b2b;
     color: #a9b7c6;
     border-radius: 4px;
+    box-sizing: border-box;
   }
 </style>
 <script>
@@ -111,7 +113,7 @@
 
   function togglePasswordVisibility() {
     const passInput = document.getElementById('password-input');
-    const btn = event.target;
+    const btn = document.getElementById('toggle-btn');
     if (passInput.type === 'password') {
       passInput.type = 'text';
       btn.innerText = 'Hide';
@@ -296,8 +298,8 @@
     <p>Please enter your master password to unlock the studio dashboard.</p>
     
     <div style="position: relative; margin: 10px 0 20px 0;">
-      <input type="password" id="password-input" placeholder="Enter password..." style="margin: 0; padding-right: 70px;">
-      <button type="button" onclick="togglePasswordVisibility()" style="position: absolute; right: 5px; top: 5px; bottom: 5px; padding: 0 10px; font-size: 0.8rem; background: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Show</button>
+      <input type="password" id="password-input" placeholder="Enter password..." style="margin: 0; padding-right: 75px;">
+      <button type="button" id="toggle-btn" onclick="togglePasswordVisibility()" style="position: absolute; right: 5px; top: 6px; bottom: 6px; padding: 0 12px; font-size: 0.8rem; background: #E8D9B5; color: #5C4033; border: 1px solid #5C4033; border-radius: 3px; cursor: pointer;">Show</button>
     </div>
 
     <div style="margin-top: 15px;">
