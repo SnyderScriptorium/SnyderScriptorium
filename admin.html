@@ -83,7 +83,7 @@
     background: #c8bcab;
     margin: 0 4px;
   }
-  /* Custom Editor Box Styling (Stretches down naturally) */
+  /* Custom Editor Box Styling */
   .custom-editor-box {
     width: 100%;
     min-height: 450px;
@@ -98,9 +98,8 @@
     line-height: 1.7;
     outline: none;
     margin-bottom: 20px;
-    overflow-y: visible; /* Allows box to expand smoothly with content */
   }
-  /* HTML Raw Code Textarea Mirror */
+  /* HTML Raw Code Textarea Mirror for Editor */
   #blog-html-code {
     width: 100%;
     min-height: 450px;
@@ -154,24 +153,11 @@
 
   /* MOBILE RESPONSIVE MEDIA QUERY */
   @media (max-width: 768px) {
-    body {
-      padding: 10px;
-    }
-    .login-container, #admin-dashboard {
-      padding: 15px;
-    }
-    .custom-toolbar {
-      gap: 2px;
-      padding: 6px;
-    }
-    .custom-toolbar button, .custom-toolbar select {
-      padding: 4px 6px;
-      font-size: 0.8rem;
-    }
-    .toolbar-divider {
-      height: 18px;
-      margin: 0 2px;
-    }
+    body { padding: 10px; }
+    .login-container, #admin-dashboard { padding: 15px; }
+    .custom-toolbar { gap: 2px; padding: 6px; }
+    .custom-toolbar button, .custom-toolbar select { padding: 4px 6px; font-size: 0.8rem; }
+    .toolbar-divider { height: 18px; margin: 0 2px; }
   }
 </style>
 <script>
@@ -244,7 +230,6 @@
     }
   }
 
-  // Blogger-style HTML / Compose Toggle for Blog Editor
   let isHtmlView = false;
   function toggleBlogEditorMode() {
     const visualBox = document.getElementById('blog-editor');
@@ -252,7 +237,6 @@
     const toggleBtn = document.getElementById('html-toggle-btn');
 
     if (!isHtmlView) {
-      // Switch from Visual to HTML Code view
       htmlBox.value = visualBox.innerHTML;
       visualBox.style.display = 'none';
       htmlBox.style.display = 'block';
@@ -260,7 +244,6 @@
       toggleBtn.style.background = '#E8D9B5';
       isHtmlView = true;
     } else {
-      // Switch from HTML Code back to Visual view
       visualBox.innerHTML = htmlBox.value;
       htmlBox.style.display = 'none';
       visualBox.style.display = 'block';
@@ -282,7 +265,6 @@
     window.location.href = 'index.html';
   }
 
-  // --- Tab Switching Logic ---
   function switchTab(tabId) {
     const tabs = ['editor-tab', 'drafts-tab', 'manuscript-tab', 'stats-tab'];
     tabs.forEach(t => {
@@ -303,9 +285,7 @@
     if (tabId === 'manuscript-tab') loadManuscriptsList();
   }
 
-  // --- Blog Draft Logic ---
   function saveDraft() {
-    // If currently in HTML mode, sync back before saving
     if (isHtmlView) {
       document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
     }
@@ -355,7 +335,7 @@
     let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
     const draft = drafts[index];
 
-    if (isHtmlView) toggleBlogEditorMode(); // Switch back to visual if stuck in HTML
+    if (isHtmlView) toggleBlogEditorMode();
 
     document.getElementById('post-title').value = draft.title;
     document.getElementById('post-category').value = draft.category;
@@ -422,7 +402,6 @@
     alert('Post generated successfully! Copy the code below, create a new HTML file for your post, and push it to GitHub.');
   }
 
-  // --- Manuscript Word Processor Logic ---
   function saveManuscript() {
     const title = document.getElementById('manuscript-title').value || "Untitled Book or Document";
     const content = document.getElementById('manuscript-editor').innerHTML;
