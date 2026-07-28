@@ -82,17 +82,27 @@
   }
 </style>
 <script>
-  // Stay logged in on refresh using sessionStorage, but log out when tab/window closes
+  // Survive refreshes, but require clean login if window was closed or session ended
   window.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem('scriptorium_logged_in') === 'true') {
+    if (sessionStorage.getItem('scriptorium_logged_in') === 'true' && sessionStorage.getItem('scriptorium_active_session') === 'yes') {
       unlockDashboard();
+    } else {
+      sessionStorage.removeItem('scriptorium_logged_in');
+      sessionStorage.removeItem('scriptorium_active_session');
     }
+    sessionStorage.setItem('scriptorium_active_session', 'yes');
+  });
+
+  // Clear active session flag the moment the window/tab closes
+  window.addEventListener('beforeunload', () => {
+    sessionStorage.removeItem('scriptorium_active_session');
   });
 
   function checkPassword() {
     const pass = document.getElementById('password-input').value;
     if (pass === 'scriptorium123') {
       sessionStorage.setItem('scriptorium_logged_in', 'true');
+      sessionStorage.setItem('scriptorium_active_session', 'yes');
       unlockDashboard();
     } else {
       alert('Incorrect master password.');
@@ -118,8 +128,9 @@
     tinymce.init({
       selector: '#blog-editor',
       height: 400,
-      plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
-      toolbar: 'undo redo | formatselect | bold italic backcolor | link | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help'
+      plugins: 'advlist lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
+      toolbar: 'undo redo | formatselect | bold italic backcolor | link | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
+      smart_paste: false
     });
     
     updateDraftCount();
@@ -127,10 +138,13 @@
 
   function logoutAdmin() {
     sessionStorage.removeItem('scriptorium_logged_in');
+    sessionStorage.removeItem('scriptorium_active_session');
     location.reload();
   }
 
   function goToHome() {
+    sessionStorage.removeItem('scriptorium_logged_in');
+    sessionStorage.removeItem('scriptorium_active_session');
     window.location.href = 'index.html';
   }
 
