@@ -82,9 +82,9 @@
   }
 </style>
 <script>
-  // Automatically log in on page load if session is active
+  // Stay logged in on refresh using sessionStorage, but log out when tab/window closes
   window.addEventListener('DOMContentLoaded', () => {
-    if (localStorage.getItem('scriptorium_logged_in') === 'true') {
+    if (sessionStorage.getItem('scriptorium_logged_in') === 'true') {
       unlockDashboard();
     }
   });
@@ -92,10 +92,22 @@
   function checkPassword() {
     const pass = document.getElementById('password-input').value;
     if (pass === 'scriptorium123') {
-      localStorage.setItem('scriptorium_logged_in', 'true');
+      sessionStorage.setItem('scriptorium_logged_in', 'true');
       unlockDashboard();
     } else {
       alert('Incorrect master password.');
+    }
+  }
+
+  function togglePasswordVisibility() {
+    const passInput = document.getElementById('password-input');
+    const btn = event.target;
+    if (passInput.type === 'password') {
+      passInput.type = 'text';
+      btn.innerText = 'Hide';
+    } else {
+      passInput.type = 'password';
+      btn.innerText = 'Show';
     }
   }
 
@@ -103,10 +115,10 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-dashboard').style.display = 'block';
     
- tinymce.init({
+    tinymce.init({
       selector: '#blog-editor',
       height: 400,
-      plugins: 'advlist lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
+      plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table code help wordcount',
       toolbar: 'undo redo | formatselect | bold italic backcolor | link | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help'
     });
     
@@ -114,7 +126,7 @@
   }
 
   function logoutAdmin() {
-    localStorage.removeItem('scriptorium_logged_in');
+    sessionStorage.removeItem('scriptorium_logged_in');
     location.reload();
   }
 
@@ -268,7 +280,12 @@
   <div id="login-screen" class="login-container">
     <h2>Scriptorium Backend Access</h2>
     <p>Please enter your master password to unlock the studio dashboard.</p>
-    <input type="password" id="password-input" placeholder="Enter password...">
+    
+    <div style="position: relative; margin: 10px 0 20px 0;">
+      <input type="password" id="password-input" placeholder="Enter password..." style="margin: 0; padding-right: 70px;">
+      <button type="button" onclick="togglePasswordVisibility()" style="position: absolute; right: 5px; top: 5px; bottom: 5px; padding: 0 10px; font-size: 0.8rem; background: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Show</button>
+    </div>
+
     <div style="margin-top: 15px;">
       <button type="button" onclick="checkPassword()">Log In</button>
       <button type="button" onclick="goToHome()" style="background-color: transparent; color: #5C4033; border: 1px solid #5C4033; margin-left: 10px;">Return to Home</button>
