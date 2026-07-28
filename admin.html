@@ -150,24 +150,16 @@
 </style>
 <script>
   window.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem('scriptorium_logged_in') === 'true' && sessionStorage.getItem('scriptorium_active_session') === 'yes') {
+    // Uses localStorage so you stay logged in across page refreshes!
+    if (localStorage.getItem('scriptorium_logged_in') === 'true') {
       unlockDashboard();
-    } else {
-      sessionStorage.removeItem('scriptorium_logged_in');
-      sessionStorage.removeItem('scriptorium_active_session');
     }
-    sessionStorage.setItem('scriptorium_active_session', 'yes');
-  });
-
-  window.addEventListener('beforeunload', () => {
-    sessionStorage.removeItem('scriptorium_active_session');
   });
 
   function checkPassword() {
     const pass = document.getElementById('password-input').value;
     if (pass === 'scriptorium123') {
-      sessionStorage.setItem('scriptorium_logged_in', 'true');
-      sessionStorage.setItem('scriptorium_active_session', 'yes');
+      localStorage.setItem('scriptorium_logged_in', 'true');
       unlockDashboard();
     } else {
       alert('Incorrect master password.');
@@ -242,14 +234,11 @@
   }
 
   function logoutAdmin() {
-    sessionStorage.removeItem('scriptorium_logged_in');
-    sessionStorage.removeItem('scriptorium_active_session');
+    localStorage.removeItem('scriptorium_logged_in');
     location.reload();
   }
 
   function goToHome() {
-    sessionStorage.removeItem('scriptorium_logged_in');
-    sessionStorage.removeItem('scriptorium_active_session');
     window.location.href = 'index.html';
   }
 
@@ -386,8 +375,18 @@
 </body>
 </html>`;
 
-    document.getElementById('output-code').value = postHTML;
-    alert('Post generated successfully! Copy the code below, create a new HTML file for your post, and push it to GitHub.');
+    const cleanTitle = (title || "new_post").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const blob = new Blob([postHTML], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cleanTitle}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert('Post generated and downloaded successfully! You can now push this file directly to GitHub.');
   }
 
   function saveManuscript() {
@@ -588,9 +587,10 @@
       <textarea id="blog-html-code" placeholder="Edit raw HTML code here..."></textarea>
 
       <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
-        <button type="button" onclick="generatePost()">Generate Post File Code</button>
+        <button type="button" onclick="generatePost()">Generate & Download Post File</button>
         <button type="button" onclick="saveDraft()" style="background-color: #7A6B5D;">Save as Draft</button>
       </div>
+    </div>
 
     <!-- TAB 2: BLOG DRAFTS -->
     <div id="drafts-tab" style="display: none;">
