@@ -123,7 +123,7 @@
     }
   }
 
-function unlockDashboard() {
+  function unlockDashboard() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-dashboard').style.display = 'block';
     
@@ -136,7 +136,16 @@ function unlockDashboard() {
       smart_paste: false,
       browser_spellcheck: true,
       url_converter: false,
-      link_assume_external_scheme: false
+      link_assume_external_scheme: false,
+      // Completely block auto-linking on paste/type unless the toolbar link button is pressed
+      forced_root_block: 'p',
+      setup: function (editor) {
+        editor.on('paste', function (e) {
+          e.preventDefault();
+          var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+          editor.insertContent(editor.dom.encode(text));
+        });
+      }
     });
     
     updateDraftCount();
