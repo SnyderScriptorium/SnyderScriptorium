@@ -44,8 +44,10 @@
     margin: 0 0 25px 0;
   }
 
+  /* Universal Navigation Bar */
   .nav-menu {
     margin-top: 25px;
+    margin-bottom: 40px;
     font-size: 1.1rem;
     display: flex;
     justify-content: center;
@@ -59,49 +61,50 @@
     font-weight: 400;
   }
 
-  /* Category Blocks Grid */
-  .category-grid {
-    max-width: 800px;
-    margin: 40px auto 0 auto;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 25px;
-  }
-
-  .category-card {
-    background-color: #DFCCA4;
-    border: 1px solid #D2BC90;
-    border-radius: 8px;
-    padding: 30px 20px;
-    text-decoration: none;
-    color: #3A3A3A;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  /* White Button Blocks Feed */
+  .blog-feed {
+    max-width: 750px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    gap: 20px;
+    text-align: left;
   }
 
-  .category-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+  .blog-block {
+    display: block;
+    background-color: #FFFFFF;
+    border: 1px solid #D2BC90;
+    border-radius: 8px;
+    padding: 22px 28px;
+    text-decoration: none;
+    color: #3A3A3A;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.06);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .category-card h2 {
+  .blog-block:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.1);
+  }
+
+  .blog-block h2 {
     color: #5C4033;
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 500;
-    margin: 0 0 10px 0;
+    margin: 0 0 8px 0;
   }
 
-  .category-card p {
-    font-size: 1rem;
+  .blog-block p {
+    font-size: 1.05rem;
     margin: 0;
-    color: #4A4A4A;
+    color: #555555;
+    line-height: 1.5;
   }
 
   footer {
     text-align: center;
-    margin-top: 40px;
+    margin-top: 50px;
     font-size: 0.9rem;
   }
 
@@ -127,8 +130,10 @@
 </a>
 
 <div class="main-content">
+  <!-- Heading -->
   <h1>The Blog</h1>
 
+  <!-- Navigation Bar -->
   <div class="nav-menu">
     <a href="index.html">The Hearth</a>
     <a href="about.html">About</a>
@@ -137,18 +142,21 @@
     <a href="merchstore.html">Merch Store</a>
   </div>
 
-  <div class="category-grid">
-    <!-- Clickable Category Block: Book Curations -->
-    <a href="book-curations.html" class="category-card">
+  <!-- Blog Category Blocks Feed -->
+  <div class="blog-feed">
+    
+    <!-- Category Block 1: Book Curations -->
+    <a href="book-curations.html" class="blog-block">
       <h2>Book Curations</h2>
-      <p>Hand-picked recommendations, craft literature notes, and reading lists.</p>
+      <p>Hand-picked reading lists, craft literature notes, and recommendations for writers and readers alike.</p>
     </a>
 
-    <!-- Additional Category Block Example -->
-    <a href="#" class="category-card">
-      <h2>Writing Craft</h2>
-      <p>Self-editing strategies, narrative design, and fiction insights.</p>
+    <!-- Category Block 2: Placeholder for next section -->
+    <a href="#" class="blog-block">
+      <h2>Writing Craft & Updates</h2>
+      <p>Thoughts on self-editing, fiction milestones, and progress updates straight from the scriptorium.</p>
     </a>
+
   </div>
 </div>
 
