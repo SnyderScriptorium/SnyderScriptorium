@@ -6,3 +6,6 @@ app = Flask(__name__)
 def home():
     return "Backend is running!"
 
+@app.route("/admin")
+def admin():
+    return render_template("admin.html")
