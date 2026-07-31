@@ -1,50 +1,41 @@
 import os
-from flask import Flask, render_template_string
+from flask import Flask, render_template
 
-app = Flask(__name__)
+# Find the exact folder where app.py lives
+basedir = os.path.abspath(os.path.dirname(__file__))
 
-
-def load_html(filename):
-  # Looks for the file in a 'templates' folder first, or right next to app.py
-  paths_to_try = [
-      os.path.join("templates", filename),
-      filename,
-  ]
-  for path in paths_to_try:
-    if os.path.exists(path):
-      with open(path, "r", encoding="utf-8") as f:
-        return f.read()
-  return f"Error: {filename} could not be found."
+# Explicitly point Flask to your templates folder using the absolute path
+app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
 
 
 @app.route("/")
 def home():
-  return render_template_string(load_html("index.html"))
+  return render_template("index.html")
 
 
 @app.route("/about")
 def about():
-  return render_template_string(load_html("about.html"))
+  return render_template("about.html")
 
 
 @app.route("/admin")
 def admin():
-  return render_template_string(load_html("admin.html"))
+  return render_template("admin.html")
 
 
 @app.route("/book-curations")
 def book_curations():
-  return render_template_string(load_html("book-curations.html"))
+  return render_template("book-curations.html")
 
 
 @app.route("/book-reviews")
 def book_reviews():
-  return render_template_string(load_html("book-reviews.html"))
+  return render_template("book-reviews.html")
 
 
 @app.route("/curiosity-cabinet")
 def curiosity_cabinet():
-  return render_template_string(load_html("curiosity-cabinet.html"))
+  return render_template("curiosity-cabinet.html")
 
 
 if __name__ == "__main__":
