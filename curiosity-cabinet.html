@@ -44,7 +44,6 @@
     margin: 0 0 25px 0;
   }
 
-  /* Universal Navigation Bar */
   .nav-menu {
     margin-top: 25px;
     margin-bottom: 40px;
@@ -61,7 +60,6 @@
     font-weight: 400;
   }
 
-  /* White Post Preview Blocks Feed */
   .post-feed {
     max-width: 750px;
     margin: 0 auto;
@@ -130,10 +128,8 @@
 </a>
 
 <div class="main-content">
-  <!-- Heading -->
   <h1>Curiosity Cabinet</h1>
 
-  <!-- Navigation Bar -->
   <div class="nav-menu">
     <a href="index.html">The Hearth</a>
     <a href="about.html">About</a>
@@ -142,16 +138,13 @@
     <a href="merchstore.html">Merch Store</a>
   </div>
 
-  <!-- Post Blocks Feed -->
   <div class="post-feed" id="posts-container">
     
-    <!-- Post Block 1 -->
     <a href="curiosity-post-1.html" class="blog-block">
       <h2>Title of Curiosity Post One</h2>
       <p>Write your two-sentence preview or hook for this non-fiction exploration right here. Give readers a glimpse into your historical tidbits or real-world deep dives before they click.</p>
     </a>
 
-    <!-- Post Block 2 -->
     <a href="curiosity-post-2.html" class="blog-block">
       <h2>Title of Curiosity Post Two</h2>
       <p>Write your two-sentence preview or hook for your second curiosity piece right here. Keep adding your chronological posts down this page.</p>
@@ -177,17 +170,14 @@
     let html = '';
     categoryPosts.forEach(post => {
       html += `
-        <div class="blog-block" style="background: #FFFFFF; border: 1px solid #D2BC90; border-radius: 8px; padding: 22px 28px; box-shadow: 0 3px 6px rgba(0,0,0,0.06);">
-          <h2 style="color: #5C4033; font-size: 1.35rem; font-weight: 500; margin: 0 0 8px 0;">${post.title}</h2>
-          <div style="color: #7A6B5D; font-style: italic; font-size: 0.85rem; margin-bottom: 12px;">Published on ${post.date}</div>
-          <div style="font-size: 1.05rem; color: #555555; line-height: 1.5;">
-            ${post.content}
-          </div>
-        </div>
+        <a href="post.html?id=${post.id}" class="blog-block">
+          <h2>${post.title}</h2>
+          <div style="color: #7A6B5D; font-style: italic; font-size: 0.85rem; margin-bottom: 6px;">Published on ${post.date}</div>
+          <p>Click to read this Curiosity Cabinet entry...</p>
+        </a>
       `;
     });
 
-    // Prepend newly published posts to the top of the feed while keeping your hardcoded starter blocks below them
     container.innerHTML = html + container.innerHTML;
   });
 </script>
