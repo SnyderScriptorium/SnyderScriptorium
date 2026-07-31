@@ -1,6 +1,12 @@
+import os
 from flask import Flask, render_template
 
-app = Flask(__name__)
+# Explicitly tell Flask where the templates and static folders are
+app = Flask(
+    __name__,
+    template_folder=os.path.abspath("templates"),
+    static_folder=os.path.abspath("static"),
+)
 
 
 @app.route("/")
