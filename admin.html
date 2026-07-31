@@ -26,15 +26,6 @@
     font-weight: 400;
     font-size: 1.8rem;
   }
-</style>
-</head>
-<body>
-
-  <div class="header-container">
-    <a href="index.html" class="logo-link">
-      <h1>The Snyder Scriptorium</h1>
-    </a>
-  </div>
   .login-container, #admin-dashboard {
     max-width: 950px;
     margin: 0 auto;
@@ -173,8 +164,8 @@
 </style>
 <script>
   window.addEventListener('DOMContentLoaded', () => {
-    // Uses localStorage so you stay logged in across page refreshes!
-    if (localStorage.getItem('scriptorium_logged_in') === 'true') {
+    // Uses sessionStorage so you stay logged in on refresh, but logs out when tab/browser is closed!
+    if (sessionStorage.getItem('scriptorium_logged_in') === 'true') {
       unlockDashboard();
     }
   });
@@ -182,7 +173,7 @@
   function checkPassword() {
     const pass = document.getElementById('password-input').value;
     if (pass === 'scriptorium123') {
-      localStorage.setItem('scriptorium_logged_in', 'true');
+      sessionStorage.setItem('scriptorium_logged_in', 'true');
       unlockDashboard();
     } else {
       alert('Incorrect master password.');
@@ -257,7 +248,7 @@
   }
 
   function logoutAdmin() {
-    localStorage.removeItem('scriptorium_logged_in');
+    sessionStorage.removeItem('scriptorium_logged_in');
     location.reload();
   }
 
@@ -268,16 +259,21 @@
   function switchTab(tabId) {
     const tabs = ['editor-tab', 'drafts-tab', 'manuscript-tab', 'stats-tab','about-tab'];
     tabs.forEach(t => {
-      document.getElementById(t).style.display = (t === tabId) ? 'block' : 'none';
-      const btn = document.getElementById('btn-' + t.replace('-tab', ''));
-      if (t === tabId) {
-        btn.style.backgroundColor = '#5C4033';
-        btn.style.color = '#ffffff';
-        btn.style.border = 'none';
-      } else {
-        btn.style.backgroundColor = '#E8D9B5';
-        btn.style.color = '#5C4033';
-        btn.style.border = '1px solid #5C4033';
+      const el = document.getElementById(t);
+      if (el) {
+        el.style.display = (t === tabId) ? 'block' : 'none';
+        const btn = document.getElementById('btn-' + t.replace('-tab', ''));
+        if (btn) {
+          if (t === tabId) {
+            btn.style.backgroundColor = '#5C4033';
+            btn.style.color = '#ffffff';
+            btn.style.border = 'none';
+          } else {
+            btn.style.backgroundColor = '#E8D9B5';
+            btn.style.color = '#5C4033';
+            btn.style.border = '1px solid #5C4033';
+          }
+        }
       }
     });
 
@@ -534,6 +530,12 @@
 </script>
 </head>
 <body>
+
+  <div class="header-container">
+    <a href="index.html" class="logo-link">
+      <h1>The Snyder Scriptorium</h1>
+    </a>
+  </div>
 
   <!-- LOGIN SCREEN -->
   <div id="login-screen" class="login-container">
