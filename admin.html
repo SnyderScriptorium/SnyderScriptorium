@@ -236,24 +236,24 @@
           <option value="monospace" style="font-family: monospace;">Monospace</option>
         </select>
 
-     <select onmousedown="event.preventDefault()" onchange="changeFontSize(this.value); this.selectedIndex=0;" title="Font Size">
-  <option value="" disabled selected>Size</option>
-  <option value="10">10pt</option>
-  <option value="11">11pt</option>
-  <option value="12">12pt</option>
-  <option value="14">14pt</option>
-  <option value="16">16pt</option>
-  <option value="18">18pt</option>
-  <option value="20">20pt</option>
-  <option value="24">24pt</option>
-  <option value="26">26pt</option>
-  <option value="28">28pt</option>
-  <option value="32">32pt</option>
-  <option value="34">34pt</option>
-  <option value="36">36pt</option>
-  <option value="38">38pt</option>
-  <option value="40">40pt</option>
-</select>
+        <select onmousedown="event.preventDefault()" onchange="changeFontSize(this.value); this.selectedIndex=0;" title="Font Size">
+          <option value="" disabled selected>Size</option>
+          <option value="10">10pt</option>
+          <option value="11">11pt</option>
+          <option value="12">12pt</option>
+          <option value="14">14pt</option>
+          <option value="16">16pt</option>
+          <option value="18">18pt</option>
+          <option value="20">20pt</option>
+          <option value="24">24pt</option>
+          <option value="26">26pt</option>
+          <option value="28">28pt</option>
+          <option value="32">32pt</option>
+          <option value="34">34pt</option>
+          <option value="36">36pt</option>
+          <option value="38">38pt</option>
+          <option value="40">40pt</option>
+        </select>
 
         <div style="display: flex; align-items: center; gap: 3px; background: #fff; padding: 2px 6px; border: 1px solid #5C4033; border-radius: 3px;">
           <label for="text-color-picker" style="font-size: 0.8rem; cursor: pointer; margin:0; color:#5C4033;">Color:</label>
@@ -426,29 +426,7 @@
       alert('Incorrect master password.');
     }
   }
-function changeFontSize(ptSize) {
-  const selection = window.getSelection();
-  if (!selection.rangeCount) return;
-  const range = selection.getRangeAt(0);
 
-  if (!range.collapsed) {
-    let container = range.commonAncestorContainer;
-    if (container.nodeType === 3) container = container.parentNode;
-
-    // If the highlighted text is already inside a styled span, update its size instead of nesting
-    if (container.tagName === 'SPAN' && container.style.fontSize) {
-      container.style.fontSize = ptSize + 'pt';
-    } else {
-      // Otherwise, wrap the selection in a new span
-      const span = document.createElement('span');
-      span.style.fontSize = ptSize + 'pt';
-      span.appendChild(range.extractContents());
-      range.insertNode(span);
-      
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-  
   function togglePasswordVisibility() {
     const passInput = document.getElementById('password-input');
     const btn = document.getElementById('toggle-btn');
@@ -458,6 +436,29 @@ function changeFontSize(ptSize) {
     } else {
       passInput.type = 'password';
       btn.innerText = 'Show';
+    }
+  }
+
+  function changeFontSize(ptSize) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+
+    if (!range.collapsed) {
+      let container = range.commonAncestorContainer;
+      if (container.nodeType === 3) container = container.parentNode;
+
+      if (container.tagName === 'SPAN' && container.style.fontSize) {
+        container.style.fontSize = ptSize + 'pt';
+      } else {
+        const span = document.createElement('span');
+        span.style.fontSize = ptSize + 'pt';
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
     }
   }
 
@@ -629,7 +630,6 @@ function changeFontSize(ptSize) {
     if (countEl) countEl.innerText = manuscripts.length;
   }
 
-// 1. PUBLISH POST FUNCTION (Registers to category storage & clears editor)
   function publishPost() {
     if (isHtmlView) {
       document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
@@ -656,7 +656,6 @@ function changeFontSize(ptSize) {
     allPosts.unshift({ title, category, categoryName, date: currentDate, content });
     localStorage.setItem('scriptorium_published_posts', JSON.stringify(allPosts));
 
-    // Clear out inputs and reset form ("closes out" composition)
     document.getElementById('post-title').value = '';
     document.getElementById('blog-editor').innerHTML = '';
     if (isHtmlView) {
@@ -664,7 +663,6 @@ function changeFontSize(ptSize) {
       toggleBlogEditorMode();
     }
 
-    // Automatically remove from drafts if it was published from a saved draft
     let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
     const draftIndex = drafts.findIndex(d => d.title === title);
     if (draftIndex > -1) {
@@ -676,7 +674,6 @@ function changeFontSize(ptSize) {
     alert(`Post published successfully to your "${categoryName}" category tracker!`);
   }
     
-  // 2. DOWNLOAD HTML FILE FUNCTION (Downloads the standalone file for GitHub)
   function downloadPostFile() {
     if (isHtmlView) {
       document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
