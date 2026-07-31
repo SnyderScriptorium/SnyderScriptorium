@@ -222,9 +222,8 @@
         <button type="button" id="html-toggle-btn" onclick="toggleBlogEditorMode()" style="background: #fff; color: #5C4033; border: 1px solid #5C4033; padding: 4px 10px; font-size: 0.85rem; border-radius: 3px;">HTML Code</button>
       </div>
 
-<!-- Expanded Word Processor Custom Toolbar -->
+      <!-- Expanded Word Processor Custom Toolbar -->
       <div class="custom-toolbar">
-        <!-- Font Family Selector (Rendered in its own font) -->
         <select onchange="formatText('fontName', this.value); this.selectedIndex=0;" title="Font Family">
           <option value="" disabled selected>Font Type</option>
           <option value="Playfair Display" style="font-family: 'Playfair Display', serif;">Playfair Display</option>
@@ -237,7 +236,6 @@
           <option value="monospace" style="font-family: monospace;">Monospace</option>
         </select>
 
-        <!-- Numeric Font Size Selector (Google Docs Style) -->
         <select onchange="changeFontSize(this.value); this.selectedIndex=0;" title="Font Size">
           <option value="" disabled selected>Size</option>
           <option value="10">10pt</option>
@@ -252,7 +250,6 @@
           <option value="36">36pt</option>
         </select>
 
-        <!-- Text Color Picker -->
         <div style="display: flex; align-items: center; gap: 3px; background: #fff; padding: 2px 6px; border: 1px solid #5C4033; border-radius: 3px;">
           <label for="text-color-picker" style="font-size: 0.8rem; cursor: pointer; margin:0; color:#5C4033;">Color:</label>
           <input type="color" id="text-color-picker" value="#3A3A3A" onchange="formatText('foreColor', this.value)" style="width: 25px; height: 22px; border: none; padding: 0; background: none; cursor: pointer;">
@@ -286,9 +283,11 @@
       <div id="blog-editor" class="custom-editor-box" contenteditable="true"></div>
       <textarea id="blog-html-code" placeholder="Edit raw HTML code here..."></textarea>
 
+      <!-- SEPARATED ACTION BUTTONS -->
       <div style="margin-top: 20px; display: flex; gap: 15px; flex-wrap: wrap;">
-        <button type="button" onclick="generatePost()">Generate & Download Post File</button>
-        <button type="button" onclick="saveDraft()" style="background-color: #7A6B5D;">Save as Draft</button>
+        <button type="button" onclick="publishPost()" style="background-color: #5C4033;">Publish Post</button>
+        <button type="button" onclick="downloadPostFile()" style="background-color: #7A6B5D;">Download HTML File</button>
+        <button type="button" onclick="saveDraft()" style="background-color: #A67B5B;">Save as Draft</button>
       </div>
     </div>
 
@@ -318,9 +317,7 @@
       <input type="text" id="manuscript-title" placeholder="Enter book title or chapter name...">
 
       <label>Document Content:</label>
-      <!-- Expanded Word Processor Custom Toolbar for Manuscripts -->
       <div class="custom-toolbar">
-        <!-- Font Family Selector -->
         <select onchange="formatText('fontName', this.value); this.selectedIndex=0;" title="Font Family">
           <option value="" disabled selected>Font Type</option>
           <option value="Playfair Display">Playfair Display</option>
@@ -331,7 +328,6 @@
           <option value="monospace">Monospace</option>
         </select>
 
-        <!-- Font Size Selector -->
         <select onchange="formatText('fontSize', this.value); this.selectedIndex=0;" title="Font Size">
           <option value="" disabled selected>Size</option>
           <option value="1">Small (1)</option>
@@ -340,7 +336,6 @@
           <option value="7">Huge (7)</option>
         </select>
 
-        <!-- Text Color Picker -->
         <div style="display: flex; align-items: center; gap: 3px; background: #fff; padding: 2px 6px; border: 1px solid #5C4033; border-radius: 3px;">
           <label for="manuscript-color-picker" style="font-size: 0.8rem; cursor: pointer; margin:0; color:#5C4033;">Color:</label>
           <input type="color" id="manuscript-color-picker" value="#3A3A3A" onchange="formatText('foreColor', this.value)" style="width: 25px; height: 22px; border: none; padding: 0; background: none; cursor: pointer;">
@@ -425,14 +420,13 @@
     } else {
       alert('Incorrect master password.');
     }
-    
   }
-function changeFontSize(ptSize) {
+
+  function changeFontSize(ptSize) {
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
     
-    // If text is highlighted, wrap it in a span with the exact font size
     if (!range.collapsed) {
       const span = document.createElement('span');
       span.style.fontSize = ptSize + 'pt';
@@ -441,8 +435,7 @@ function changeFontSize(ptSize) {
       selection.removeAllRanges();
       selection.addRange(range);
     } else {
-      // If no text is highlighted, apply it to the active editor typing style
-      document.execCommand('fontSize', false, '7'); // fallback container
+      document.execCommand('fontSize', false, '7');
       const fontElements = document.getElementsByTagName('font');
       for (let i = 0; i < fontElements.length; i++) {
         if (fontElements[i].size === '7') {
@@ -627,11 +620,14 @@ function changeFontSize(ptSize) {
     if (countEl) countEl.innerText = drafts.length;
   }
 
-  function generatePost() {
-    if (isHtmlView) {
-      document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
-    }
-function generatePost() {
+  function updateManuscriptCount() {
+    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
+    const countEl = document.getElementById('manuscript-count');
+    if (countEl) countEl.innerText = manuscripts.length;
+  }
+
+  // 1. PUBLISH POST FUNCTION (Registers to category storage & clears editor)
+  function publishPost() {
     if (isHtmlView) {
       document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
     }
@@ -655,12 +651,41 @@ function generatePost() {
     const fileName = `${cleanTitle}.html`;
     const currentDate = new Date().toLocaleDateString();
 
-    // Save post metadata to local storage so your category pages can track it
     let allPosts = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
     allPosts.unshift({ title, category, fileName, date: currentDate, content });
     localStorage.setItem('scriptorium_published_posts', JSON.stringify(allPosts));
 
-    // Generate the downloadable HTML file for GitHub
+    // Clear out inputs and reset form ("closes out" composition)
+    document.getElementById('post-title').value = '';
+    document.getElementById('blog-editor').innerHTML = '';
+    if (isHtmlView) {
+      document.getElementById('blog-html-code').value = '';
+      toggleBlogEditorMode();
+    }
+
+    alert(`Post published successfully to your "${categoryName}" category tracker!`);
+  }
+
+  // 2. DOWNLOAD HTML FILE FUNCTION (Downloads the standalone file for GitHub)
+  function downloadPostFile() {
+    if (isHtmlView) {
+      document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
+    }
+
+    const title = document.getElementById('post-title').value.trim() || "new_post";
+    const category = document.getElementById('post-category').value;
+    const content = document.getElementById('blog-editor').innerHTML;
+
+    let categoryName = "Journal";
+    if (category === "curations") categoryName = "Book Curations";
+    else if (category === "reviews") categoryName = "Book Reviews";
+    else if (category === "curiosity") categoryName = "Curiosity Cabinet";
+    else if (category === "fiction") categoryName = "K. W. Snyder Writing";
+
+    const cleanTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const fileName = `${cleanTitle}.html`;
+    const currentDate = new Date().toLocaleDateString();
+
     const postHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -695,64 +720,6 @@ function generatePost() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-
-    // Clear out the editor inputs and reset form ("closes out" the composition)
-    document.getElementById('post-title').value = '';
-    document.getElementById('blog-editor').innerHTML = '';
-    if (isHtmlView) {
-      document.getElementById('blog-html-code').value = '';
-      toggleBlogEditorMode(); // switch back to visual compose view
-    }
-
-    alert(`Success! Post downloaded as "${fileName}" for your "${categoryName}" section. Push this file to GitHub, and your blog is updated!`);
-  }
-    const title = document.getElementById('post-title').value;
-    const category = document.getElementById('post-category').value;
-    const content = document.getElementById('blog-editor').innerHTML;
-
-    let categoryName = "Journal";
-    if (category === "curations") categoryName = "Book Curations";
-    else if (category === "reviews") categoryName = "Book Reviews";
-    else if (category === "curiosity") categoryName = "Curiosity Cabinet";
-    else if (category === "fiction") categoryName = "K. W. Snyder Writing";
-
-    const postHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${title} — Snyder Scriptorium</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;700&display=swap" rel="stylesheet">
-<style>
-  body { background-color: #E8D9B5; color: #3A3A3A; font-family: "Playfair Display", serif; margin: 0; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.7; }
-  a { color: #5C4033; }
-  .back-link { margin-bottom: 20px; display: inline-block; text-decoration: none; font-weight: 500; }
-  h1 { color: #5C4033; font-weight: 300; font-size: 2.5rem; margin-bottom: 5px; }
-  .date { color: #5C4033; margin-bottom: 30px; font-style: italic; opacity: 0.8; }
-</style>
-</head>
-<body>
-  <a href="${category}.html" class="back-link">&larr; Back to ${categoryName}</a>
-  <h1>${title}</h1>
-  <div class="date">${new Date().toLocaleDateString()}</div>
-  <div class="post-content">
-    ${content}
-  </div>
-</body>
-</html>`;
-
-    const cleanTitle = (title || "new_post").replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const blob = new Blob([postHTML], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${cleanTitle}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    alert('Post generated and downloaded successfully! You can now push this file directly to GitHub.');
   }
 
   function saveManuscript() {
@@ -797,82 +764,6 @@ function generatePost() {
       `;
     });
     container.innerHTML = html;
-  }
-
-  function loadManuscriptToEditor(index) {
-    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
-    const book = manuscripts[index];
-
-    document.getElementById('manuscript-title').value = book.title;
-    document.getElementById('manuscript-editor').innerHTML = book.content;
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function deleteManuscript(index) {
-    if (confirm("Are you sure you want to delete this document from storage?")) {
-      let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
-      manuscripts.splice(index, 1);
-      localStorage.setItem('scriptorium_manuscripts', JSON.stringify(manuscripts));
-      loadManuscriptsList();
-      updateManuscriptCount();
-    }
-  }
-
-  function updateManuscriptCount() {
-    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
-    const countEl = document.getElementById('manuscript-count');
-    if (countEl) countEl.innerText = manuscripts.length;
-  }
-
-  function downloadManuscriptFile(index) {
-    let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
-    const book = manuscripts[index];
-    const cleanTitle = book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-
-    const fileContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>${book.title} — Backup</title>
-<style>body { font-family: serif; max-width: 800px; margin: 40px auto; line-height: 1.8; padding: 20px; }</style>
-</head>
-<body>
-<h1>${book.title}</h1>
-<p><em>Saved on: ${book.date}</em></p>
-<hr/>
-<div>${book.content}</div>
-</body>
-</html>`;
-
-    const blob = new Blob([fileContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${cleanTitle}_backup.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
-  function uploadManuscriptFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const htmlContent = e.target.result;
-      let title = file.name.replace(/\.[^/.]+$/, "").replace(/(_backup)/g, '').replace(/_/g, ' ');
-      title = title.charAt(0).toUpperCase() + title.slice(1);
-
-      document.getElementById('manuscript-title').value = title;
-      document.getElementById('manuscript-editor').innerHTML = htmlContent;
-
-      alert('Manuscript loaded successfully into your studio workspace!');
-    };
-    reader.readAsText(file);
-    event.target.value = '';
   }
 </script>
 </body>
