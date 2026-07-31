@@ -422,29 +422,34 @@
     }
   }
 
-  function changeFontSize(ptSize) {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    const range = selection.getRangeAt(0);
+function changeFontSize(ptSize) {
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+  const range = selection.getRangeAt(0);
+
+  // 1. If text is highlighted, wrap the exact selection in a styled span
+  if (!range.collapsed) {
+    const span = document.createElement('span');
+    span.style.fontSize = ptSize + 'pt';
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
     
-    if (!range.collapsed) {
-      const span = document.createElement('span');
-      span.style.fontSize = ptSize + 'pt';
-      span.appendChild(range.extractContents());
-      range.insertNode(span);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    } else {
-      document.execCommand('fontSize', false, '7');
-      const fontElements = document.getElementsByTagName('font');
-      for (let i = 0; i < fontElements.length; i++) {
-        if (fontElements[i].size === '7') {
-          fontElements[i].removeAttribute('size');
-          fontElements[i].style.fontSize = ptSize + 'pt';
-        }
-      }
-    }
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } 
+  // 2. If no text is highlighted, insert a zero-width space so future typing matches
+  else {
+    const span = document.createElement('span');
+    span.style.fontSize = ptSize + 'pt';
+    span.innerHTML = '&#8203;';
+    range.insertNode(span);
+    
+    range.setStart(span.firstChild, 1);
+    range.setEnd(span.firstChild, 1);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
+}
   
   function togglePasswordVisibility() {
     const passInput = document.getElementById('password-input');
