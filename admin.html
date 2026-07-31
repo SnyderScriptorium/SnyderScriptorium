@@ -629,7 +629,7 @@ function changeFontSize(ptSize) {
     if (countEl) countEl.innerText = manuscripts.length;
   }
 
-  // 1. PUBLISH POST FUNCTION (Registers to category storage & clears editor)
+// 1. PUBLISH POST FUNCTION (Registers to category storage & clears editor)
   function publishPost() {
     if (isHtmlView) {
       document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
@@ -650,12 +650,10 @@ function changeFontSize(ptSize) {
     else if (category === "curiosity") categoryName = "Curiosity Cabinet";
     else if (category === "fiction") categoryName = "K. W. Snyder Writing";
 
-    const cleanTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const fileName = `${cleanTitle}.html`;
     const currentDate = new Date().toLocaleDateString();
 
     let allPosts = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
-    allPosts.unshift({ title, category, fileName, date: currentDate, content });
+    allPosts.unshift({ title, category, categoryName, date: currentDate, content });
     localStorage.setItem('scriptorium_published_posts', JSON.stringify(allPosts));
 
     // Clear out inputs and reset form ("closes out" composition)
@@ -666,9 +664,18 @@ function changeFontSize(ptSize) {
       toggleBlogEditorMode();
     }
 
+    // Automatically remove from drafts if it was published from a saved draft
+    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+    const draftIndex = drafts.findIndex(d => d.title === title);
+    if (draftIndex > -1) {
+      drafts.splice(draftIndex, 1);
+      localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
+      updateDraftCount();
+    }
+
     alert(`Post published successfully to your "${categoryName}" category tracker!`);
   }
-
+    
   // 2. DOWNLOAD HTML FILE FUNCTION (Downloads the standalone file for GitHub)
   function downloadPostFile() {
     if (isHtmlView) {
