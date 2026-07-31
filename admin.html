@@ -101,6 +101,8 @@
   .custom-editor-box {
     width: 100%;
     min-height: 450px;
+    max-height: 450px;
+    overflow-y: auto;
     background: #fff;
     border: 1px solid #5C4033;
     border-bottom-left-radius: 4px;
@@ -220,26 +222,34 @@
         <button type="button" id="html-toggle-btn" onclick="toggleBlogEditorMode()" style="background: #fff; color: #5C4033; border: 1px solid #5C4033; padding: 4px 10px; font-size: 0.85rem; border-radius: 3px;">HTML Code</button>
       </div>
 
-      <!-- Expanded Word Processor Custom Toolbar -->
+<!-- Expanded Word Processor Custom Toolbar -->
       <div class="custom-toolbar">
-        <!-- Font Family Selector -->
+        <!-- Font Family Selector (Rendered in its own font) -->
         <select onchange="formatText('fontName', this.value); this.selectedIndex=0;" title="Font Family">
           <option value="" disabled selected>Font Type</option>
-          <option value="Playfair Display">Playfair Display</option>
-          <option value="Georgia">Georgia</option>
-          <option value="Times New Roman">Times New Roman</option>
-          <option value="Arial">Arial</option>
-          <option value="sans-serif">Sans-Serif</option>
-          <option value="monospace">Monospace</option>
+          <option value="Playfair Display" style="font-family: 'Playfair Display', serif;">Playfair Display</option>
+          <option value="Georgia" style="font-family: Georgia, serif;">Georgia</option>
+          <option value="Times New Roman" style="font-family: 'Times New Roman', serif;">Times New Roman</option>
+          <option value="Arial" style="font-family: Arial, sans-serif;">Arial</option>
+          <option value="Verdana" style="font-family: Verdana, sans-serif;">Verdana</option>
+          <option value="Courier New" style="font-family: 'Courier New', monospace;">Courier New</option>
+          <option value="sans-serif" style="font-family: sans-serif;">Sans-Serif</option>
+          <option value="monospace" style="font-family: monospace;">Monospace</option>
         </select>
 
-        <!-- Font Size Selector -->
-        <select onchange="formatText('fontSize', this.value); this.selectedIndex=0;" title="Font Size">
+        <!-- Numeric Font Size Selector (Google Docs Style) -->
+        <select onchange="changeFontSize(this.value); this.selectedIndex=0;" title="Font Size">
           <option value="" disabled selected>Size</option>
-          <option value="1">Small (1)</option>
-          <option value="3">Normal (3)</option>
-          <option value="5">Large (5)</option>
-          <option value="7">Huge (7)</option>
+          <option value="10">10pt</option>
+          <option value="12">12pt</option>
+          <option value="14">14pt</option>
+          <option value="16">16pt</option>
+          <option value="18">18pt</option>
+          <option value="20">20pt</option>
+          <option value="24">24pt</option>
+          <option value="28">28pt</option>
+          <option value="32">32pt</option>
+          <option value="36">36pt</option>
         </select>
 
         <!-- Text Color Picker -->
@@ -415,8 +425,34 @@
     } else {
       alert('Incorrect master password.');
     }
+    
   }
-
+function changeFontSize(ptSize) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    
+    // If text is highlighted, wrap it in a span with the exact font size
+    if (!range.collapsed) {
+      const span = document.createElement('span');
+      span.style.fontSize = ptSize + 'pt';
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else {
+      // If no text is highlighted, apply it to the active editor typing style
+      document.execCommand('fontSize', false, '7'); // fallback container
+      const fontElements = document.getElementsByTagName('font');
+      for (let i = 0; i < fontElements.length; i++) {
+        if (fontElements[i].size === '7') {
+          fontElements[i].removeAttribute('size');
+          fontElements[i].style.fontSize = ptSize + 'pt';
+        }
+      }
+    }
+  }
+  
   function togglePasswordVisibility() {
     const passInput = document.getElementById('password-input');
     const btn = document.getElementById('toggle-btn');
