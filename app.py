@@ -1,17 +1,19 @@
-import os
-from flask import Flask, render_template
+from flask import Flask, render_template_string
 
-# Explicitly tell Flask where the templates and static folders are
-app = Flask(
-    __name__,
-    template_folder=os.path.abspath("templates"),
-    static_folder=os.path.abspath("static"),
-)
+app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-  return render_template("index.html")
+  # This reads the index.html file straight from the main directory
+  try:
+    with open("index.html", "r", encoding="utf-8") as f:
+      return render_template_string(f.read())
+  except FileNotFoundError:
+    return (
+        "Error: index.html not found in root directory. Please check file"
+        " placement."
+    )
 
 
 if __name__ == "__main__":
