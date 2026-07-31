@@ -143,7 +143,7 @@
   </div>
 
   <!-- Post Blocks Feed -->
-  <div class="post-feed">
+  <div class="post-feed" id="posts-container">
     
     <!-- Post Block 1 -->
     <a href="curiosity-post-1.html" class="blog-block">
@@ -163,6 +163,34 @@
 <footer>
   <p>&copy; 2026 Snyder Scriptorium &nbsp;|&nbsp; <a href="admin.html" style="color: #5C4033; text-decoration: none; font-weight: 600;">Admin</a></p>
 </footer>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('posts-container');
+    if (!container) return;
+
+    const allPosts = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
+    const categoryPosts = allPosts.filter(p => p.category === 'curiosity');
+
+    if (categoryPosts.length === 0) return;
+
+    let html = '';
+    categoryPosts.forEach(post => {
+      html += `
+        <div class="blog-block" style="background: #FFFFFF; border: 1px solid #D2BC90; border-radius: 8px; padding: 22px 28px; box-shadow: 0 3px 6px rgba(0,0,0,0.06);">
+          <h2 style="color: #5C4033; font-size: 1.35rem; font-weight: 500; margin: 0 0 8px 0;">${post.title}</h2>
+          <div style="color: #7A6B5D; font-style: italic; font-size: 0.85rem; margin-bottom: 12px;">Published on ${post.date}</div>
+          <div style="font-size: 1.05rem; color: #555555; line-height: 1.5;">
+            ${post.content}
+          </div>
+        </div>
+      `;
+    });
+
+    // Prepend newly published posts to the top of the feed while keeping your hardcoded starter blocks below them
+    container.innerHTML = html + container.innerHTML;
+  });
+</script>
 
 </body>
 </html>
