@@ -474,27 +474,21 @@
   }
 
   // Function to move a post back to drafts
-function unpublishPost(postId) {
-  let published = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
-  let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+  function unpublishPost(postId) {
+    let published = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
+    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
 
-  // Find the post in published posts
-  const postIndex = published.findIndex(p => String(p.id) === String(postId));
-  if (postIndex === -1) return;
+    const postIndex = published.findIndex(p => String(p.id) === String(postId));
+    if (postIndex === -1) return;
 
-  // Pull it out of published
-  const [postToUnpublish] = published.splice(postIndex, 1);
+    const [postToUnpublish] = published.splice(postIndex, 1);
+    drafts.push(postToUnpublish);
 
-  // Push it back into drafts
-  drafts.push(postToUnpublish);
+    localStorage.setItem('scriptorium_published_posts', JSON.stringify(published));
+    localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
 
-  // Save both lists back to localStorage
-  localStorage.setItem('scriptorium_published_posts', JSON.stringify(published));
-  localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
-
-  // Refresh your admin dashboard view
-  loadAdminDashboard(); 
-}
+    loadAdminDashboard(); 
+  }
   
   function setupPlaintextPaste(elementId) {
     const el = document.getElementById(elementId);
