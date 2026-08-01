@@ -18,6 +18,22 @@ def login():
         username = request.form.get("username")
         password = request.form.get("password")
         @app.route("/admin")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        # Replace these with your real credentials
+        if username == "Snyder" and password == "scriptorium123":
+            session["logged_in"] = True
+            return redirect("/admin")
+        else:
+            return "Invalid credentials"
+
+    return render_template("login.html")
+        
 def admin():
     if not session.get("logged_in"):
         return redirect("/login")
