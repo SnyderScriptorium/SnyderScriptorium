@@ -647,7 +647,7 @@
     if (countEl) countEl.innerText = manuscripts.length;
   }
 
-  function publishPost() {
+function publishPost() {
     if (isHtmlView) {
       document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
     }
@@ -660,6 +660,39 @@
       alert('Please enter a post title before publishing.');
       return;
     }
+
+    let categoryName = "Journal";
+    if (category === "curations") categoryName = "Book Curations";
+    else if (category === "reviews") categoryName = "Book Reviews";
+    else if (category === "curiosity") categoryName = "Curiosity Cabinet";
+    else if (category === "fiction") categoryName = "K. W. Snyder Writing";
+
+    const currentDate = new Date().toLocaleDateString();
+    
+    // Generate a unique ID using the current timestamp
+    const id = Date.now();
+
+    let allPosts = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
+    allPosts.unshift({ id, title, category, categoryName, date: currentDate, content });
+    localStorage.setItem('scriptorium_published_posts', JSON.stringify(allPosts));
+
+    document.getElementById('post-title').value = '';
+    document.getElementById('blog-editor').innerHTML = '';
+    if (isHtmlView) {
+      document.getElementById('blog-html-code').value = '';
+      toggleBlogEditorMode();
+    }
+
+    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
+    const draftIndex = drafts.findIndex(d => d.title === title);
+    if (draftIndex > -1) {
+      drafts.splice(draftIndex, 1);
+      localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
+      updateDraftCount();
+    }
+
+    alert(`Post published successfully to your "${categoryName}" category tracker!`);
+  }
 
     let categoryName = "Journal";
     if (category === "curations") categoryName = "Book Curations";
