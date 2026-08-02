@@ -341,8 +341,8 @@
           <option value="sans-serif">Sans-Serif</option>
           <option value="monospace">Monospace</option>
         </select>
-
-        <select onmousedown="event.preventDefault()" onchange="changeFontSize(this.value); this.selectedIndex=0;" title="Font Size">
+        
+<select onmousedown="saveSelection()" onchange="restoreSelection(); changeFontSize(this.value); this.selectedIndex=0;" title="Font Size">
           <option value="" disabled selected>Size</option>
           <option value="10">10pt</option>
           <option value="11">11pt</option>
@@ -488,23 +488,55 @@
     applySpanStyle('fontFamily', fontFamily);
   }
 
+  let savedRange = null;
+function saveSelection() {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      savedRange = selection.getRangeAt(0);
+    }
+  }
+
+  function restoreSelection() {
+    if (savedRange) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
+  } // <--- Make sure this closing bracket is here!
+
+  function applySpanStyle(styleProperty, styleValue) {
+    let range = savedRange;
+    
+    if (!range) {
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        range = selection.getRangeAt(0);
+      }
+    }
+
+    if (!range || range.collapsed) return;
+
+    let container = range.commonAncestorContainer;
+    if (container.nodeType === 3) container = container.parentNode;
+
+    if (container.tagName === 'SPAN') {
+      container.style[styleProperty] = styleValue;
+    } else {
+      const span = document.createElement('span');
+      span.style[styleProperty] = styleValue;
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      
+      savedRange = null;
+    }
+  }
+
   function changeFontSize(ptSize) {
     applySpanStyle('fontSize', ptSize + 'pt');
   }
 
   function changeFontColor(colorHex) {
     applySpanStyle('color', colorHex);
-  }
-
-  function unlockDashboard() {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('admin-dashboard').style.display = 'block';
-    
-    setupPlaintextPaste('blog-editor');
-    setupPlaintextPaste('manuscript-editor');
-
-    updateDraftCount();
-    updateManuscriptCount();
   }
 
   function unpublishPost(postId) {
