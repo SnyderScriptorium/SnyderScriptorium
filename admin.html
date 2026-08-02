@@ -193,6 +193,7 @@
     <div style="display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 2px solid #5C4033; padding-bottom: 15px; flex-wrap: wrap; align-items: center;">
       <button type="button" onclick="switchTab('editor-tab')" id="btn-editor" style="background-color: #5C4033; color: #fff; border: none;">Write & Publish</button>
       <button type="button" onclick="switchTab('drafts-tab')" id="btn-drafts" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Blog Drafts (<span id="draft-count">0</span>)</button>
+      <button type="button" onclick="switchTab('published-tab')" id="btn-published" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Published Posts</button>
       <button type="button" onclick="switchTab('manuscript-tab')" id="btn-manuscript" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Manuscripts Studio (<span id="manuscript-count">0</span>)</button>
       <button type="button" onclick="switchTab('stats-tab')" id="btn-stats" style="background-color: #E8D9B5; color: #5C4033; border: 1px solid #5C4033;">Analytics</button>
       
@@ -305,7 +306,16 @@
       </div>
     </div>
 
-    <!-- TAB 3: MANUSCRIPTS STUDIO -->
+    <!-- TAB 3: PUBLISHED POSTS -->
+    <div id="published-tab" style="display: none;">
+      <h2 style="margin-top: 0;">Published Posts Tracker</h2>
+      <p style="color: #555; font-style: italic;">Manage live posts or unpublish them back to drafts if needed.</p>
+      <div id="published-container" style="display: grid; gap: 15px; margin-top: 20px;">
+        <p style="color: #666;">No published posts yet.</p>
+      </div>
+    </div>
+
+    <!-- TAB 4: MANUSCRIPTS STUDIO -->
     <div id="manuscript-tab" style="display: none;">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
         <div>
@@ -391,7 +401,7 @@
       </div>
     </div>
 
-    <!-- TAB 4: ANALYTICS -->
+    <!-- TAB 5: ANALYTICS -->
     <div id="stats-tab" style="display: none;">
       <h2 style="margin-top: 0;">Audience Analytics</h2>
       <p style="color: #555; font-style: italic;">Track daily, weekly, and monthly readership growth.</p>
@@ -487,7 +497,8 @@
     localStorage.setItem('scriptorium_published_posts', JSON.stringify(published));
     localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
 
-    loadAdminDashboard(); 
+    loadPublishedPostsList();
+    updateDraftCount();
   }
   
   function setupPlaintextPaste(elementId) {
@@ -544,7 +555,7 @@
   }
 
   function switchTab(tabId) {
-    const tabs = ['editor-tab', 'drafts-tab', 'manuscript-tab', 'stats-tab'];
+    const tabs = ['editor-tab', 'drafts-tab', 'published-tab', 'manuscript-tab', 'stats-tab'];
     tabs.forEach(t => {
       const el = document.getElementById(t);
       if (el) {
@@ -565,6 +576,7 @@
     });
 
     if (tabId === 'drafts-tab') loadDraftsList();
+    if (tabId === 'published-tab') loadPublishedPostsList();
     if (tabId === 'manuscript-tab') loadManuscriptsList();
   }
 
@@ -614,6 +626,34 @@
     container.innerHTML = html;
   }
 
+  function loadPublishedPostsList() {
+    const container = document.getElementById('published-container');
+    if (!container) return;
+    
+    let published = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
+    
+    if (published.length === 0) {
+      container.innerHTML = '<p style="color: #666;">No published posts yet.</p>';
+      return;
+    }
+
+    let html = '';
+    published.forEach((post) => {
+      html += `
+        <div style="background: #E8D9B5; padding: 15px; border-radius: 6px; border: 1px solid #5C4033; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 style="margin: 0 0 5px 0; color: #5C4033;">${post.title}</h3>
+            <small style="color: #555;">Published: ${post.date} | Category: ${post.categoryName}</small>
+          </div>
+          <div>
+            <button type="button" onclick="unpublishPost(${post.id})" style="background-color: #a94442; padding: 6px 12px; font-size: 0.9rem;">Unpublish to Drafts</button>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
   function loadDraftToEditor(index) {
     let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
     const draft = drafts[index];
@@ -647,7 +687,7 @@
     if (countEl) countEl.innerText = manuscripts.length;
   }
 
-function publishPost() {
+  function publishPost() {
     if (isHtmlView) {
       document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
     }
@@ -668,42 +708,10 @@ function publishPost() {
     else if (category === "fiction") categoryName = "K. W. Snyder Writing";
 
     const currentDate = new Date().toLocaleDateString();
-    
-    // Generate a unique ID using the current timestamp
     const id = Date.now();
 
     let allPosts = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
     allPosts.unshift({ id, title, category, categoryName, date: currentDate, content });
-    localStorage.setItem('scriptorium_published_posts', JSON.stringify(allPosts));
-
-    document.getElementById('post-title').value = '';
-    document.getElementById('blog-editor').innerHTML = '';
-    if (isHtmlView) {
-      document.getElementById('blog-html-code').value = '';
-      toggleBlogEditorMode();
-    }
-
-    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
-    const draftIndex = drafts.findIndex(d => d.title === title);
-    if (draftIndex > -1) {
-      drafts.splice(draftIndex, 1);
-      localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
-      updateDraftCount();
-    }
-
-    alert(`Post published successfully to your "${categoryName}" category tracker!`);
-  }
-
-    let categoryName = "Journal";
-    if (category === "curations") categoryName = "Book Curations";
-    else if (category === "reviews") categoryName = "Book Reviews";
-    else if (category === "curiosity") categoryName = "Curiosity Cabinet";
-    else if (category === "fiction") categoryName = "K. W. Snyder Writing";
-
-    const currentDate = new Date().toLocaleDateString();
-
-    let allPosts = JSON.parse(localStorage.getItem('scriptorium_published_posts')) || [];
-    allPosts.unshift({ title, category, categoryName, date: currentDate, content });
     localStorage.setItem('scriptorium_published_posts', JSON.stringify(allPosts));
 
     document.getElementById('post-title').value = '';
@@ -811,11 +819,6 @@ function publishPost() {
           <div>
             <h3 style="margin: 0 0 5px 0; color: #5C4033;">${book.title}</h3>
             <small style="color: #555;">Last saved: ${book.date}</small>
-          </div>
-          <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-            <button type="button" onclick="loadManuscriptToEditor(${index})" style="background-color: #5C4033; padding: 6px 12px; font-size: 0.9rem;">Open</button>
-            <button type="button" onclick="downloadManuscriptFile(${index})" style="background-color: #7A6B5D; padding: 6px 12px; font-size: 0.9rem;">Download File</button>
-            <button type="button" onclick="deleteManuscript(${index})" style="background-color: #a94442; padding: 6px 12px; font-size: 0.9rem;">Delete</button>
           </div>
         </div>
       `;
