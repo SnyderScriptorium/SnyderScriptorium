@@ -24,23 +24,23 @@ def the_blog():
     return render_template("blog_templates/theblog.html")
 
 
-@app.route("/blog/curations")
+@app.route("/blog/bookcurations")
 def book_curations():
     return render_template("blog_templates/book_curations.html")
 
 
-@app.route("/blog/reviews")
-def book_reviews():
+@app.route("/blog/bookreviews")
+def bookreviews():
     return render_template("blog_templates/bookreviews.html")
 
 
-@app.route("/blog/curiosity-cabinet")
+@app.route("/blog/curiosity_cabinet")
 def curiosity_cabinet():
     return render_template("blog_templates/curiosity_cabinet.html")
 
 
-@app.route("/snyder-writing")
-def kw_snyder_writing():
+@app.route("/kwsnyderwriting")
+def kwsnyderwriting():
     return render_template("kwsnyderwriting.html")
 
 
