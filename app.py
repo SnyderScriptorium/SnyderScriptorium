@@ -20,17 +20,17 @@ def about():
 
 @app.route("/blog")
 def the_blog():
-    return render_template("blog_templates/main_blog.html")
+    return render_template("blog_templates/theblog.html")
 
 
 @app.route("/blog/curations")
 def book_curations():
-    return render_template("blog_templates/curations.html")
+    return render_template("blog_templates/book_curations.html")
 
 
 @app.route("/blog/reviews")
 def book_reviews():
-    return render_template("blog_templates/book_reviews.html")
+    return render_template("blog_templates/bookreviews.html")
 
 
 @app.route("/blog/curiosity-cabinet")
