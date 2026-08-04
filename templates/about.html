@@ -90,19 +90,19 @@
 </head>
 <body>
 
-<a href="index.html">
-  <img src="logo3.png" alt="Snyder Scriptorium Logo" class="top-left-logo">
+<a href="{{ url_for('the_hearth') }}">
+  <img src="{{ url_for('static', filename='logo3.png') }}" alt="Snyder Scriptorium Logo" class="top-left-logo">
 </a>
 
 <div class="main-content">
   <h1>About</h1>
 
   <div class="nav-menu">
-    <a href="index.html">The Hearth</a>
-    <a href="about.html" style="font-weight: 700;">About</a>
-    <a href="theblog.html">The Blog</a>
-    <a href="thescriptorium.html">The Scriptorium</a>
-    <a href="merchstore.html">Merch Store</a>
+    <a href="{{ url_for('the_hearth') }}">The Hearth</a>
+    <a href="{{ url_for('about') }}" style="font-weight: 700;">About</a>
+    <a href="{{ url_for('the_blog') }}">The Blog</a>
+    <a href="{{ url_for('the_scriptorium') }}">The Scriptorium</a>
+    <a href="{{ url_for('merch_shop') }}">Merch Store</a>
   </div>
 
   <div class="content-section">
@@ -111,7 +111,7 @@
 </div>
 
 <footer>
-  <p>&copy; 2026 Snyder Scriptorium &nbsp;|&nbsp; <a href="admin.html" style="color: #5C4033; text-decoration: none; font-weight: 600;">Admin</a></p>
+  <p>&copy; 2026 Snyder Scriptorium &nbsp;|&nbsp; <a href="{{ url_for('admin_dashboard') }}" style="color: #5C4033; text-decoration: none; font-weight: 600;">Admin</a></p>
 </footer>
 
 </body>
