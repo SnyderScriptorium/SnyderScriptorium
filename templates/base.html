@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}The Snyder Scriptorium{% endblock %}</title>
+    <!-- We can link a basic style.css here later when you're ready -->
+</head>
+<body>
+
+    <!-- Master Navigation Bar -->
+    <header>
+        <h1>The Snyder Scriptorium</h1>
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('home') }}">Home</a></li>
+                <li><a href="{{ url_for('snyder_writing') }}">K. W. Snyder Writing</a></li>
+                
+                <!-- Blog Dropdown / Hub -->
+                <li>
+                    <a href="{{ url_for('main_blog') }}">Blog</a>
+                    <ul>
+                        <li><a href="{{ url_for('blog_curations') }}">Book Curations</a></li>
+                        <li><a href="{{ url_for('blog_reviews') }}">Book Reviews</a></li>
+                        <li><a href="{{ url_for('blog_cabinet') }}">Curiosity Cabinet</a></li>
+                    </ul>
+                </li>
+
+                <li><a href="{{ url_for('store') }}">Bookstore</a></li>
+                <li><a href="{{ url_for('merch') }}">Merch Store</a></li>
+                <li><a href="{{ url_for('about') }}">About</a></li>
+                <li><a href="{{ url_for('admin_dashboard') }}">Admin</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <hr>
+
+    <!-- Dynamic Content Injection Point -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <hr>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2026 The Snyder Scriptorium. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>
