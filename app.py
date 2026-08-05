@@ -9,14 +9,12 @@ app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
 
 
 @app.route('/')
-def the_hearth():
+def index():
     return render_template('index.html')
-
 
 @app.route("/about")
 def about():
     return render_template("about.html")
-
 
 @app.route("/blog")
 def the_blog():
