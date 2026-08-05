@@ -8,10 +8,9 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
 
 
-@app.route("/")
-@app.route("/index")
+@app.route('/')
 def the_hearth():
-    return render_template("index.html")
+    return render_template('index.html')
 
 
 @app.route("/about")
