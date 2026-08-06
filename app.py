@@ -6,8 +6,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 # Explicitly point Flask to your templates folder using the absolute path
 app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
-
-    @app.route("/")
+@app.route("/")
 def the_hearth():
     return render_template("index.html")
 
