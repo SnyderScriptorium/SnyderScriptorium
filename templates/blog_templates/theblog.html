@@ -138,32 +138,32 @@
     <a href="{{ url_for('about') }}">About</a>
     <a href="{{ url_for('the_blog') }}" style="font-weight: 700;">The Blog</a>
     <a href="{{ url_for('the_scriptorium') }}">The Scriptorium</a>
-    <a href="{{ url_for('merch_store') }}">Merch Store</a>
+ <a href="{{ url_for('merch_shop') }}">Merch Store</a>
   </div>
   
   <!-- Blog Category Blocks Feed -->
   <div class="blog-feed">
     
     <!-- Category Block 1: Book Curations -->
-    <a href="book-curations.html" class="blog-block">
+  <a href="{{ url_for('book_curations') }}">
       <h2>Book Curations</h2>
       <p>Hand-picked reading lists, craft literature notes, and recommendations for writers and readers alike.</p>
     </a>
 
     <!-- Category Block 2: Book Reviews -->
-    <a href="book-reviews.html" class="blog-block">
+ <a href="{{ url_for('bookreviews') }}">
       <h2>Book Reviews</h2>
       <p>Deep dives, thoughts, and ratings on recent fiction and non-fiction reads.</p>
     </a>
 
     <!-- Category Block 3: Curiosity Cabinet -->
-    <a href="curiosity-cabinet.html" class="blog-block">
+    <a href="{{ url_for('curiosity_cabinet') }}">
       <h2>Curiosity Cabinet</h2>
       <p>Non-fiction explorations, fascinating historical tidbits, and deep dives into intriguing real-world subjects.</p>
     </a>
     
 <!-- Category Block 4: K.W. Snyder Writing -->
-    <a href="kwsnyderwriting.html" class="blog-block">
+<a href="{{ url_for('kwsnyderwriting') }}">
       <h2>K.W. Snyder Writing</h2>
       <p>Personal updates, drafting milestones, and behind-the-scenes writing progress.</p>
     </a>
