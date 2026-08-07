@@ -40,20 +40,18 @@ def curiosity_cabinet():
 def kwsnyderwriting():
     return render_template("kwsnyderwriting.html")
 
-
 @app.route("/store")
 def the_scriptorium():
     return render_template("store.html")
-
 
 @app.route("/merch")
 def merch_shop():
     return render_template("merch.html")
 
-
 @app.route("/admin")
 def admin_dashboard():
-    return render_template("admin.html")
+    logged_in = session.get("admin_logged_in", False)
+    return render_template("admin.html", logged_in=logged_in)
 
 @app.route("/admin/login", methods=["POST"])
 def admin_login():
