@@ -126,9 +126,11 @@
 <body>
 
 <a href="{{ url_for('the_hearth') }}">
-  <img src="logo3.png" alt="Snyder Scriptorium Logo" class="top-left-logo">
+    <img src="{{ url_for('static', filename='logo3.png') }}"
+         alt="Snyder Scriptorium Logo"
+         class="top-left-logo">
 </a>
-
+  
 <div class="main-content">
   <!-- Heading -->
   <h1>The Blog</h1>
