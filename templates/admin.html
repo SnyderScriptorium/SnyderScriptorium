@@ -438,12 +438,13 @@
 
   </div>
 
-<script>
-  window.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem('scriptorium_logged_in') === 'true') {
-      unlockDashboard();
-    }
-  });
+window.addEventListener('DOMContentLoaded', () => {
+  const loggedIn = {{ 'true' if logged_in else 'false' }};
+
+  if (loggedIn) {
+    unlockDashboard();
+  }
+});
 
   function checkPassword() {
     const pass = document.getElementById('password-input').value;
