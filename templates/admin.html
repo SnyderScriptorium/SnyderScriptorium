@@ -176,14 +176,21 @@
     <p>Please enter your master password to unlock the studio dashboard.</p>
     
     <div style="position: relative; margin: 10px 0 20px 0;">
-      <input type="password" id="password-input" placeholder="Enter password..." style="margin: 0; width: 100%; padding-right: 70px; box-sizing: border-box;">
+   <input type="password" id="password-input" name="password" placeholder="Enter password..." ...
       <button type="button" id="toggle-btn" onclick="togglePasswordVisibility()" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); padding: 6px 12px; font-size: 0.8rem; background: #E8D9B5; color: #5C4033; border: 1px solid #5C4033; border-radius: 3px; cursor: pointer; height: auto;">Show</button>
     </div>
 
-    <div style="margin-top: 15px;">
-      <button type="button" onclick="checkPassword()">Log In</button>
-      <button type="button" onclick="goToHome()" style="background-color: transparent; color: #5C4033; border: 1px solid #5C4033; margin-left: 10px;">Return to Home</button>
-    </div>
+  <form action="{{ url_for('admin_login') }}" method="POST" style="margin-top: 15px;">
+  <button type="submit">Log In</button>
+
+  <button
+    type="button"
+    onclick="goToHome()"
+    style="background-color: transparent; color: #5C4033; border: 1px solid #5C4033; margin-left: 10px;"
+  >
+    Return to Home
+  </button>
+</form>
   </div>
 
   <!-- ADMIN DASHBOARD -->
