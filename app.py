@@ -1,11 +1,13 @@
 import os
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for, session
 
 # Find the exact folder where app.py lives
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # Explicitly point Flask to your templates folder using the absolute path
 app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
+app.secret_key = os.environ.get("SECRET_KEY", "snyder-scriptorium-development-key")
+
 @app.route("/")
 def the_hearth():
     return render_template("index.html")
@@ -53,6 +55,15 @@ def merch_shop():
 def admin_dashboard():
     return render_template("admin.html")
 
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    password = request.form.get("password", "")
+
+    if password == "scriptorium123":
+        session["admin_logged_in"] = True
+        return redirect(url_for("admin_dashboard"))
+
+    return redirect(url_for("admin_dashboard"))
 
 if __name__ == "__main__":
     app.run(debug=True)
