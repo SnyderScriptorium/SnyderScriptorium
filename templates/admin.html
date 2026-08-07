@@ -976,7 +976,15 @@ function saveSelection() {
       event.target.value = '';
     };
     reader.readAsText(file);
+    
   }
+  function unlockDashboard() {
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("admin-dashboard").style.display = "block";
+
+    updateDraftCount();
+    updateManuscriptCount();
+}
 </script>
 </body>
 </html>
