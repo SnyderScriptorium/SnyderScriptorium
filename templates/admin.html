@@ -656,24 +656,51 @@ function goToHome() {
     if (tabId === 'manuscript-tab') loadManuscriptsList();
   }
 
-  function saveDraft() {
-    if (isHtmlView) {
-      document.getElementById('blog-editor').innerHTML = document.getElementById('blog-html-code').value;
+async function saveDraft() {
+  if (isHtmlView) {
+    document.getElementById('blog-editor').innerHTML =
+      document.getElementById('blog-html-code').value;
+  }
+
+  const title =
+    document.getElementById('post-title').value.trim() ||
+    "Untitled Draft";
+
+  const category =
+    document.getElementById('post-category').value;
+
+  const content =
+    document.getElementById('blog-editor').innerHTML;
+
+  try {
+    const response = await fetch('/api/drafts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: title,
+        category: category,
+        content: content
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Unable to save draft.');
     }
 
-    const title = document.getElementById('post-title').value || "Untitled Draft";
-    const category = document.getElementById('post-category').value;
-    const content = document.getElementById('blog-editor').innerHTML;
-    const date = new Date().toLocaleDateString();
+    alert('Blog draft saved successfully to backend storage.');
 
-    const draft = { title, category, content, date };
-    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
-    drafts.push(draft);
-    localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
-
-    alert('Blog draft saved successfully!');
+    await loadDraftsList();
     updateDraftCount();
+
+  } catch (error) {
+    console.error('Save draft error:', error);
+    alert('Unable to save the draft. Please try again.');
   }
+}
 
   function loadDraftsList() {
     const container = document.getElementById('drafts-container');
