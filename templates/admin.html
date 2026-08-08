@@ -615,13 +615,10 @@ function saveSelection() {
       toggleBtn.style.background = '#fff';
       isHtmlView = false;
     }
-  }
-
-  function logoutAdmin() {
-    sessionStorage.removeItem('scriptorium_logged_in');
-    location.reload();
-  }
-
+    
+function logoutAdmin() {
+    window.location.href = '/admin/logout';
+}
   function goToHome() {
     window.location.href = '/';
   }
