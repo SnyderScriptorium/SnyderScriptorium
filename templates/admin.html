@@ -175,10 +175,22 @@
     <h2>Scriptorium Backend Access</h2>
     <p>Please enter your master password to unlock the studio dashboard.</p>
     
-    <div style="position: relative; margin: 10px 0 20px 0;">
-<input type="password" id="password-input" name="password" placeholder="Enter password..." required>
-      <button type="button" id="toggle-btn" onclick="togglePasswordVisibility()" style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); padding: 6px 12px; font-size: 0.8rem; background: #E8D9B5; color: #5C4033; border: 1px solid #5C4033; border-radius: 3px; cursor: pointer; height: auto;">Show</button>
-    </div>
+   <form action="{{ url_for('admin_login') }}" method="POST" style="margin-top: 15px;">
+
+  <div style="position: relative; margin: 10px 0 20px 0;">
+    <input type="password" id="password-input" name="password" placeholder="Enter password..." required>
+
+    <button
+      type="button"
+      id="toggle-btn"
+      onclick="togglePasswordVisibility()"
+      style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); padding: 6px 12px; font-size: 0.8rem; background: #E8D9B5; color: #5C4033; border: 1px solid #5C4033; border-radius: 3px; cursor: pointer; height: auto;"
+    >
+      Show
+    </button>
+  </div>
+
+  <button type="submit">Log In</button>
 
   <form action="{{ url_for('admin_login') }}" method="POST" style="margin-top: 15px;">
   <button type="submit">Log In</button>
@@ -836,7 +848,7 @@ function saveSelection() {
   <div class="post-content">
     ${content}
   </div>
-  </script>
+  <\/script>
 </body>
 </html>`;
 
