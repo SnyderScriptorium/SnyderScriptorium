@@ -57,6 +57,11 @@ def admin_dashboard():
 def admin_login():
     password = request.form.get("password", "")
 
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin_logged_in", None)
+    return redirect(url_for("admin"))
+
     if password == "scriptorium123":
         session["admin_logged_in"] = True
         return redirect(url_for("admin_dashboard"))
