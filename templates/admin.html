@@ -595,18 +595,11 @@ function saveSelection() {
   }
 
   let isHtmlView = false;
+  
   function toggleBlogEditorMode() {
     const visualBox = document.getElementById('blog-editor');
     const htmlBox = document.getElementById('blog-html-code');
     const toggleBtn = document.getElementById('html-toggle-btn');
-
-    if (!isHtmlView) {
-      htmlBox.value = visualBox.innerHTML;
-      visualBox.style.display = 'none';
-      htmlBox.style.display = 'block';
-      toggleBtn.innerText = 'Compose View';
-      toggleBtn.style.background = '#E8D9B5';
-      isHtmlView = true;
     } else {
       visualBox.innerHTML = htmlBox.value;
       htmlBox.style.display = 'none';
@@ -615,10 +608,12 @@ function saveSelection() {
       toggleBtn.style.background = '#fff';
       isHtmlView = false;
     }
-    
-function logoutAdmin() {
+  }
+
+  function logoutAdmin() {
     window.location.href = '/admin/logout';
-}
+  }
+
   function goToHome() {
     window.location.href = '/';
   }
