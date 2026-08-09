@@ -1,16 +1,49 @@
 {% extends "base.html" %}
 
-{% block content %}
-    <h2>The Scriptorium Merch Store</h2>
-    <p>Explore custom reader gear, literary accessories, and exclusive merchandise designed for book lovers.</p>
-    
-    <!-- We will add your merch inventory loop here later when your backend is connected! -->
+{% block title %}
+Merch Shop — Snyder Scriptorium
 {% endblock %}
 
-<div class="nav-menu">
-    <a href="{{ url_for('index') }}">The Hearth</a>
-    <a href="{{ url_for('about') }}">About</a>
-    <a href="{{ url_for('the_blog') }}" style="font-weight: 700;">The Blog</a>
-    <a href="{{ url_for('the_scriptorium') }}">The Scriptorium</a>
-    <a href="{{ url_for('merch_store') }}">Merch Store</a>
-  </div>
+{% block content %}
+
+<section class="merch-page">
+
+```
+<div class="page-heading">
+    <h1>Merch Shop</h1>
+</div>
+
+<div class="content-section">
+
+    <h2>Snyder Scriptorium Goods</h2>
+
+    <p>
+        Welcome to the Snyder Scriptorium Merch Shop —
+        a collection of literary goods and reader-inspired
+        pieces created for those who never feel they have
+        too many books.
+    </p>
+
+    <p>
+        Reader gear, literary accessories, bookmarks, and
+        exclusive Scriptorium merchandise will be added here
+        as the shop develops.
+    </p>
+
+    <div class="store-coming-soon">
+
+        <h2>Coming Soon</h2>
+
+        <p>
+            The shelves are being stocked.
+            Check back soon for the first collection.
+        </p>
+
+    </div>
+
+</div>
+```
+
+</section>
+
+{% endblock %}
