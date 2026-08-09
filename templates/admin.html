@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,15 +6,22 @@
 
 <title>Scriptorium Control Panel</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
+  * {
+    box-sizing: border-box;
+  }
+
   body {
     background-color: #E8D9B5;
     color: #3A3A3A;
-    font-family: "Playfair Display", serif;
+    font-family: "Playfair Display", Georgia, serif;
     margin: 0;
     padding: 20px;
+    line-height: 1.6;
   }
 
   .header-container {
@@ -40,10 +46,13 @@
     max-width: 950px;
     margin: 0 auto;
     background: #FDFBF7;
-    padding: 20px;
+    padding: 25px;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    box-sizing: border-box;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  }
+
+  #admin-dashboard {
+    display: none;
   }
 
   input[type="password"],
@@ -56,7 +65,7 @@
     border-radius: 4px;
     background: #fff;
     font-family: inherit;
-    box-sizing: border-box;
+    font-size: 1rem;
   }
 
   button {
@@ -73,6 +82,32 @@
   button:hover {
     background-color: #4A3525;
   }
+
+  button.secondary {
+    background-color: #7A6B5D;
+  }
+
+  button.danger {
+    background-color: #A94442;
+  }
+
+  button.draft {
+    background-color: #A67B5B;
+  }
+
+  button.light {
+    background-color: #E8D9B5;
+    color: #5C4033;
+    border: 1px solid #5C4033;
+  }
+
+  button.light:hover {
+    background-color: #D9C79E;
+  }
+
+  /* ========================================================
+     TOOLBAR
+     ======================================================== */
 
   .custom-toolbar {
     display: flex;
@@ -115,6 +150,35 @@
     margin: 0 4px;
   }
 
+  .color-control {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: #fff;
+    padding: 2px 6px;
+    border: 1px solid #5C4033;
+    border-radius: 3px;
+  }
+
+  .color-control label {
+    font-size: 0.8rem;
+    color: #5C4033;
+    margin: 0;
+  }
+
+  .color-control input {
+    width: 25px;
+    height: 22px;
+    border: none;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  /* ========================================================
+     EDITORS
+     ======================================================== */
+
   .custom-editor-box {
     width: 100%;
     min-height: 450px;
@@ -125,12 +189,16 @@
     border-bottom-left-radius: 4px;
     border-bottom-right-radius: 4px;
     padding: 20px;
-    box-sizing: border-box;
     font-family: sans-serif;
     font-size: 15px;
     line-height: 1.7;
     outline: none;
     margin-bottom: 20px;
+  }
+
+  .manuscript-editor {
+    min-height: 550px;
+    max-height: 650px;
   }
 
   #blog-html-code {
@@ -144,11 +212,65 @@
     border: 1px solid #5C4033;
     border-bottom-left-radius: 4px;
     border-bottom-right-radius: 4px;
-    box-sizing: border-box;
     display: none;
     margin-bottom: 20px;
     line-height: 1.5;
+    resize: vertical;
   }
+
+  /* ========================================================
+     TABS
+     ======================================================== */
+
+  .tab-navigation {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+    border-bottom: 2px solid #5C4033;
+    padding-bottom: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .tab-spacer {
+    margin-left: auto;
+  }
+
+  /* ========================================================
+     CARDS
+     ======================================================== */
+
+  .content-card {
+    background: #E8D9B5;
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid #5C4033;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .content-card h3 {
+    margin: 0 0 5px 0;
+    color: #5C4033;
+  }
+
+  .content-card small {
+    color: #555;
+  }
+
+  .action-row {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  /* ========================================================
+     ANALYTICS
+     ======================================================== */
 
   .stats-grid {
     display: grid;
@@ -162,6 +284,7 @@
     padding: 15px;
     border-radius: 6px;
     text-align: center;
+    border: 1px solid #D1BE94;
   }
 
   .stat-card h3 {
@@ -176,43 +299,23 @@
     color: #3A3A3A;
   }
 
-  .item-card {
-    background: #E8D9B5;
-    padding: 15px;
-    border-radius: 6px;
-    border: 1px solid #5C4033;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
+  .status-message {
+    margin: 15px 0;
+    padding: 10px 14px;
+    border-radius: 4px;
+    display: none;
   }
 
-  .item-card h3 {
-    margin: 0 0 5px 0;
-    color: #5C4033;
+  .status-success {
+    background: #E4EFD9;
+    color: #405A32;
+    border: 1px solid #A9BE91;
   }
 
-  .item-card small {
-    color: #555;
-  }
-
-  .danger-button {
-    background-color: #a94442;
-    padding: 6px 12px;
-    font-size: 0.9rem;
-  }
-
-  .secondary-button {
-    background-color: #7A6B5D;
-  }
-
-  .success-button {
-    background-color: #5C4033;
-  }
-
-  .draft-button {
-    background-color: #A67B5B;
+  .status-error {
+    background: #F4DADA;
+    color: #7A2929;
+    border: 1px solid #C98B8B;
   }
 
   @media (max-width: 768px) {
@@ -244,6 +347,11 @@
     .stats-grid {
       grid-template-columns: 1fr;
     }
+
+    .tab-spacer {
+      width: 100%;
+      margin-left: 0;
+    }
   }
 </style>
 </head>
@@ -256,11 +364,15 @@
   </a>
 </div>
 
-<!-- ========================================================= -->
-<!-- LOGIN SCREEN -->
-<!-- ========================================================= -->
+<!-- =========================================================
+     LOGIN
+========================================================= -->
 
-<div id="login-screen" class="login-container">
+<div
+  id="login-screen"
+  class="login-container"
+  {% if logged_in %}style="display:none;"{% endif %}
+>
 
   <h2>Scriptorium Backend Access</h2>
 
@@ -268,9 +380,13 @@
     Please enter your master password to unlock the studio dashboard.
   </p>
 
-  <form action="{{ url_for('admin_login') }}" method="POST" style="margin-top: 15px;">
+  <form
+    action="{{ url_for('admin_login') }}"
+    method="POST"
+    style="margin-top:15px;"
+  >
 
-    <div style="position: relative; margin: 10px 0 20px 0;">
+    <div style="position:relative; margin:10px 0 20px 0;">
 
       <input
         type="password"
@@ -278,7 +394,7 @@
         name="password"
         placeholder="Enter password..."
         required
-        style="padding-right: 70px;"
+        style="padding-right:70px; margin-bottom:0;"
       >
 
       <button
@@ -286,18 +402,16 @@
         id="toggle-btn"
         onclick="togglePasswordVisibility()"
         style="
-          position: absolute;
-          right: 6px;
-          top: 50%;
-          transform: translateY(-50%);
-          padding: 6px 12px;
-          font-size: 0.8rem;
-          background: #E8D9B5;
-          color: #5C4033;
-          border: 1px solid #5C4033;
-          border-radius: 3px;
-          cursor: pointer;
-          height: auto;
+          position:absolute;
+          right:6px;
+          top:50%;
+          transform:translateY(-50%);
+          padding:6px 12px;
+          font-size:0.8rem;
+          background:#E8D9B5;
+          color:#5C4033;
+          border:1px solid #5C4033;
+          height:auto;
         "
       >
         Show
@@ -312,39 +426,27 @@
     <button
       type="button"
       onclick="goToHome()"
-      style="
-        background-color: transparent;
-        color: #5C4033;
-        border: 1px solid #5C4033;
-        margin-left: 10px;
-      "
+      class="light"
+      style="margin-left:10px;"
     >
       Return to Home
     </button>
 
   </form>
-
 </div>
 
+<!-- =========================================================
+     ADMIN DASHBOARD
+========================================================= -->
 
-<!-- ========================================================= -->
-<!-- ADMIN DASHBOARD -->
-<!-- ========================================================= -->
-
-<div id="admin-dashboard">
+<div
+  id="admin-dashboard"
+  {% if logged_in %}style="display:block;"{% endif %}
+>
 
   <!-- TAB NAVIGATION -->
-  <div
-    style="
-      display: flex;
-      gap: 10px;
-      margin-bottom: 25px;
-      border-bottom: 2px solid #5C4033;
-      padding-bottom: 15px;
-      flex-wrap: wrap;
-      align-items: center;
-    "
-  >
+
+  <div class="tab-navigation">
 
     <button
       type="button"
@@ -358,7 +460,7 @@
       type="button"
       onclick="switchTab('drafts-tab')"
       id="btn-drafts"
-      style="background-color:#E8D9B5;color:#5C4033;border:1px solid #5C4033;"
+      class="light"
     >
       Blog Drafts (<span id="draft-count">0</span>)
     </button>
@@ -367,7 +469,7 @@
       type="button"
       onclick="switchTab('published-tab')"
       id="btn-published"
-      style="background-color:#E8D9B5;color:#5C4033;border:1px solid #5C4033;"
+      class="light"
     >
       Published Posts
     </button>
@@ -376,7 +478,7 @@
       type="button"
       onclick="switchTab('manuscript-tab')"
       id="btn-manuscript"
-      style="background-color:#E8D9B5;color:#5C4033;border:1px solid #5C4033;"
+      class="light"
     >
       Manuscripts Studio (<span id="manuscript-count">0</span>)
     </button>
@@ -385,17 +487,17 @@
       type="button"
       onclick="switchTab('stats-tab')"
       id="btn-stats"
-      style="background-color:#E8D9B5;color:#5C4033;border:1px solid #5C4033;"
+      class="light"
     >
       Analytics
     </button>
 
-    <div style="margin-left:auto;">
+    <div class="tab-spacer">
 
       <button
         type="button"
         onclick="logoutAdmin()"
-        style="padding:6px 14px;font-size:0.9rem;margin-right:8px;"
+        style="padding:6px 14px; font-size:0.9rem;"
       >
         Log Out
       </button>
@@ -403,13 +505,8 @@
       <button
         type="button"
         onclick="goToHome()"
-        style="
-          background-color:transparent;
-          color:#5C4033;
-          border:1px solid #5C4033;
-          padding:6px 14px;
-          font-size:0.9rem;
-        "
+        class="light"
+        style="padding:6px 14px; font-size:0.9rem;"
       >
         Go to Home
       </button>
@@ -418,10 +515,11 @@
 
   </div>
 
+  <div id="status-message" class="status-message"></div>
 
-  <!-- ========================================================= -->
-  <!-- TAB 1: BLOG EDITOR -->
-  <!-- ========================================================= -->
+  <!-- =======================================================
+       BLOG EDITOR
+  ======================================================== -->
 
   <div id="editor-tab">
 
@@ -440,7 +538,7 @@
     >
 
     <label for="post-category">
-      Select Category Page:
+      Select Category:
     </label>
 
     <select id="post-category">
@@ -457,12 +555,27 @@
         Curiosity Cabinet
       </option>
 
-      <option value="fiction">
-        K. W. Snyder Writing
+      <option value="kwsnyderwriting">
+        K. W. Snyder Writing — Members Only
       </option>
 
     </select>
 
+    <label for="post-access">
+      Access:
+    </label>
+
+    <select id="post-access">
+
+      <option value="public">
+        Public
+      </option>
+
+      <option value="members">
+        Members Only
+      </option>
+
+    </select>
 
     <div
       style="
@@ -481,13 +594,10 @@
         type="button"
         id="html-toggle-btn"
         onclick="toggleBlogEditorMode()"
+        class="light"
         style="
-          background:#fff;
-          color:#5C4033;
-          border:1px solid #5C4033;
           padding:4px 10px;
           font-size:0.85rem;
-          border-radius:3px;
         "
       >
         HTML Code
@@ -495,17 +605,14 @@
 
     </div>
 
-
     <!-- BLOG TOOLBAR -->
 
     <div class="custom-toolbar">
 
       <select
-        onmousedown="event.preventDefault()"
         onchange="changeFontStyle(this.value); this.selectedIndex=0;"
         title="Font Family"
       >
-
         <option value="" disabled selected>
           Font Type
         </option>
@@ -544,9 +651,9 @@
 
       </select>
 
-
       <select
-        onchange="saveSelection(); changeFontSize(this.value); this.selectedIndex=0;"
+        onmousedown="saveSelection()"
+        onchange="restoreSelection(); changeFontSize(this.value); this.selectedIndex=0;"
         title="Font Size"
       >
 
@@ -572,28 +679,9 @@
 
       </select>
 
+      <div class="color-control">
 
-      <div
-        style="
-          display:flex;
-          align-items:center;
-          gap:3px;
-          background:#fff;
-          padding:2px 6px;
-          border:1px solid #5C4033;
-          border-radius:3px;
-        "
-      >
-
-        <label
-          for="text-color-picker"
-          style="
-            font-size:0.8rem;
-            cursor:pointer;
-            margin:0;
-            color:#5C4033;
-          "
-        >
+        <label for="text-color-picker">
           Color:
         </label>
 
@@ -602,18 +690,9 @@
           id="text-color-picker"
           value="#3A3A3A"
           onchange="changeFontColor(this.value)"
-          style="
-            width:25px;
-            height:22px;
-            border:none;
-            padding:0;
-            background:none;
-            cursor:pointer;
-          "
         >
 
       </div>
-
 
       <div class="toolbar-divider"></div>
 
@@ -628,7 +707,6 @@
       <button type="button" onclick="formatText('underline')">
         <u>U</u>
       </button>
-
 
       <div class="toolbar-divider"></div>
 
@@ -648,7 +726,6 @@
         Justify
       </button>
 
-
       <div class="toolbar-divider"></div>
 
       <button type="button" onclick="formatText('insertUnorderedList')">
@@ -658,7 +735,6 @@
       <button type="button" onclick="formatText('insertOrderedList')">
         Numbered List
       </button>
-
 
       <div class="toolbar-divider"></div>
 
@@ -672,7 +748,6 @@
 
     </div>
 
-
     <div
       id="blog-editor"
       class="custom-editor-box"
@@ -684,20 +759,11 @@
       placeholder="Edit raw HTML code here..."
     ></textarea>
 
-
-    <div
-      style="
-        margin-top:20px;
-        display:flex;
-        gap:15px;
-        flex-wrap:wrap;
-      "
-    >
+    <div class="action-row">
 
       <button
         type="button"
         onclick="publishPost()"
-        class="success-button"
       >
         Publish Post
       </button>
@@ -705,7 +771,7 @@
       <button
         type="button"
         onclick="downloadPostFile()"
-        class="secondary-button"
+        class="secondary"
       >
         Download HTML File
       </button>
@@ -713,19 +779,26 @@
       <button
         type="button"
         onclick="saveDraft()"
-        class="draft-button"
+        class="draft"
       >
         Save as Draft
+      </button>
+
+      <button
+        type="button"
+        onclick="clearBlogEditor()"
+        class="light"
+      >
+        Clear
       </button>
 
     </div>
 
   </div>
 
-
-  <!-- ========================================================= -->
-  <!-- TAB 2: DRAFTS -->
-  <!-- ========================================================= -->
+  <!-- =======================================================
+       DRAFTS
+  ======================================================== -->
 
   <div id="drafts-tab" style="display:none;">
 
@@ -733,51 +806,49 @@
       Saved Blog Drafts
     </h2>
 
-    <p style="color:#555;font-style:italic;">
-      Unfinished blog posts stored safely in your backend.
+    <p style="color:#555; font-style:italic;">
+      Unfinished blog posts stored safely in your Scriptorium database.
     </p>
 
     <div
       id="drafts-container"
-      style="display:grid;gap:15px;margin-top:20px;"
+      style="display:grid; gap:15px; margin-top:20px;"
     >
       <p style="color:#666;">
-        No drafts saved yet.
+        Loading drafts...
       </p>
     </div>
 
   </div>
 
-
-  <!-- ========================================================= -->
-  <!-- TAB 3: PUBLISHED POSTS -->
-  <!-- ========================================================= -->
+  <!-- =======================================================
+       PUBLISHED
+  ======================================================== -->
 
   <div id="published-tab" style="display:none;">
 
     <h2 style="margin-top:0;">
-      Published Posts Tracker
+      Published Posts
     </h2>
 
-    <p style="color:#555;font-style:italic;">
-      Manage live posts or unpublish them back to drafts if needed.
+    <p style="color:#555; font-style:italic;">
+      Posts currently stored in your Scriptorium database.
     </p>
 
     <div
       id="published-container"
-      style="display:grid;gap:15px;margin-top:20px;"
+      style="display:grid; gap:15px; margin-top:20px;"
     >
       <p style="color:#666;">
-        No published posts yet.
+        Loading published posts...
       </p>
     </div>
 
   </div>
 
-
-  <!-- ========================================================= -->
-  <!-- TAB 4: MANUSCRIPTS -->
-  <!-- ========================================================= -->
+  <!-- =======================================================
+       MANUSCRIPTS
+  ======================================================== -->
 
   <div id="manuscript-tab" style="display:none;">
 
@@ -810,7 +881,6 @@
 
       </div>
 
-
       <div>
 
         <input
@@ -824,8 +894,8 @@
         <button
           type="button"
           onclick="document.getElementById('upload-file-input').click()"
-          class="secondary-button"
-          style="font-size:0.9rem;padding:8px 14px;"
+          class="secondary"
+          style="font-size:0.9rem; padding:8px 14px;"
         >
           Upload Backup File
         </button>
@@ -833,7 +903,6 @@
       </div>
 
     </div>
-
 
     <label for="manuscript-title">
       Book / Document Title:
@@ -845,16 +914,13 @@
       placeholder="Enter book title or chapter name..."
     >
 
-
     <label>
       Document Content:
     </label>
 
-
     <div class="custom-toolbar">
 
       <select
-        onmousedown="event.preventDefault()"
         onchange="changeFontStyle(this.value); this.selectedIndex=0;"
       >
 
@@ -888,7 +954,6 @@
 
       </select>
 
-
       <select
         onmousedown="saveSelection()"
         onchange="restoreSelection(); changeFontSize(this.value); this.selectedIndex=0;"
@@ -916,28 +981,9 @@
 
       </select>
 
+      <div class="color-control">
 
-      <div
-        style="
-          display:flex;
-          align-items:center;
-          gap:3px;
-          background:#fff;
-          padding:2px 6px;
-          border:1px solid #5C4033;
-          border-radius:3px;
-        "
-      >
-
-        <label
-          for="manuscript-color-picker"
-          style="
-            font-size:0.8rem;
-            cursor:pointer;
-            margin:0;
-            color:#5C4033;
-          "
-        >
+        <label for="manuscript-color-picker">
           Color:
         </label>
 
@@ -946,24 +992,13 @@
           id="manuscript-color-picker"
           value="#3A3A3A"
           onchange="changeFontColor(this.value)"
-          style="
-            width:25px;
-            height:22px;
-            border:none;
-            padding:0;
-            background:none;
-            cursor:pointer;
-          "
         >
 
       </div>
 
-
       <div class="toolbar-divider"></div>
 
-
       <select
-        onmousedown="event.preventDefault()"
         onchange="formatText('formatBlock', this.value); this.selectedIndex=0;"
       >
 
@@ -985,9 +1020,7 @@
 
       </select>
 
-
       <div class="toolbar-divider"></div>
-
 
       <button type="button" onclick="formatText('bold')">
         <b>B</b>
@@ -1001,9 +1034,7 @@
         <u>U</u>
       </button>
 
-
       <div class="toolbar-divider"></div>
-
 
       <button type="button" onclick="formatText('justifyLeft')">
         Left
@@ -1021,9 +1052,7 @@
         Justify
       </button>
 
-
       <div class="toolbar-divider"></div>
-
 
       <button type="button" onclick="formatText('insertUnorderedList')">
         Bullet List
@@ -1033,9 +1062,7 @@
         Numbered List
       </button>
 
-
       <div class="toolbar-divider"></div>
-
 
       <button type="button" onclick="insertCustomLink()">
         Link
@@ -1047,23 +1074,13 @@
 
     </div>
 
-
     <div
       id="manuscript-editor"
-      class="custom-editor-box"
-      style="min-height:550px;"
+      class="custom-editor-box manuscript-editor"
       contenteditable="true"
     ></div>
 
-
-    <div
-      style="
-        margin-top:20px;
-        display:flex;
-        gap:15px;
-        flex-wrap:wrap;
-      "
-    >
+    <div class="action-row">
 
       <button
         type="button"
@@ -1075,13 +1092,20 @@
       <button
         type="button"
         onclick="downloadManuscriptFile()"
-        class="secondary-button"
+        class="secondary"
       >
         Download Book File
       </button>
 
-    </div>
+      <button
+        type="button"
+        onclick="clearManuscriptEditor()"
+        class="light"
+      >
+        Clear
+      </button>
 
+    </div>
 
     <h3
       style="
@@ -1093,22 +1117,20 @@
       Saved Manuscripts & Backups
     </h3>
 
-
     <div
       id="manuscripts-container"
-      style="display:grid;gap:15px;margin-top:15px;"
+      style="display:grid; gap:15px; margin-top:15px;"
     >
       <p style="color:#666;">
-        No books saved yet.
+        Loading manuscripts...
       </p>
     </div>
 
   </div>
 
-
-  <!-- ========================================================= -->
-  <!-- TAB 5: ANALYTICS -->
-  <!-- ========================================================= -->
+  <!-- =======================================================
+       ANALYTICS
+  ======================================================== -->
 
   <div id="stats-tab" style="display:none;">
 
@@ -1116,36 +1138,31 @@
       Audience Analytics
     </h2>
 
-    <p style="color:#555;font-style:italic;">
-      Track daily, weekly, and monthly readership growth.
+    <p style="color:#555; font-style:italic;">
+      Audience analytics will be connected here as the readership system develops.
     </p>
 
-
-    <div
-      class="stats-grid"
-      style="margin-top:20px;"
-    >
+    <div class="stats-grid" style="margin-top:20px;">
 
       <div class="stat-card">
 
         <h3>
-          Today's Views
+          Published Posts
         </h3>
 
-        <p>
+        <p id="published-stat">
           0
         </p>
 
       </div>
 
-
       <div class="stat-card">
 
         <h3>
-          This Month
+          Saved Drafts
         </h3>
 
-        <p>
+        <p id="draft-stat">
           0
         </p>
 
@@ -1157,12 +1174,19 @@
 
 </div>
 
-
 <script>
+/* ============================================================
+   SCRIPTORIUM ADMIN
+   Backend-connected version
+============================================================ */
+
+let isHtmlView = false;
+let savedRange = null;
+
 
 /* ============================================================
-   LOGIN STATE
-   ============================================================ */
+   STARTUP
+============================================================ */
 
 window.addEventListener("DOMContentLoaded", function () {
 
@@ -1172,74 +1196,90 @@ window.addEventListener("DOMContentLoaded", function () {
     unlockDashboard();
   }
 
+  setupPlaintextPaste("blog-editor");
+  setupPlaintextPaste("manuscript-editor");
+
+  updateCategoryAccess();
 });
 
 
-function togglePasswordVisibility() {
-
-  const passInput =
-    document.getElementById("password-input");
-
-  const button =
-    document.getElementById("toggle-btn");
-
-  if (passInput.type === "password") {
-
-    passInput.type = "text";
-    button.innerText = "Hide";
-
-  } else {
-
-    passInput.type = "password";
-    button.innerText = "Show";
-
-  }
-
-}
-
-
 /* ============================================================
-   NAVIGATION
-   ============================================================ */
+   AUTHENTICATION
+============================================================ */
 
-function goToHome() {
-  window.location.href = "/";
+function unlockDashboard() {
+
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("admin-dashboard").style.display = "block";
+
+  updateDraftCount();
+  updateManuscriptCount();
+  loadDraftsList();
+  loadPublishedPostsList();
+  loadManuscriptsList();
 }
 
 
 function logoutAdmin() {
-  window.location.href = "/admin/logout";
+
+  window.location.href = "{{ url_for('admin_logout') }}";
+}
+
+
+function goToHome() {
+
+  window.location.href = "{{ url_for('the_hearth') }}";
+}
+
+
+function togglePasswordVisibility() {
+
+  const input = document.getElementById("password-input");
+  const button = document.getElementById("toggle-btn");
+
+  if (input.type === "password") {
+
+    input.type = "text";
+    button.innerText = "Hide";
+
+  } else {
+
+    input.type = "password";
+    button.innerText = "Show";
+
+  }
 }
 
 
 /* ============================================================
-   DASHBOARD
-   ============================================================ */
+   STATUS MESSAGES
+============================================================ */
 
-function unlockDashboard() {
+function showStatus(message, type = "success") {
 
-  const loginScreen =
-    document.getElementById("login-screen");
+  const box = document.getElementById("status-message");
 
-  const dashboard =
-    document.getElementById("admin-dashboard");
+  if (!box) return;
 
-  if (loginScreen) {
-    loginScreen.style.display = "none";
-  }
+  box.innerText = message;
 
-  if (dashboard) {
-    dashboard.style.display = "block";
-  }
+  box.className =
+    "status-message " +
+    (type === "error"
+      ? "status-error"
+      : "status-success");
 
-  updateDraftCount();
-  updateManuscriptCount();
+  box.style.display = "block";
+
+  setTimeout(function () {
+    box.style.display = "none";
+  }, 4000);
 }
 
 
 /* ============================================================
    TABS
-   ============================================================ */
+============================================================ */
 
 function switchTab(tabId) {
 
@@ -1253,13 +1293,14 @@ function switchTab(tabId) {
 
   tabs.forEach(function (tab) {
 
-    const element =
-      document.getElementById(tab);
+    const element = document.getElementById(tab);
 
     if (!element) return;
 
     element.style.display =
-      tab === tabId ? "block" : "none";
+      tab === tabId
+        ? "block"
+        : "none";
 
     const button =
       document.getElementById(
@@ -1284,7 +1325,6 @@ function switchTab(tabId) {
 
   });
 
-
   if (tabId === "drafts-tab") {
     loadDraftsList();
   }
@@ -1297,27 +1337,58 @@ function switchTab(tabId) {
     loadManuscriptsList();
   }
 
+  if (tabId === "stats-tab") {
+    updateAnalytics();
+  }
 }
 
 
 /* ============================================================
-   TEXT EDITOR
-   ============================================================ */
+   CATEGORY / ACCESS
+============================================================ */
 
-let savedRange = null;
-let isHtmlView = false;
+function updateCategoryAccess() {
 
+  const category =
+    document.getElementById("post-category");
+
+  const access =
+    document.getElementById("post-access");
+
+  if (!category || !access) return;
+
+  if (category.value === "kwsnyderwriting") {
+
+    access.value = "members";
+    access.disabled = true;
+
+  } else {
+
+    access.disabled = false;
+
+  }
+}
+
+
+document
+  .getElementById("post-category")
+  .addEventListener(
+    "change",
+    updateCategoryAccess
+  );
+
+
+/* ============================================================
+   EDITOR SELECTION
+============================================================ */
 
 function saveSelection() {
 
-  const selection =
-    window.getSelection();
+  const selection = window.getSelection();
 
   if (selection.rangeCount > 0) {
-    savedRange =
-      selection.getRangeAt(0).cloneRange();
+    savedRange = selection.getRangeAt(0);
   }
-
 }
 
 
@@ -1325,13 +1396,10 @@ function restoreSelection() {
 
   if (!savedRange) return;
 
-  const selection =
-    window.getSelection();
+  const selection = window.getSelection();
 
   selection.removeAllRanges();
-
   selection.addRange(savedRange);
-
 }
 
 
@@ -1341,32 +1409,37 @@ function applySpanStyle(property, value) {
 
   if (!range) {
 
-    const selection =
-      window.getSelection();
+    const selection = window.getSelection();
 
     if (selection.rangeCount > 0) {
-      range =
-        selection.getRangeAt(0);
+      range = selection.getRangeAt(0);
     }
 
   }
 
   if (!range || range.collapsed) return;
 
-
-  const span =
-    document.createElement("span");
+  const span = document.createElement("span");
 
   span.style[property] = value;
 
-  span.appendChild(
-    range.extractContents()
-  );
+  const fragment = range.extractContents();
+
+  span.appendChild(fragment);
 
   range.insertNode(span);
 
-  savedRange = null;
+  const selection = window.getSelection();
 
+  selection.removeAllRanges();
+
+  const newRange = document.createRange();
+
+  newRange.selectNodeContents(span);
+
+  selection.addRange(newRange);
+
+  savedRange = newRange;
 }
 
 
@@ -1376,19 +1449,15 @@ function changeFontStyle(fontFamily) {
     "fontFamily",
     fontFamily
   );
-
 }
 
 
 function changeFontSize(size) {
 
-  restoreSelection();
-
   applySpanStyle(
     "fontSize",
     size + "pt"
   );
-
 }
 
 
@@ -1398,7 +1467,6 @@ function changeFontColor(color) {
     "color",
     color
   );
-
 }
 
 
@@ -1409,33 +1477,24 @@ function formatText(command, value = null) {
     false,
     value
   );
-
 }
 
 
 function insertCustomLink() {
 
-  const url =
-    prompt(
-      "Enter the link URL (e.g., https://example.com):"
-    );
+  const url = prompt(
+    "Enter the link URL (e.g., https://example.com):"
+  );
 
-  if (url) {
+  if (!url) return;
 
-    document.execCommand(
-      "createLink",
-      false,
-      url
-    );
-
-  }
-
+  document.execCommand(
+    "createLink",
+    false,
+    url
+  );
 }
 
-
-/* ============================================================
-   PLAINTEXT PASTE
-   ============================================================ */
 
 function setupPlaintextPaste(elementId) {
 
@@ -1464,72 +1523,53 @@ function setupPlaintextPaste(elementId) {
 
     }
   );
-
 }
 
 
 /* ============================================================
-   BLOG HTML MODE
-   ============================================================ */
+   HTML MODE
+============================================================ */
 
 function toggleBlogEditorMode() {
 
-  const visualBox =
+  const visual =
     document.getElementById("blog-editor");
 
-  const htmlBox =
+  const html =
     document.getElementById("blog-html-code");
 
-  const toggleButton =
+  const button =
     document.getElementById("html-toggle-btn");
-
 
   if (!isHtmlView) {
 
-    htmlBox.value =
-      visualBox.innerHTML;
+    html.value = visual.innerHTML;
 
-    visualBox.style.display =
-      "none";
+    visual.style.display = "none";
+    html.style.display = "block";
 
-    htmlBox.style.display =
-      "block";
-
-    toggleButton.innerText =
-      "Compose View";
-
-    toggleButton.style.background =
-      "#E8D9B5";
+    button.innerText = "Compose View";
 
     isHtmlView = true;
 
   } else {
 
-    visualBox.innerHTML =
-      htmlBox.value;
+    visual.innerHTML = html.value;
 
-    htmlBox.style.display =
-      "none";
+    html.style.display = "none";
+    visual.style.display = "block";
 
-    visualBox.style.display =
-      "block";
-
-    toggleButton.innerText =
-      "HTML Code";
-
-    toggleButton.style.background =
-      "#fff";
+    button.innerText = "HTML Code";
 
     isHtmlView = false;
 
   }
-
 }
 
 
 /* ============================================================
-   DRAFTS — BACKEND STORAGE
-   ============================================================ */
+   DRAFTS
+============================================================ */
 
 async function saveDraft() {
 
@@ -1544,113 +1584,59 @@ async function saveDraft() {
 
   }
 
-
   const title =
     document.getElementById(
       "post-title"
-    ).value.trim() ||
-    "Untitled Draft";
-
+    ).value.trim()
+    || "Untitled Draft";
 
   const category =
     document.getElementById(
       "post-category"
     ).value;
 
-
   const content =
     document.getElementById(
       "blog-editor"
     ).innerHTML;
 
-
-  const date =
-    new Date().toLocaleDateString();
-
-
   try {
 
     const response =
       await fetch(
-        "/api/drafts",
+        "{{ url_for('create_draft') }}",
         {
           method: "POST",
-
           headers: {
-            "Content-Type":
-              "application/json"
+            "Content-Type": "application/json"
           },
-
           body: JSON.stringify({
             title: title,
             category: category,
             content: content,
-            date: date
+            date: new Date().toLocaleDateString()
           })
         }
       );
 
-
     const data =
       await response.json();
 
-
     if (!response.ok) {
-
       throw new Error(
         data.error ||
         "Unable to save draft."
       );
-
     }
 
-
-    /* CLEAR TITLE */
-
-    document.getElementById(
-      "post-title"
-    ).value = "";
-
-
-    /* RESET CATEGORY */
-
-    document.getElementById(
-      "post-category"
-    ).value =
-      "curations";
-
-
-    /* CLEAR VISUAL EDITOR */
-
-    document.getElementById(
-      "blog-editor"
-    ).innerHTML = "";
-
-
-    /* CLEAR HTML EDITOR */
-
-    document.getElementById(
-      "blog-html-code"
-    ).value = "";
-
-
-    /* RETURN TO VISUAL MODE */
-
-    if (isHtmlView) {
-      toggleBlogEditorMode();
-    }
-
-
-    /* REFRESH BACKEND DATA */
+    clearBlogEditor();
 
     await updateDraftCount();
     await loadDraftsList();
 
-
-    alert(
-      "Blog draft saved successfully!"
+    showStatus(
+      "Blog draft saved successfully."
     );
-
 
   } catch (error) {
 
@@ -1659,18 +1645,13 @@ async function saveDraft() {
       error
     );
 
-    alert(
-      "The draft could not be saved. Please try again."
+    showStatus(
+      "The draft could not be saved.",
+      "error"
     );
-
   }
-
 }
 
-
-/* ============================================================
-   LOAD DRAFTS
-   ============================================================ */
 
 async function loadDraftsList() {
 
@@ -1681,114 +1662,104 @@ async function loadDraftsList() {
 
   if (!container) return;
 
-
   container.innerHTML =
     '<p style="color:#666;">Loading saved drafts...</p>';
-
 
   try {
 
     const response =
-      await fetch("/api/drafts");
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Unable to load drafts."
+      await fetch(
+        "{{ url_for('get_drafts') }}"
       );
 
+    const drafts =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        drafts.error ||
+        "Unable to load drafts."
+      );
     }
 
-
-    const drafts =
-      Array.isArray(data)
-        ? data
-        : (data.drafts || []);
-
-
-    if (drafts.length === 0) {
+    if (!Array.isArray(drafts) || drafts.length === 0) {
 
       container.innerHTML =
         '<p style="color:#666;">No drafts saved yet.</p>';
 
-      updateDraftCount();
-
       return;
-
     }
 
-
-    let html = "";
-
+    container.innerHTML = "";
 
     drafts.forEach(function (draft) {
 
-      html += `
+      const card =
+        document.createElement("div");
 
-        <div class="item-card">
+      card.className = "content-card";
 
-          <div>
+      const info =
+        document.createElement("div");
 
-            <h3>
-              ${escapeHtml(draft.title || "Untitled Draft")}
-            </h3>
+      const title =
+        document.createElement("h3");
 
-            <small>
-              Saved on:
-              ${escapeHtml(draft.date || "Unknown date")}
-              |
-              Category:
-              ${escapeHtml(draft.category || "Uncategorized")}
-            </small>
+      title.innerText =
+        draft.title || "Untitled Draft";
 
-          </div>
+      const details =
+        document.createElement("small");
 
+      details.innerText =
+        "Saved on: " +
+        (draft.date_created || "Unknown date") +
+        " | Category: " +
+        categoryName(draft.category);
 
-          <div>
+      info.appendChild(title);
+      info.appendChild(details);
 
-            <button
-              type="button"
-              onclick="loadDraftToEditor(${draft.id})"
-              style="
-                background-color:#5C4033;
-                margin-right:5px;
-                padding:6px 12px;
-                font-size:0.9rem;
-              "
-            >
-              Resume
-            </button>
+      const actions =
+        document.createElement("div");
 
+      const resume =
+        document.createElement("button");
 
-            <button
-              type="button"
-              onclick="deleteDraft(${draft.id})"
-              class="danger-button"
-            >
-              Delete
-            </button>
+      resume.type = "button";
+      resume.innerText = "Resume";
+      resume.style.marginRight = "5px";
+      resume.style.padding = "6px 12px";
+      resume.style.fontSize = "0.9rem";
 
-          </div>
+      resume.onclick =
+        function () {
+          loadDraftToEditor(draft.id);
+        };
 
-        </div>
+      const deleteButton =
+        document.createElement("button");
 
-      `;
+      deleteButton.type = "button";
+      deleteButton.innerText = "Delete";
+      deleteButton.className = "danger";
+      deleteButton.style.padding = "6px 12px";
+      deleteButton.style.fontSize = "0.9rem";
+
+      deleteButton.onclick =
+        function () {
+          deleteDraft(draft.id);
+        };
+
+      actions.appendChild(resume);
+      actions.appendChild(deleteButton);
+
+      card.appendChild(info);
+      card.appendChild(actions);
+
+      container.appendChild(card);
 
     });
-
-
-    container.innerHTML =
-      html;
-
-
-    updateDraftCount();
-
 
   } catch (error) {
 
@@ -1799,74 +1770,9 @@ async function loadDraftsList() {
 
     container.innerHTML =
       '<p style="color:#a94442;">Unable to load drafts from backend storage.</p>';
-
   }
-
 }
 
-
-/* ============================================================
-   DRAFT COUNTER
-   ============================================================ */
-
-async function updateDraftCount() {
-
-  const countElement =
-    document.getElementById(
-      "draft-count"
-    );
-
-  if (!countElement) return;
-
-
-  try {
-
-    const response =
-      await fetch("/api/drafts");
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Unable to load draft count."
-      );
-
-    }
-
-
-    const drafts =
-      Array.isArray(data)
-        ? data
-        : (data.drafts || []);
-
-
-    countElement.innerText =
-      drafts.length;
-
-
-  } catch (error) {
-
-    console.error(
-      "Draft count error:",
-      error
-    );
-
-    countElement.innerText =
-      "0";
-
-  }
-
-}
-
-
-/* ============================================================
-   RESUME DRAFT
-   ============================================================ */
 
 async function loadDraftToEditor(draftId) {
 
@@ -1874,144 +1780,97 @@ async function loadDraftToEditor(draftId) {
 
     const response =
       await fetch(
-        "/api/drafts"
+        "/api/drafts/" +
+        encodeURIComponent(draftId)
       );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Unable to load drafts."
-      );
-
-    }
-
-
-    const drafts =
-      Array.isArray(data)
-        ? data
-        : (data.drafts || []);
-
 
     const draft =
-      drafts.find(function (item) {
-        return String(item.id) ===
-          String(draftId);
-      });
+      await response.json();
 
-
-    if (!draft) {
-
-      alert(
-        "That draft could not be found."
+    if (!response.ok) {
+      throw new Error(
+        draft.error ||
+        "Draft not found."
       );
-
-      return;
-
     }
-
 
     document.getElementById(
       "post-title"
     ).value =
       draft.title || "";
 
-
     document.getElementById(
       "post-category"
     ).value =
       draft.category || "curations";
-
 
     document.getElementById(
       "blog-editor"
     ).innerHTML =
       draft.content || "";
 
-
-    document.getElementById(
-      "blog-html-code"
-    ).value = "";
-
-
     if (isHtmlView) {
       toggleBlogEditorMode();
     }
 
+    switchTab("editor-tab");
 
-    switchTab(
-      "editor-tab"
+    showStatus(
+      "Draft loaded into the editor."
     );
-
 
   } catch (error) {
 
     console.error(
-      "Resume draft error:",
+      "Load draft error:",
       error
     );
 
-    alert(
-      "Unable to open this draft."
+    showStatus(
+      "Unable to load that draft.",
+      "error"
     );
-
   }
-
 }
 
 
-/* ============================================================
-   DELETE DRAFT
-   ============================================================ */
-
 async function deleteDraft(draftId) {
 
-  const confirmed =
-    confirm(
+  if (
+    !confirm(
       "Delete this draft permanently?"
-    );
-
-  if (!confirmed) return;
-
+    )
+  ) {
+    return;
+  }
 
   try {
 
     const response =
       await fetch(
-        `/api/drafts/${draftId}`,
+        "/api/drafts/" +
+        encodeURIComponent(draftId),
         {
           method: "DELETE"
         }
       );
 
-
     const data =
       await response.json();
 
-
     if (!response.ok) {
-
       throw new Error(
         data.error ||
         "Unable to delete draft."
       );
-
     }
-
 
     await loadDraftsList();
     await updateDraftCount();
 
-
-    alert(
+    showStatus(
       "Draft deleted."
     );
-
 
   } catch (error) {
 
@@ -2020,38 +1879,67 @@ async function deleteDraft(draftId) {
       error
     );
 
-    alert(
-      "Unable to delete the draft."
+    showStatus(
+      "Unable to delete that draft.",
+      "error"
+    );
+  }
+}
+
+
+async function updateDraftCount() {
+
+  const count =
+    document.getElementById(
+      "draft-count"
     );
 
-  }
+  const stat =
+    document.getElementById(
+      "draft-stat"
+    );
 
+  if (!count) return;
+
+  try {
+
+    const response =
+      await fetch(
+        "{{ url_for('get_drafts') }}"
+      );
+
+    const drafts =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error();
+    }
+
+    const total =
+      Array.isArray(drafts)
+        ? drafts.length
+        : 0;
+
+    count.innerText = total;
+
+    if (stat) {
+      stat.innerText = total;
+    }
+
+  } catch (error) {
+
+    count.innerText = "0";
+
+    if (stat) {
+      stat.innerText = "0";
+    }
+  }
 }
 
 
 /* ============================================================
    PUBLISHED POSTS
-   ============================================================ */
-
-function loadPublishedPostsList() {
-
-  const container =
-    document.getElementById(
-      "published-container"
-    );
-
-  if (!container) return;
-
-
-  container.innerHTML =
-    '<p style="color:#666;">Published post management will connect here as the publishing backend is completed.</p>';
-
-}
-
-
-/* ============================================================
-   PUBLISH POST
-   ============================================================ */
+============================================================ */
 
 async function publishPost() {
 
@@ -2066,65 +1954,726 @@ async function publishPost() {
 
   }
 
-
   const title =
     document.getElementById(
       "post-title"
     ).value.trim();
-
 
   const category =
     document.getElementById(
       "post-category"
     ).value;
 
-
   const content =
     document.getElementById(
       "blog-editor"
     ).innerHTML;
 
+  let accessLevel =
+    document.getElementById(
+      "post-access"
+    ).value;
 
   if (!title) {
 
-    alert(
-      "Please enter a post title before publishing."
+    showStatus(
+      "Please enter a post title before publishing.",
+      "error"
     );
 
     return;
-
   }
-
 
   if (!content.trim()) {
 
-    alert(
-      "Please enter some post content before publishing."
+    showStatus(
+      "Please enter some content before publishing.",
+      "error"
     );
 
     return;
-
   }
 
+  if (category === "kwsnyderwriting") {
+    accessLevel = "members";
+  }
 
-  /*
-   * The publishing API will be connected
-   * through the Flask backend.
-   *
-   * For now, preserve the editor and do
-   * not put published posts into localStorage.
-   */
+  const categoryLabel =
+    categoryName(category);
 
-  alert(
-    "The post is ready to publish. The publishing backend will be connected next."
-  );
+  try {
 
+    const response =
+      await fetch(
+        "{{ url_for('create_published_post') }}",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+
+            title: title,
+
+            category: category,
+
+            categoryName: categoryLabel,
+
+            content: content,
+
+            date:
+              new Date().toLocaleDateString(),
+
+            accessLevel:
+              accessLevel
+
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        "Unable to publish post."
+      );
+    }
+
+    clearBlogEditor();
+
+    await loadPublishedPostsList();
+    await updateAnalytics();
+
+    showStatus(
+      "Post published successfully to " +
+      categoryLabel +
+      "."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Publish error:",
+      error
+    );
+
+    showStatus(
+      "The post could not be published.",
+      "error"
+    );
+  }
+}
+
+
+async function loadPublishedPostsList() {
+
+  const container =
+    document.getElementById(
+      "published-container"
+    );
+
+  if (!container) return;
+
+  container.innerHTML =
+    '<p style="color:#666;">Loading published posts...</p>';
+
+  try {
+
+    const response =
+      await fetch(
+        "{{ url_for('get_published_posts') }}"
+      );
+
+    const posts =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        posts.error ||
+        "Unable to load published posts."
+      );
+    }
+
+    if (!Array.isArray(posts) || posts.length === 0) {
+
+      container.innerHTML =
+        '<p style="color:#666;">No published posts yet.</p>';
+
+      return;
+    }
+
+    container.innerHTML = "";
+
+    posts.forEach(function (post) {
+
+      const card =
+        document.createElement("div");
+
+      card.className =
+        "content-card";
+
+      const info =
+        document.createElement("div");
+
+      const title =
+        document.createElement("h3");
+
+      title.innerText =
+        post.title || "Untitled Post";
+
+      const details =
+        document.createElement("small");
+
+      details.innerText =
+        "Published: " +
+        (post.date_published || "Unknown") +
+        " | Category: " +
+        (post.category_name || categoryName(post.category)) +
+        " | Access: " +
+        (post.access_level === "members"
+          ? "Members Only"
+          : "Public");
+
+      info.appendChild(title);
+      info.appendChild(details);
+
+      const actions =
+        document.createElement("div");
+
+      const deleteButton =
+        document.createElement("button");
+
+      deleteButton.type = "button";
+      deleteButton.innerText = "Delete";
+      deleteButton.className = "danger";
+      deleteButton.style.padding = "6px 12px";
+      deleteButton.style.fontSize = "0.9rem";
+
+      deleteButton.onclick =
+        function () {
+          deletePublishedPost(post.id);
+        };
+
+      actions.appendChild(deleteButton);
+
+      card.appendChild(info);
+      card.appendChild(actions);
+
+      container.appendChild(card);
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Published posts error:",
+      error
+    );
+
+    container.innerHTML =
+      '<p style="color:#a94442;">Unable to load published posts from backend storage.</p>';
+  }
+}
+
+
+async function deletePublishedPost(postId) {
+
+  if (
+    !confirm(
+      "Delete this published post permanently?"
+    )
+  ) {
+    return;
+  }
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/published/" +
+        encodeURIComponent(postId),
+        {
+          method: "DELETE"
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        "Unable to delete post."
+      );
+    }
+
+    await loadPublishedPostsList();
+    await updateAnalytics();
+
+    showStatus(
+      "Published post deleted."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Delete published post error:",
+      error
+    );
+
+    showStatus(
+      "Unable to delete that published post.",
+      "error"
+    );
+  }
 }
 
 
 /* ============================================================
-   DOWNLOAD BLOG POST
-   ============================================================ */
+   MANUSCRIPTS
+============================================================ */
+
+async function saveManuscript() {
+
+  const title =
+    document.getElementById(
+      "manuscript-title"
+    ).value.trim()
+    || "Untitled Book or Document";
+
+  const content =
+    document.getElementById(
+      "manuscript-editor"
+    ).innerHTML;
+
+  if (!content.trim()) {
+
+    showStatus(
+      "Please enter manuscript content before saving.",
+      "error"
+    );
+
+    return;
+  }
+
+  try {
+
+    const response =
+      await fetch(
+        "{{ url_for('create_manuscript') }}",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+
+            title: title,
+
+            content: content,
+
+            date:
+              new Date().toLocaleDateString()
+
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        "Unable to save manuscript."
+      );
+    }
+
+    clearManuscriptEditor();
+
+    await loadManuscriptsList();
+    await updateManuscriptCount();
+
+    showStatus(
+      "Manuscript saved to backend storage."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Save manuscript error:",
+      error
+    );
+
+    showStatus(
+      "The manuscript could not be saved.",
+      "error"
+    );
+  }
+}
+
+
+async function loadManuscriptsList() {
+
+  const container =
+    document.getElementById(
+      "manuscripts-container"
+    );
+
+  if (!container) return;
+
+  container.innerHTML =
+    '<p style="color:#666;">Loading manuscripts...</p>';
+
+  try {
+
+    const response =
+      await fetch(
+        "{{ url_for('get_manuscripts') }}"
+      );
+
+    const manuscripts =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        manuscripts.error ||
+        "Unable to load manuscripts."
+      );
+    }
+
+    if (
+      !Array.isArray(manuscripts) ||
+      manuscripts.length === 0
+    ) {
+
+      container.innerHTML =
+        '<p style="color:#666;">No books saved yet.</p>';
+
+      return;
+    }
+
+    container.innerHTML = "";
+
+    manuscripts.forEach(function (book) {
+
+      const card =
+        document.createElement("div");
+
+      card.className =
+        "content-card";
+
+      const info =
+        document.createElement("div");
+
+      const title =
+        document.createElement("h3");
+
+      title.innerText =
+        book.title ||
+        "Untitled Manuscript";
+
+      const details =
+        document.createElement("small");
+
+      details.innerText =
+        "Saved on: " +
+        (book.date_created || "Unknown date");
+
+      info.appendChild(title);
+      info.appendChild(details);
+
+      const actions =
+        document.createElement("div");
+
+      const resume =
+        document.createElement("button");
+
+      resume.type = "button";
+      resume.innerText = "Resume";
+      resume.style.marginRight = "5px";
+      resume.style.padding = "6px 12px";
+      resume.style.fontSize = "0.9rem";
+
+      resume.onclick =
+        function () {
+          loadManuscriptToEditor(book.id);
+        };
+
+      const deleteButton =
+        document.createElement("button");
+
+      deleteButton.type = "button";
+      deleteButton.innerText = "Delete";
+      deleteButton.className = "danger";
+      deleteButton.style.padding = "6px 12px";
+      deleteButton.style.fontSize = "0.9rem";
+
+      deleteButton.onclick =
+        function () {
+          deleteManuscript(book.id);
+        };
+
+      actions.appendChild(resume);
+      actions.appendChild(deleteButton);
+
+      card.appendChild(info);
+      card.appendChild(actions);
+
+      container.appendChild(card);
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Load manuscripts error:",
+      error
+    );
+
+    container.innerHTML =
+      '<p style="color:#a94442;">Unable to load manuscripts from backend storage.</p>';
+  }
+}
+
+
+async function loadManuscriptToEditor(manuscriptId) {
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/manuscripts/" +
+        encodeURIComponent(manuscriptId)
+      );
+
+    const book =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        book.error ||
+        "Manuscript not found."
+      );
+    }
+
+    document.getElementById(
+      "manuscript-title"
+    ).value =
+      book.title || "";
+
+    document.getElementById(
+      "manuscript-editor"
+    ).innerHTML =
+      book.content || "";
+
+    switchTab("manuscript-tab");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+
+    showStatus(
+      "Manuscript loaded into the studio."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Load manuscript error:",
+      error
+    );
+
+    showStatus(
+      "Unable to load that manuscript.",
+      "error"
+    );
+  }
+}
+
+
+async function deleteManuscript(manuscriptId) {
+
+  if (
+    !confirm(
+      "Delete this manuscript permanently?"
+    )
+  ) {
+    return;
+  }
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/manuscripts/" +
+        encodeURIComponent(manuscriptId),
+        {
+          method: "DELETE"
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        "Unable to delete manuscript."
+      );
+    }
+
+    await loadManuscriptsList();
+    await updateManuscriptCount();
+
+    showStatus(
+      "Manuscript deleted."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Delete manuscript error:",
+      error
+    );
+
+    showStatus(
+      "Unable to delete that manuscript.",
+      "error"
+    );
+  }
+}
+
+
+async function updateManuscriptCount() {
+
+  const count =
+    document.getElementById(
+      "manuscript-count"
+    );
+
+  if (!count) return;
+
+  try {
+
+    const response =
+      await fetch(
+        "{{ url_for('get_manuscripts') }}"
+      );
+
+    const manuscripts =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error();
+    }
+
+    count.innerText =
+      Array.isArray(manuscripts)
+        ? manuscripts.length
+        : 0;
+
+  } catch (error) {
+
+    count.innerText = "0";
+  }
+}
+
+
+/* ============================================================
+   MANUSCRIPT FILE UPLOAD
+============================================================ */
+
+function uploadManuscriptFile(event) {
+
+  const file =
+    event.target.files[0];
+
+  if (!file) return;
+
+  const reader =
+    new FileReader();
+
+  reader.onload =
+    function (eventResult) {
+
+      const text =
+        eventResult.target.result;
+
+      let title =
+        file.name
+          .replace(/\.[^/.]+$/, "")
+          .replace(/[_]/g, " ");
+
+      let content = text;
+
+      if (
+        text.includes("<!DOCTYPE html>") ||
+        text.includes("<html")
+      ) {
+
+        const titleMatch =
+          text.match(
+            /<title>(.*?)<\/title>/i
+          );
+
+        if (
+          titleMatch &&
+          titleMatch[1]
+        ) {
+
+          title =
+            titleMatch[1]
+              .split("—")[0]
+              .trim();
+
+        }
+
+        const bodyMatch =
+          text.match(
+            /<div class="manuscript-body">([\s\S]*?)<\/div>\s*<\/body>/i
+          ) ||
+          text.match(
+            /<body[^>]*>([\s\S]*?)<\/body>/i
+          );
+
+        if (
+          bodyMatch &&
+          bodyMatch[1]
+        ) {
+
+          content =
+            bodyMatch[1].trim();
+
+        }
+      }
+
+      document.getElementById(
+        "manuscript-title"
+      ).value = title;
+
+      document.getElementById(
+        "manuscript-editor"
+      ).innerHTML = content;
+
+      showStatus(
+        "Backup file loaded into the studio. Save it to store it in the backend."
+      );
+
+      event.target.value = "";
+
+    };
+
+  reader.readAsText(file);
+}
+
+
+/* ============================================================
+   DOWNLOAD BLOG
+============================================================ */
 
 function downloadPostFile() {
 
@@ -2139,75 +2688,44 @@ function downloadPostFile() {
 
   }
 
-
   const title =
     document.getElementById(
       "post-title"
-    ).value.trim() ||
-    "new_post";
-
+    ).value.trim()
+    || "new_post";
 
   const category =
     document.getElementById(
       "post-category"
     ).value;
 
-
   const content =
     document.getElementById(
       "blog-editor"
     ).innerHTML;
 
-
-  const categoryNames = {
-
-    curations:
-      "Book Curations",
-
-    reviews:
-      "Book Reviews",
-
-    curiosity:
-      "Curiosity Cabinet",
-
-    fiction:
-      "K. W. Snyder Writing"
-
-  };
-
-
-  const categoryName =
-    categoryNames[category] ||
-    "Journal";
-
+  const categoryLabel =
+    categoryName(category);
 
   const cleanTitle =
     title
       .replace(/[^a-z0-9]/gi, "_")
       .toLowerCase();
 
-
   const fileName =
-    `${cleanTitle}.html`;
-
+    cleanTitle + ".html";
 
   const currentDate =
     new Date().toLocaleDateString();
 
-
-  const postHTML = `<!DOCTYPE html>
+  const postHTML = `
+<!DOCTYPE html>
 <html lang="en">
-
 <head>
-
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<meta
-  name="viewport"
-  content="width=device-width, initial-scale=1.0"
->
-
-<title>${escapeHtml(title)} — Snyder Scriptorium</title>
+<title>${escapeHTML(title)} — Snyder Scriptorium</title>
 
 <link
   href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;700&display=swap"
@@ -2219,12 +2737,10 @@ function downloadPostFile() {
 body {
   background-color:#E8D9B5;
   color:#3A3A3A;
-  font-family:"Playfair Display", serif;
-  margin:0;
+  font-family:"Playfair Display",serif;
+  margin:0 auto;
   padding:40px;
   max-width:800px;
-  margin-left:auto;
-  margin-right:auto;
   line-height:1.7;
 }
 
@@ -2236,7 +2752,6 @@ a {
   margin-bottom:20px;
   display:inline-block;
   text-decoration:none;
-  font-weight:500;
 }
 
 h1 {
@@ -2250,7 +2765,7 @@ h1 {
   color:#5C4033;
   margin-bottom:30px;
   font-style:italic;
-  opacity:0.8;
+  opacity:.8;
 }
 
 </style>
@@ -2260,30 +2775,27 @@ h1 {
 <body>
 
 <a
-  href="${category}.html"
+  href="#"
   class="back-link"
 >
-  &larr; Back to ${escapeHtml(categoryName)}
+  &larr; Back to ${escapeHTML(categoryLabel)}
 </a>
 
 <h1>
-  ${escapeHtml(title)}
+  ${escapeHTML(title)}
 </h1>
 
 <div class="date">
-  ${escapeHtml(currentDate)}
+  ${escapeHTML(currentDate)}
 </div>
 
 <div class="post-content">
-
-${content}
-
+  ${content}
 </div>
 
 </body>
-
-</html>`;
-
+</html>
+`;
 
   const blob =
     new Blob(
@@ -2291,18 +2803,14 @@ ${content}
       { type:"text/html" }
     );
 
-
   const url =
     URL.createObjectURL(blob);
-
 
   const link =
     document.createElement("a");
 
-
   link.href = url;
   link.download = fileName;
-
 
   document.body.appendChild(link);
 
@@ -2310,300 +2818,37 @@ ${content}
 
   document.body.removeChild(link);
 
-
   URL.revokeObjectURL(url);
-
 }
 
 
 /* ============================================================
-   MANUSCRIPTS
-   ============================================================ */
-
-/*
- * Manuscripts remain browser-backed temporarily.
- * We are deliberately keeping this separate from
- * the backend draft system so we don't break the
- * working manuscript editor while the backend storage
- * is developed.
- */
-
-function saveManuscript() {
-
-  const title =
-    document.getElementById(
-      "manuscript-title"
-    ).value.trim() ||
-    "Untitled Book or Document";
-
-
-  const content =
-    document.getElementById(
-      "manuscript-editor"
-    ).innerHTML;
-
-
-  const date =
-    new Date().toLocaleDateString();
-
-
-  const book = {
-    id: Date.now(),
-    title: title,
-    content: content,
-    date: date
-  };
-
-
-  let manuscripts =
-    JSON.parse(
-      localStorage.getItem(
-        "scriptorium_manuscripts"
-      )
-    ) || [];
-
-
-  manuscripts.push(book);
-
-
-  localStorage.setItem(
-    "scriptorium_manuscripts",
-    JSON.stringify(manuscripts)
-  );
-
-
-  loadManuscriptsList();
-  updateManuscriptCount();
-
-
-  alert(
-    "Manuscript saved successfully."
-  );
-
-}
-
-
-function loadManuscriptsList() {
-
-  const container =
-    document.getElementById(
-      "manuscripts-container"
-    );
-
-
-  if (!container) return;
-
-
-  const manuscripts =
-    JSON.parse(
-      localStorage.getItem(
-        "scriptorium_manuscripts"
-      )
-    ) || [];
-
-
-  if (manuscripts.length === 0) {
-
-    container.innerHTML =
-      '<p style="color:#666;">No books saved yet.</p>';
-
-    return;
-
-  }
-
-
-  let html = "";
-
-
-  manuscripts.forEach(
-    function (book, index) {
-
-      html += `
-
-        <div class="item-card">
-
-          <div>
-
-            <h3>
-              ${escapeHtml(book.title)}
-            </h3>
-
-            <small>
-              Saved on:
-              ${escapeHtml(book.date)}
-            </small>
-
-          </div>
-
-
-          <div>
-
-            <button
-              type="button"
-              onclick="loadManuscriptToEditor(${index})"
-              style="
-                background-color:#5C4033;
-                margin-right:5px;
-                padding:6px 12px;
-                font-size:0.9rem;
-              "
-            >
-              Resume
-            </button>
-
-
-            <button
-              type="button"
-              onclick="deleteManuscript(${index})"
-              class="danger-button"
-            >
-              Delete
-            </button>
-
-          </div>
-
-        </div>
-
-      `;
-
-    }
-  );
-
-
-  container.innerHTML =
-    html;
-
-}
-
-
-function loadManuscriptToEditor(index) {
-
-  const manuscripts =
-    JSON.parse(
-      localStorage.getItem(
-        "scriptorium_manuscripts"
-      )
-    ) || [];
-
-
-  const book =
-    manuscripts[index];
-
-
-  if (!book) return;
-
-
-  document.getElementById(
-    "manuscript-title"
-  ).value =
-    book.title;
-
-
-  document.getElementById(
-    "manuscript-editor"
-  ).innerHTML =
-    book.content;
-
-
-  window.scrollTo({
-    top:0,
-    behavior:"smooth"
-  });
-
-}
-
-
-function deleteManuscript(index) {
-
-  const confirmed =
-    confirm(
-      "Delete this manuscript backup?"
-    );
-
-  if (!confirmed) return;
-
-
-  let manuscripts =
-    JSON.parse(
-      localStorage.getItem(
-        "scriptorium_manuscripts"
-      )
-    ) || [];
-
-
-  manuscripts.splice(
-    index,
-    1
-  );
-
-
-  localStorage.setItem(
-    "scriptorium_manuscripts",
-    JSON.stringify(manuscripts)
-  );
-
-
-  loadManuscriptsList();
-  updateManuscriptCount();
-
-}
-
-
-function updateManuscriptCount() {
-
-  const countElement =
-    document.getElementById(
-      "manuscript-count"
-    );
-
-
-  if (!countElement) return;
-
-
-  const manuscripts =
-    JSON.parse(
-      localStorage.getItem(
-        "scriptorium_manuscripts"
-      )
-    ) || [];
-
-
-  countElement.innerText =
-    manuscripts.length;
-
-}
-
-
-/* ============================================================
-   MANUSCRIPT DOWNLOAD
-   ============================================================ */
+   DOWNLOAD MANUSCRIPT
+============================================================ */
 
 function downloadManuscriptFile() {
 
   const title =
     document.getElementById(
       "manuscript-title"
-    ).value.trim() ||
-    "manuscript";
-
+    ).value.trim()
+    || "manuscript";
 
   const content =
     document.getElementById(
       "manuscript-editor"
     ).innerHTML;
 
-
   const cleanTitle =
     title
       .replace(/[^a-z0-9]/gi, "_")
       .toLowerCase();
 
-
   const fileName =
-    `${cleanTitle}.html`;
+    cleanTitle + ".html";
 
-
-  const manuscriptHTML = `<!DOCTYPE html>
+  const manuscriptHTML = `
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -2615,7 +2860,7 @@ function downloadManuscriptFile() {
   content="width=device-width, initial-scale=1.0"
 >
 
-<title>${escapeHtml(title)} — Manuscript Backup</title>
+<title>${escapeHTML(title)} — Manuscript Backup</title>
 
 <link
   href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;700&display=swap"
@@ -2627,12 +2872,10 @@ function downloadManuscriptFile() {
 body {
   background-color:#FDFBF7;
   color:#3A3A3A;
-  font-family:"Playfair Display", serif;
-  margin:0;
+  font-family:"Playfair Display",serif;
+  margin:0 auto;
   padding:40px;
   max-width:800px;
-  margin-left:auto;
-  margin-right:auto;
   line-height:1.8;
 }
 
@@ -2652,19 +2895,17 @@ h1 {
 <body>
 
 <h1>
-${escapeHtml(title)}
+  ${escapeHTML(title)}
 </h1>
 
 <div class="manuscript-body">
-
-${content}
-
+  ${content}
 </div>
 
 </body>
 
-</html>`;
-
+</html>
+`;
 
   const blob =
     new Blob(
@@ -2672,18 +2913,14 @@ ${content}
       { type:"text/html" }
     );
 
-
   const url =
     URL.createObjectURL(blob);
-
 
   const link =
     document.createElement("a");
 
-
   link.href = url;
   link.download = fileName;
-
 
   document.body.appendChild(link);
 
@@ -2691,196 +2928,166 @@ ${content}
 
   document.body.removeChild(link);
 
-
   URL.revokeObjectURL(url);
-
 }
 
 
 /* ============================================================
-   MANUSCRIPT UPLOAD
-   ============================================================ */
+   CLEAR EDITORS
+============================================================ */
 
-function uploadManuscriptFile(event) {
+function clearBlogEditor() {
 
-  const file =
-    event.target.files[0];
+  document.getElementById(
+    "post-title"
+  ).value = "";
 
+  document.getElementById(
+    "post-category"
+  ).value = "curations";
 
-  if (!file) return;
+  document.getElementById(
+    "post-access"
+  ).value = "public";
 
+  document.getElementById(
+    "post-access"
+  ).disabled = false;
 
-  const reader =
-    new FileReader();
+  document.getElementById(
+    "blog-editor"
+  ).innerHTML = "";
 
+  document.getElementById(
+    "blog-html-code"
+  ).value = "";
 
-  reader.onload =
-    function (e) {
-
-      const text =
-        e.target.result;
-
-
-      let title =
-        file.name
-          .replace(/\.[^/.]+$/, "")
-          .replace(/[_]/g, " ");
-
-
-      let content =
-        text;
-
-
-      if (
-        text.includes("<!DOCTYPE html>") ||
-        text.includes("<html")
-      ) {
-
-        const titleMatch =
-          text.match(
-            /<title>(.*?)<\/title>/i
-          );
-
-
-        if (
-          titleMatch &&
-          titleMatch[1]
-        ) {
-
-          title =
-            titleMatch[1]
-              .split("—")[0]
-              .trim();
-
-        }
-
-
-        const bodyMatch =
-          text.match(
-            /<div class="manuscript-body">([\s\S]*?)<\/div>\s*<\/body>/i
-          ) ||
-          text.match(
-            /<body>([\s\S]*?)<\/body>/i
-          );
-
-
-        if (
-          bodyMatch &&
-          bodyMatch[1]
-        ) {
-
-          content =
-            bodyMatch[1].trim();
-
-        }
-
-      }
-
-
-      document.getElementById(
-        "manuscript-title"
-      ).value =
-        title;
-
-
-      document.getElementById(
-        "manuscript-editor"
-      ).innerHTML =
-        content;
-
-
-      const book = {
-
-        id: Date.now(),
-
-        title: title,
-
-        content: content,
-
-        date:
-          new Date().toLocaleDateString()
-
-      };
-
-
-      let manuscripts =
-        JSON.parse(
-          localStorage.getItem(
-            "scriptorium_manuscripts"
-          )
-        ) || [];
-
-
-      manuscripts.push(book);
-
-
-      localStorage.setItem(
-        "scriptorium_manuscripts",
-        JSON.stringify(manuscripts)
-      );
-
-
-      loadManuscriptsList();
-      updateManuscriptCount();
-
-
-      alert(
-        "Backup file uploaded and loaded successfully."
-      );
-
-
-      event.target.value = "";
-
-    };
-
-
-  reader.readAsText(file);
-
-}
-
-
-/* ============================================================
-   HTML ESCAPING
-   ============================================================ */
-
-function escapeHtml(value) {
-
-  if (value === null || value === undefined) {
-    return "";
+  if (isHtmlView) {
+    toggleBlogEditorMode();
   }
 
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  savedRange = null;
+}
 
+
+function clearManuscriptEditor() {
+
+  document.getElementById(
+    "manuscript-title"
+  ).value = "";
+
+  document.getElementById(
+    "manuscript-editor"
+  ).innerHTML = "";
+
+  savedRange = null;
 }
 
 
 /* ============================================================
-   EDITOR PASTE SETUP
-   ============================================================ */
+   ANALYTICS
+============================================================ */
 
-window.addEventListener(
-  "DOMContentLoaded",
-  function () {
+async function updateAnalytics() {
 
-    setupPlaintextPaste(
-      "blog-editor"
+  try {
+
+    const draftsResponse =
+      await fetch(
+        "{{ url_for('get_drafts') }}"
+      );
+
+    const drafts =
+      await draftsResponse.json();
+
+    const publishedResponse =
+      await fetch(
+        "{{ url_for('get_published_posts') }}"
+      );
+
+    const published =
+      await publishedResponse.json();
+
+    const draftTotal =
+      Array.isArray(drafts)
+        ? drafts.length
+        : 0;
+
+    const publishedTotal =
+      Array.isArray(published)
+        ? published.length
+        : 0;
+
+    const draftStat =
+      document.getElementById(
+        "draft-stat"
+      );
+
+    const publishedStat =
+      document.getElementById(
+        "published-stat"
+      );
+
+    if (draftStat) {
+      draftStat.innerText =
+        draftTotal;
+    }
+
+    if (publishedStat) {
+      publishedStat.innerText =
+        publishedTotal;
+    }
+
+  } catch (error) {
+
+    console.error(
+      "Analytics error:",
+      error
     );
-
-    setupPlaintextPaste(
-      "manuscript-editor"
-    );
-
   }
-);
+}
+
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+function categoryName(category) {
+
+  if (category === "curations") {
+    return "Book Curations";
+  }
+
+  if (category === "reviews") {
+    return "Book Reviews";
+  }
+
+  if (category === "curiosity") {
+    return "Curiosity Cabinet";
+  }
+
+  if (category === "kwsnyderwriting") {
+    return "K. W. Snyder Writing";
+  }
+
+  return "Journal";
+}
+
+
+function escapeHTML(value) {
+
+  const div =
+    document.createElement("div");
+
+  div.textContent =
+    value == null
+      ? ""
+      : String(value);
+
+  return div.innerHTML;
+}
 
 </script>
 
 </body>
 </html>
-```
-
