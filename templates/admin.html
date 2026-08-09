@@ -719,7 +719,7 @@ async function loadDraftsList() {
       throw new Error(data.error || 'Unable to load drafts.');
     }
 
-    const drafts = data.drafts || [];
+  const drafts = Array.isArray(data) ? data : (data.drafts || []);
 
     if (drafts.length === 0) {
       container.innerHTML =
