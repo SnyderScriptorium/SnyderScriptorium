@@ -1,6 +1,142 @@
+```html
 {% extends "base.html" %}
 
+{% block title %}Book Reviews - Snyder Scriptorium{% endblock %}
+
 {% block content %}
-    <h2>Book Reviews</h2>
-    <p>Deep dives, critiques, and honest thoughts on the books crossing my desk.</p>
+
+<style>
+  .blog-page {
+    text-align: center;
+    padding: 20px 0 40px;
+  }
+
+  .blog-page h2 {
+    color: #2F4F2F;
+    font-family: "Playfair Display", serif;
+    font-weight: 300;
+    font-size: clamp(2.2rem, 6vw, 3.5rem);
+    line-height: 1.2;
+    margin: 0 0 15px;
+  }
+
+  .blog-intro {
+    max-width: 700px;
+    margin: 0 auto 40px;
+    color: #555555;
+    font-family: "Playfair Display", serif;
+    font-size: 1.1rem;
+    line-height: 1.6;
+  }
+
+  .post-feed {
+    max-width: 750px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    text-align: left;
+  }
+
+  .preview-block {
+    display: block;
+    background-color: #DFCCA4;
+    border: 1px solid #D2BC90;
+    border-radius: 6px;
+    padding: 20px 25px;
+    text-decoration: none;
+    color: #3A3A3A;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  .preview-block:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 12px rgba(0,0,0,0.08);
+    background-color: #E6D4AA;
+  }
+
+  .preview-block h3 {
+    color: #5C4033;
+    font-family: "Playfair Display", serif;
+    font-size: 1.4rem;
+    font-weight: 500;
+    margin: 0 0 8px;
+  }
+
+  .post-date {
+    color: #7A6B5D;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    font-style: italic;
+  }
+
+  .preview-block p {
+    font-size: 1.05rem;
+    margin: 0;
+    color: #4A4A4A;
+    line-height: 1.5;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: #5C4033;
+    font-style: italic;
+    padding: 40px 0;
+  }
+</style>
+
+<div class="blog-page">
+
+  <h2>Book Reviews</h2>
+
+  <p class="blog-intro">
+    Deep dives, critiques, and honest thoughts on the books crossing my desk.
+  </p>
+
+  <div class="post-feed">
+
+    {% if posts %}
+
+      {% for post in posts %}
+
+        <a
+          href="{{ url_for('view_post', post_id=post['id']) }}"
+          class="preview-block"
+        >
+
+          <h3>{{ post['title'] }}</h3>
+
+          <div class="post-date">
+            Published on {{ post['date_published'] }}
+          </div>
+
+          <p>
+            {% if post['content'] %}
+              {{ post['content']|striptags|truncate(140, True, '...') }}
+            {% else %}
+              Click to read this Book Review...
+            {% endif %}
+          </p>
+
+        </a>
+
+      {% endfor %}
+
+    {% else %}
+
+      <div class="empty-state">
+        No book reviews have been published yet.
+        Check back soon.
+      </div>
+
+    {% endif %}
+
+  </div>
+
+</div>
+
 {% endblock %}
+```
