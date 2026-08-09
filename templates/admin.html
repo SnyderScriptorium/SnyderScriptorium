@@ -862,11 +862,27 @@ async function loadDraftsList() {
     updateDraftCount();
   }
 
-  function updateDraftCount() {
-    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
-    const countEl = document.getElementById('draft-count');
-    if (countEl) countEl.innerText = drafts.length;
+async function updateDraftCount() {
+  const countEl = document.getElementById('draft-count');
+
+  if (!countEl) return;
+
+  try {
+    const response = await fetch('/api/drafts');
+
+    if (!response.ok) {
+      throw new Error('Unable to load draft count.');
+    }
+
+    const drafts = await response.json();
+
+    countEl.innerText = drafts.length;
+
+  } catch (error) {
+    console.error('Draft count error:', error);
+    countEl.innerText = '0';
   }
+}
 
   function updateManuscriptCount() {
     let manuscripts = JSON.parse(localStorage.getItem('scriptorium_manuscripts')) || [];
@@ -908,14 +924,9 @@ async function loadDraftsList() {
       toggleBlogEditorMode();
     }
 
-    let drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
-    const draftIndex = drafts.findIndex(d => d.title === title);
-    if (draftIndex > -1) {
-      drafts.splice(draftIndex, 1);
-      localStorage.setItem('scriptorium_drafts', JSON.stringify(drafts));
-      updateDraftCount();
-    }
-
+    await loadDraftsList();
+await updateDraftCount();
+    
     alert(`Post published successfully to your "${categoryName}" category tracker!`);
   }
     
