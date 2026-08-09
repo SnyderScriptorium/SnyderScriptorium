@@ -13,6 +13,8 @@ from flask import (
     jsonify,
 )
 
+from werkzeug.security import check_password_hash
+
 
 # ============================================================
 # APPLICATION SETUP
@@ -91,11 +93,11 @@ def init_db():
     # --------------------------------------------------------
     # MEMBERS
     #
-    # This prepares the database for the future K. W. Snyder
-    # subscription system.
+    # This is for the future K. W. Snyder membership system.
     #
-    # The actual subscription/payment system will be added
-    # later. No payment system is being faked here.
+    # IMPORTANT:
+    # subscription_status is NOT automatically made active.
+    # A future payment provider will control membership status.
     # --------------------------------------------------------
     conn.execute("""
         CREATE TABLE IF NOT EXISTS members (
@@ -110,7 +112,7 @@ def init_db():
     # --------------------------------------------------------
     # SUBSCRIPTIONS
     #
-    # This table is ready for the future payment provider.
+    # Prepared for a future payment provider.
     # --------------------------------------------------------
     conn.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (
@@ -127,13 +129,11 @@ def init_db():
 
     conn.commit()
 
-    # --------------------------------------------------------
-    # DATABASE MIGRATION
-    #
-    # If published_posts already existed before access_level
-    # was added, add the column without destroying existing
-    # posts.
-    # --------------------------------------------------------
+    # ========================================================
+    # SAFE DATABASE MIGRATIONS
+    # ========================================================
+
+    # Check published_posts columns.
     columns = conn.execute(
         "PRAGMA table_info(published_posts)"
     ).fetchall()
@@ -165,12 +165,14 @@ def require_member():
 
 def member_has_access():
     """
-    Returns True only when the current member has an active
-    subscription.
+    A member must have both:
+        1. A valid member login session.
+        2. An active subscription in the database.
 
-    The actual payment/subscription provider will eventually
-    update subscription_status.
+    This prevents simply visiting the private URL from granting
+    access.
     """
+
     if not require_member():
         return False
 
@@ -201,12 +203,71 @@ def member_has_access():
 def admin_required(view_function):
     @wraps(view_function)
     def wrapped_view(*args, **kwargs):
+
         if not require_admin():
             return redirect(url_for("admin_dashboard"))
 
         return view_function(*args, **kwargs)
 
     return wrapped_view
+
+
+# ============================================================
+# K. W. SNYDER DOMAIN DETECTION
+# ============================================================
+
+def is_kw_domain():
+    """
+    Allows the future K. W. Snyder domain to point directly
+    into the private branch.
+
+    The actual domain should eventually be placed in Render
+    as:
+
+        KWSNYDER_DOMAIN=your-domain.com
+
+    Until that environment variable exists, the normal
+    Snyder Scriptorium domain continues to operate normally.
+    """
+
+    configured_domain = os.environ.get(
+        "KWSNYDER_DOMAIN",
+        ""
+    ).strip().lower()
+
+    if not configured_domain:
+        return False
+
+    host = request.host.split(":")[0].lower()
+
+    return host == configured_domain or host == f"www.{configured_domain}"
+
+
+@app.before_request
+def route_kw_domain():
+    """
+    If the future K. W. Snyder domain is being visited directly,
+    send the visitor into the K. W. Snyder membership entrance.
+
+    The normal Snyder Scriptorium domain is unaffected.
+    """
+
+    if not is_kw_domain():
+        return None
+
+    # Allow static files.
+    if request.path.startswith("/static/"):
+        return None
+
+    # Allow the K. W. Snyder branch itself.
+    if request.path.startswith("/kwsnyderwriting"):
+        return None
+
+    # Send the domain root to the member entrance.
+    if request.path == "/":
+        return redirect(url_for("kwsnyderwriting_membership"))
+
+    return None
 
 
 # ============================================================
@@ -229,11 +290,18 @@ def about():
 
 @app.route("/blog")
 def the_blog():
-    return render_template("blog_templates/theblog.html")
+    return render_template(
+        "blog_templates/theblog.html"
+    )
 
+
+# ------------------------------------------------------------
+# BOOK CURATIONS
+# ------------------------------------------------------------
 
 @app.route("/blog/bookcurations")
 def book_curations():
+
     conn = get_db()
 
     posts = conn.execute(
@@ -255,8 +323,13 @@ def book_curations():
     )
 
 
+# ------------------------------------------------------------
+# BOOK REVIEWS
+# ------------------------------------------------------------
+
 @app.route("/blog/bookreviews")
 def bookreviews():
+
     conn = get_db()
 
     posts = conn.execute(
@@ -278,8 +351,13 @@ def bookreviews():
     )
 
 
+# ------------------------------------------------------------
+# CURIOSITY CABINET
+# ------------------------------------------------------------
+
 @app.route("/blog/curiosity_cabinet")
 def curiosity_cabinet():
+
     conn = get_db()
 
     posts = conn.execute(
@@ -304,29 +382,36 @@ def curiosity_cabinet():
 # ============================================================
 # K. W. SNYDER WRITING
 #
-# This is intentionally separated from the public blog.
-#
-# Eventually:
-#
-# SnyderScriptorium.com
-#       ↓
-#      Blog
-#       ↓
-# K. W. Snyder Writing
-#       ↓
-# Login / Subscribe
-#       ↓
-# Members-only content
-#
-# The dedicated K. W. Snyder domain will eventually point
-# directly to this branch.
+# PRIVATE MEMBER-ONLY BRANCH
 # ============================================================
 
 @app.route("/kwsnyderwriting")
 def kwsnyderwriting():
 
+    # --------------------------------------------------------
+    # STEP 1:
+    # Visitor must be logged in as a member.
+    # --------------------------------------------------------
+
+    if not require_member():
+        return redirect(
+            url_for("kwsnyderwriting_membership")
+        )
+
+    # --------------------------------------------------------
+    # STEP 2:
+    # Visitor must have an active subscription.
+    # --------------------------------------------------------
+
     if not member_has_access():
-        return redirect(url_for("kwsnyderwriting_membership"))
+        return redirect(
+            url_for("kwsnyderwriting_membership")
+        )
+
+    # --------------------------------------------------------
+    # STEP 3:
+    # Only members-only K.W. Snyder posts are retrieved.
+    # --------------------------------------------------------
 
     conn = get_db()
 
@@ -349,34 +434,80 @@ def kwsnyderwriting():
     )
 
 
+# ============================================================
+# K. W. SNYDER MEMBERSHIP ENTRANCE
+# ============================================================
+
 @app.route("/kwsnyderwriting/membership")
 def kwsnyderwriting_membership():
+
     return render_template(
         "blog_templates/kwsnyderwriting_membership.html"
     )
 
 
 # ============================================================
-# FUTURE MEMBER LOGIN
-#
-# These pages are placeholders for the real subscription
-# system. They do NOT process payments yet.
+# K. W. SNYDER MEMBER LOGIN
 # ============================================================
 
-@app.route("/kwsnyderwriting/login", methods=["GET", "POST"])
+@app.route(
+    "/kwsnyderwriting/login",
+    methods=["GET", "POST"]
+)
 def member_login():
 
     if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
 
-        # Member authentication will be completed when we add
-        # the real password hashing/account system.
-        #
-        # Do not put plaintext member passwords in this file.
+        email = request.form.get(
+            "email",
+            ""
+        ).strip().lower()
+
+        password = request.form.get(
+            "password",
+            ""
+        )
+
+        if not email or not password:
+            return redirect(
+                url_for(
+                    "kwsnyderwriting_membership"
+                )
+            )
+
+        conn = get_db()
+
+        member = conn.execute(
+            """
+            SELECT *
+            FROM members
+            WHERE email = ?
+            """,
+            (email,),
+        ).fetchone()
+
+        conn.close()
+
+        # ----------------------------------------------------
+        # Check the stored password hash.
+        # ----------------------------------------------------
+
+        if member and check_password_hash(
+            member["password_hash"],
+            password
+        ):
+
+            session["member_logged_in"] = True
+            session["member_id"] = member["id"]
+
+            return redirect(
+                url_for("kwsnyderwriting")
+            )
 
         return redirect(
-            url_for("kwsnyderwriting_membership")
+            url_for(
+                "kwsnyderwriting_membership"
+            )
         )
 
     return render_template(
@@ -384,12 +515,26 @@ def member_login():
     )
 
 
+# ============================================================
+# K. W. SNYDER MEMBER LOGOUT
+# ============================================================
+
 @app.route("/kwsnyderwriting/logout")
 def member_logout():
-    session.pop("member_logged_in", None)
-    session.pop("member_id", None)
 
-    return redirect(url_for("kwsnyderwriting_membership"))
+    session.pop(
+        "member_logged_in",
+        None
+    )
+
+    session.pop(
+        "member_id",
+        None
+    )
+
+    return redirect(
+        url_for("kwsnyderwriting_membership")
+    )
 
 
 # ============================================================
@@ -398,12 +543,16 @@ def member_logout():
 
 @app.route("/store")
 def the_scriptorium():
-    return render_template("store.html")
+    return render_template(
+        "store.html"
+    )
 
 
 @app.route("/merch")
 def merch_shop():
-    return render_template("merch.html")
+    return render_template(
+        "merch.html"
+    )
 
 
 # ============================================================
@@ -412,6 +561,7 @@ def merch_shop():
 
 @app.route("/admin")
 def admin_dashboard():
+
     logged_in = require_admin()
 
     return render_template(
@@ -420,42 +570,64 @@ def admin_dashboard():
     )
 
 
-@app.route("/admin/login", methods=["POST"])
+@app.route(
+    "/admin/login",
+    methods=["POST"]
+)
 def admin_login():
 
-    password = request.form.get("password", "")
+    password = request.form.get(
+        "password",
+        ""
+    )
 
     # IMPORTANT:
-    # For production, put ADMIN_PASSWORD in Render's
-    # Environment Variables instead of storing it in app.py.
+    # Set ADMIN_PASSWORD in Render Environment Variables.
     admin_password = os.environ.get(
         "ADMIN_PASSWORD",
         "scriptorium123",
     )
 
     if password == admin_password:
-        session["admin_logged_in"] = True
-        return redirect(url_for("admin_dashboard"))
 
-    return redirect(url_for("admin_dashboard"))
+        session["admin_logged_in"] = True
+
+        return redirect(
+            url_for("admin_dashboard")
+        )
+
+    return redirect(
+        url_for("admin_dashboard")
+    )
 
 
 @app.route("/admin/logout")
 def admin_logout():
-    session.pop("admin_logged_in", None)
 
-    return redirect(url_for("admin_dashboard"))
+    session.pop(
+        "admin_logged_in",
+        None
+    )
+
+    return redirect(
+        url_for("admin_dashboard")
+    )
 
 
 # ============================================================
 # BLOG DRAFTS API
 # ============================================================
 
-@app.route("/api/drafts", methods=["GET"])
+@app.route(
+    "/api/drafts",
+    methods=["GET"]
+)
 def get_drafts():
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -475,32 +647,37 @@ def get_drafts():
     ])
 
 
-@app.route("/api/drafts", methods=["POST"])
+@app.route(
+    "/api/drafts",
+    methods=["POST"]
+)
 def create_draft():
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     data = request.get_json() or {}
 
     title = data.get(
         "title",
-        "Untitled Draft",
+        "Untitled Draft"
     )
 
     category = data.get(
         "category",
-        "",
+        ""
     )
 
     content = data.get(
         "content",
-        "",
+        ""
     )
 
     date_created = data.get(
         "date",
-        "",
+        ""
     )
 
     if not date_created:
@@ -513,7 +690,12 @@ def create_draft():
     cursor = conn.execute(
         """
         INSERT INTO drafts
-        (title, category, content, date_created)
+        (
+            title,
+            category,
+            content,
+            date_created
+        )
         VALUES (?, ?, ?, ?)
         """,
         (
@@ -536,11 +718,16 @@ def create_draft():
     }), 201
 
 
-@app.route("/api/drafts/<int:draft_id>", methods=["GET"])
+@app.route(
+    "/api/drafts/<int:draft_id>",
+    methods=["GET"]
+)
 def get_draft(draft_id):
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -560,14 +747,21 @@ def get_draft(draft_id):
             "error": "Draft not found"
         }), 404
 
-    return jsonify(dict(draft))
+    return jsonify(
+        dict(draft)
+    )
 
 
-@app.route("/api/drafts/<int:draft_id>", methods=["DELETE"])
+@app.route(
+    "/api/drafts/<int:draft_id>",
+    methods=["DELETE"]
+)
 def delete_draft(draft_id):
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -591,11 +785,16 @@ def delete_draft(draft_id):
 # PUBLISHED POSTS API
 # ============================================================
 
-@app.route("/api/published", methods=["GET"])
+@app.route(
+    "/api/published",
+    methods=["GET"]
+)
 def get_published_posts():
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -615,44 +814,47 @@ def get_published_posts():
     ])
 
 
-@app.route("/api/published", methods=["POST"])
+@app.route(
+    "/api/published",
+    methods=["POST"]
+)
 def create_published_post():
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     data = request.get_json() or {}
 
     title = data.get(
         "title",
-        "",
+        ""
     )
 
     category = data.get(
         "category",
-        "",
+        ""
     )
 
     category_name = data.get(
         "categoryName",
-        "Journal",
+        "Journal"
     )
 
     content = data.get(
         "content",
-        "",
+        ""
     )
 
     date_published = data.get(
         "date",
-        "",
+        ""
     )
 
-    # Default access level is public.
-    # K.W. Snyder posts can be marked "members".
     access_level = data.get(
         "accessLevel",
-        "public",
+        "public"
     )
 
     if not title:
@@ -660,10 +862,27 @@ def create_published_post():
             "error": "Post title is required"
         }), 400
 
-    if access_level not in ("public", "members"):
+    # --------------------------------------------------------
+    # Only these two access levels exist.
+    # --------------------------------------------------------
+
+    if access_level not in (
+        "public",
+        "members"
+    ):
         return jsonify({
             "error": "Invalid access level"
         }), 400
+
+    # --------------------------------------------------------
+    # K.W. Snyder Writing is ALWAYS members-only.
+    #
+    # This prevents an admin publishing a K.W. Snyder post
+    # accidentally as a public article.
+    # --------------------------------------------------------
+
+    if category == "kwsnyderwriting":
+        access_level = "members"
 
     if not date_published:
         date_published = datetime.now().strftime(
@@ -704,6 +923,7 @@ def create_published_post():
     return jsonify({
         "success": True,
         "id": post_id,
+        "access_level": access_level,
     }), 201
 
 
@@ -714,7 +934,9 @@ def create_published_post():
 def delete_published_post(post_id):
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -728,6 +950,7 @@ def delete_published_post(post_id):
     ).fetchone()
 
     if post is None:
+
         conn.close()
 
         return jsonify({
@@ -754,11 +977,16 @@ def delete_published_post(post_id):
 # MANUSCRIPTS API
 # ============================================================
 
-@app.route("/api/manuscripts", methods=["GET"])
+@app.route(
+    "/api/manuscripts",
+    methods=["GET"]
+)
 def get_manuscripts():
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -778,27 +1006,32 @@ def get_manuscripts():
     ])
 
 
-@app.route("/api/manuscripts", methods=["POST"])
+@app.route(
+    "/api/manuscripts",
+    methods=["POST"]
+)
 def create_manuscript():
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     data = request.get_json() or {}
 
     title = data.get(
         "title",
-        "Untitled Book or Document",
+        "Untitled Book or Document"
     )
 
     content = data.get(
         "content",
-        "",
+        ""
     )
 
     date_created = data.get(
         "date",
-        "",
+        ""
     )
 
     if not date_created:
@@ -811,7 +1044,11 @@ def create_manuscript():
     cursor = conn.execute(
         """
         INSERT INTO manuscripts
-        (title, content, date_created)
+        (
+            title,
+            content,
+            date_created
+        )
         VALUES (?, ?, ?)
         """,
         (
@@ -840,7 +1077,9 @@ def create_manuscript():
 def get_manuscript(manuscript_id):
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -860,7 +1099,9 @@ def get_manuscript(manuscript_id):
             "error": "Manuscript not found"
         }), 404
 
-    return jsonify(dict(manuscript))
+    return jsonify(
+        dict(manuscript)
+    )
 
 
 @app.route(
@@ -870,7 +1111,9 @@ def get_manuscript(manuscript_id):
 def delete_manuscript(manuscript_id):
 
     if not require_admin():
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({
+            "error": "Unauthorized"
+        }), 401
 
     conn = get_db()
 
@@ -898,4 +1141,6 @@ init_db()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(
+        debug=True
+    )
