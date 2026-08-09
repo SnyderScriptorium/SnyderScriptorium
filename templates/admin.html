@@ -702,32 +702,82 @@ async function saveDraft() {
   }
 }
 
-  function loadDraftsList() {
-    const container = document.getElementById('drafts-container');
-    const drafts = JSON.parse(localStorage.getItem('scriptorium_drafts')) || [];
-    
+async function loadDraftsList() {
+  const container = document.getElementById('drafts-container');
+
+  if (!container) return;
+
+  container.innerHTML =
+    '<p style="color: #666;">Loading saved drafts...</p>';
+
+  try {
+    const response = await fetch('/api/drafts');
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Unable to load drafts.');
+    }
+
+    const drafts = data.drafts || [];
+
     if (drafts.length === 0) {
-      container.innerHTML = '<p style="color: #666;">No drafts saved yet.</p>';
+      container.innerHTML =
+        '<p style="color: #666;">No drafts saved yet.</p>';
+      updateDraftCount();
       return;
     }
 
     let html = '';
-    drafts.forEach((draft, index) => {
+
+    drafts.forEach((draft) => {
       html += `
         <div style="background: #E8D9B5; padding: 15px; border-radius: 6px; border: 1px solid #5C4033; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          
           <div>
-            <h3 style="margin: 0 0 5px 0; color: #5C4033;">${draft.title}</h3>
-            <small style="color: #555;">Saved on: ${draft.date} | Category: ${draft.category}</small>
+            <h3 style="margin: 0 0 5px 0; color: #5C4033;">
+              ${draft.title}
+            </h3>
+
+            <small style="color: #555;">
+              Saved on: ${draft.date || 'Unknown date'} |
+              Category: ${draft.category || 'Uncategorized'}
+            </small>
           </div>
+
           <div>
-            <button type="button" onclick="loadDraftToEditor(${index})" style="background-color: #5C4033; margin-right: 5px; padding: 6px 12px; font-size: 0.9rem;">Resume</button>
-            <button type="button" onclick="deleteDraft(${index})" style="background-color: #a94442; padding: 6px 12px; font-size: 0.9rem;">Delete</button>
+            <button
+              type="button"
+              onclick="loadDraftToEditor(${draft.id})"
+              style="background-color: #5C4033; margin-right: 5px; padding: 6px 12px; font-size: 0.9rem;"
+            >
+              Resume
+            </button>
+
+            <button
+              type="button"
+              onclick="deleteDraft(${draft.id})"
+              style="background-color: #a94442; padding: 6px 12px; font-size: 0.9rem;"
+            >
+              Delete
+            </button>
           </div>
+
         </div>
       `;
     });
+
     container.innerHTML = html;
+
+    updateDraftCount();
+
+  } catch (error) {
+    console.error('Load drafts error:', error);
+
+    container.innerHTML =
+      '<p style="color: #a94442;">Unable to load drafts from backend storage.</p>';
   }
+}
 
   function loadPublishedPostsList() {
     const container = document.getElementById('published-container');
