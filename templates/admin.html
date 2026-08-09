@@ -672,6 +672,9 @@ async function saveDraft() {
   const content =
     document.getElementById('blog-editor').innerHTML;
 
+  const date =
+    new Date().toLocaleDateString();
+
   try {
     const response = await fetch('/api/drafts', {
       method: 'POST',
@@ -681,24 +684,55 @@ async function saveDraft() {
       body: JSON.stringify({
         title: title,
         category: category,
-        content: content
+        content: content,
+        date: date
       })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'Unable to save draft.');
+      throw new Error(
+        data.error || 'Unable to save draft.'
+      );
     }
 
-    alert('Blog draft saved successfully to backend storage.');
+    /*
+     * SAVE WAS SUCCESSFUL
+     * Now completely reset the writing area.
+     */
 
-    await loadDraftsList();
+    document.getElementById('post-title').value = '';
+
+    document.getElementById('post-category').value =
+      'curations';
+
+    document.getElementById('blog-editor').innerHTML = '';
+
+    document.getElementById('blog-html-code').value = '';
+
+    /*
+     * If HTML mode is currently active,
+     * switch back to the normal visual editor.
+     */
+    if (isHtmlView) {
+      toggleBlogEditorMode();
+    }
+
+    /*
+     * Refresh the draft counter/list.
+     */
     updateDraftCount();
+    loadDraftsList();
+
+    alert('Blog draft saved successfully!');
 
   } catch (error) {
     console.error('Save draft error:', error);
-    alert('Unable to save the draft. Please try again.');
+
+    alert(
+      'The draft could not be saved. Please try again.'
+    );
   }
 }
 
