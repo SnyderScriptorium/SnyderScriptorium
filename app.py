@@ -3,53 +3,38 @@ import sqlite3
 from datetime import datetime
 from functools import wraps
 
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    session,
-    jsonify,
-)
-
-from werkzeug.security import check_password_hash
-
-
-# ============================================================
-# APPLICATION SETUP
-# ============================================================
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
+from werkzeug.security import check_password_hash, generate_password_hash
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.path.join(basedir, "scriptorium.db")
 
-app = Flask(
-    __name__,
-    template_folder=os.path.join(basedir, "templates"),
-)
+app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
+app.secret_key = os.environ.get("SECRET_KEY", "snyder-scriptorium-development-key")
 
-app.secret_key = os.environ.get(
-    "SECRET_KEY",
-    "snyder-scriptorium-development-key",
-)
-
-
-# ============================================================
-# DATABASE HELPERS
-# ============================================================
 
 def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def now_string():
+    return datetime.now().strftime("%m/%d/%Y %I:%M %p")
+
+
+def table_columns(conn, table):
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def add_column_if_missing(conn, table, column, definition):
+    if column not in table_columns(conn, table):
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_db():
     conn = get_db()
-
-    # --------------------------------------------------------
-    # DRAFTS
-    # --------------------------------------------------------
     conn.execute("""
         CREATE TABLE IF NOT EXISTS drafts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,10 +44,6 @@ def init_db():
             date_created TEXT NOT NULL
         )
     """)
-
-    # --------------------------------------------------------
-    # PUBLISHED POSTS
-    # --------------------------------------------------------
     conn.execute("""
         CREATE TABLE IF NOT EXISTS published_posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,10 +55,6 @@ def init_db():
             access_level TEXT NOT NULL DEFAULT 'public'
         )
     """)
-
-    # --------------------------------------------------------
-    # MANUSCRIPTS
-    # --------------------------------------------------------
     conn.execute("""
         CREATE TABLE IF NOT EXISTS manuscripts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,10 +63,30 @@ def init_db():
             date_created TEXT NOT NULL
         )
     """)
-
-    # --------------------------------------------------------
-    # MEMBERS
-    # --------------------------------------------------------
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_books (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            date_created TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            access_level TEXT NOT NULL DEFAULT 'members'
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS manuscript_chapters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER NOT NULL,
+            chapter_number INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            date_created TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            published INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY(book_id) REFERENCES manuscript_books(id) ON DELETE CASCADE,
+            UNIQUE(book_id, chapter_number)
+        )
+    """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,10 +96,6 @@ def init_db():
             date_created TEXT NOT NULL
         )
     """)
-
-    # --------------------------------------------------------
-    # SUBSCRIPTIONS
-    # --------------------------------------------------------
     conn.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,127 +105,90 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'inactive',
             date_started TEXT,
             date_ends TEXT,
-            FOREIGN KEY (member_id) REFERENCES members(id)
+            FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
         )
     """)
-
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS site_content (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        )
+    """)
+    add_column_if_missing(conn, "published_posts", "access_level", "TEXT NOT NULL DEFAULT 'public'")
+    conn.execute("""
+        INSERT OR IGNORE INTO site_content(key, value, updated_at)
+        VALUES ('about_content', ?, ?)
+    """, ("The Snyder Scriptorium is a growing home for books, writing, curiosity, and the stories that bring people together.", now_string()))
     conn.commit()
-
-    # --------------------------------------------------------
-    # SAFE MIGRATION: published_posts.access_level
-    # --------------------------------------------------------
-    columns = conn.execute(
-        "PRAGMA table_info(published_posts)"
-    ).fetchall()
-
-    column_names = [column["name"] for column in columns]
-
-    if "access_level" not in column_names:
-        conn.execute("""
-            ALTER TABLE published_posts
-            ADD COLUMN access_level TEXT NOT NULL DEFAULT 'public'
-        """)
-        conn.commit()
-
     conn.close()
 
 
-# ============================================================
-# AUTHENTICATION HELPERS
-# ============================================================
-
 def require_admin():
-    return session.get("admin_logged_in", False)
+    return bool(session.get("admin_logged_in"))
 
 
 def require_member():
-    return session.get("member_logged_in", False)
+    return bool(session.get("member_logged_in"))
 
 
 def member_has_access():
     if not require_member():
         return False
-
     member_id = session.get("member_id")
-
     if not member_id:
         return False
-
     conn = get_db()
-
-    member = conn.execute(
-        """
-        SELECT subscription_status
-        FROM members
-        WHERE id = ?
-        """,
-        (member_id,),
-    ).fetchone()
-
+    row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
     conn.close()
-
-    if member is None:
-        return False
-
-    return member["subscription_status"] == "active"
+    return bool(row and row["subscription_status"] == "active")
 
 
-def admin_required(view_function):
-    @wraps(view_function)
-    def wrapped_view(*args, **kwargs):
-
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
         if not require_admin():
             return redirect(url_for("admin_dashboard"))
-
-        return view_function(*args, **kwargs)
-
-    return wrapped_view
+        return view(*args, **kwargs)
+    return wrapped
 
 
-# ============================================================
-# K. W. SNYDER DOMAIN DETECTION
-# ============================================================
+def member_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not member_has_access():
+            return redirect(url_for("kwsnyderwriting_membership"))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def category_label(category):
+    return {
+        "curations": "Book Curations",
+        "reviews": "Book Reviews",
+        "curiosity": "Curiosity Cabinet",
+        "kwsnyderwriting": "K. W. Snyder Writing",
+    }.get(category, "Journal")
+
 
 def is_kw_domain():
-    configured_domain = os.environ.get(
-        "KWSNYDER_DOMAIN",
-        ""
-    ).strip().lower()
-
-    if not configured_domain:
+    configured = os.environ.get("KWSNYDER_DOMAIN", "").strip().lower()
+    if not configured:
         return False
-
     host = request.host.split(":")[0].lower()
-
-    return (
-        host == configured_domain
-        or host == f"www.{configured_domain}"
-    )
+    return host in {configured, f"www.{configured}"}
 
 
 @app.before_request
 def route_kw_domain():
-
-    if not is_kw_domain():
+    if not is_kw_domain() or request.path.startswith("/static/"):
         return None
-
-    if request.path.startswith("/static/"):
-        return None
-
     if request.path.startswith("/kwsnyderwriting"):
         return None
-
     if request.path == "/":
-        return redirect(
-            url_for("kwsnyderwriting_membership")
-        )
-
+        return redirect(url_for("kwsnyderwriting_membership"))
     return None
 
-
-# ============================================================
-# MAIN WEBSITE ROUTES
-# ============================================================
 
 @app.route("/")
 def the_hearth():
@@ -241,245 +197,158 @@ def the_hearth():
 
 @app.route("/about")
 def about():
-    return render_template("about.html")
+    conn = get_db()
+    row = conn.execute("SELECT value FROM site_content WHERE key = 'about_content'").fetchone()
+    conn.close()
+    return render_template("about.html", about_content=row["value"] if row else "")
 
-
-# ============================================================
-# PUBLIC BLOG
-# ============================================================
 
 @app.route("/blog")
 def the_blog():
-    return render_template(
-        "blog_templates/theblog.html"
-    )
+    return render_template("blog_templates/theblog.html")
 
 
-# ============================================================
-# BOOK CURATIONS
-# ============================================================
+def public_category(category, template):
+    conn = get_db()
+    posts = conn.execute("""
+        SELECT * FROM published_posts
+        WHERE category = ? AND access_level = 'public'
+        ORDER BY id DESC
+    """, (category,)).fetchall()
+    conn.close()
+    return render_template(template, posts=posts, category_name=category_label(category))
+
 
 @app.route("/blog/bookcurations")
 def book_curations():
+    return public_category("curations", "blog_templates/book_curations.html")
 
-    conn = get_db()
-
-    posts = conn.execute(
-        """
-        SELECT *
-        FROM published_posts
-        WHERE category = ?
-        AND access_level = 'public'
-        ORDER BY id DESC
-        """,
-        ("curations",),
-    ).fetchall()
-
-    conn.close()
-
-    return render_template(
-        "blog_templates/book_curations.html",
-        posts=posts,
-    )
-
-
-# ============================================================
-# BOOK REVIEWS
-# ============================================================
 
 @app.route("/blog/bookreviews")
 def bookreviews():
+    return public_category("reviews", "blog_templates/bookreviews.html")
 
-    conn = get_db()
-
-    posts = conn.execute(
-        """
-        SELECT *
-        FROM published_posts
-        WHERE category = ?
-        AND access_level = 'public'
-        ORDER BY id DESC
-        """,
-        ("reviews",),
-    ).fetchall()
-
-    conn.close()
-
-    return render_template(
-        "blog_templates/bookreviews.html",
-        posts=posts,
-    )
-
-
-# ============================================================
-# CURIOSITY CABINET
-# ============================================================
 
 @app.route("/blog/curiosity_cabinet")
 def curiosity_cabinet():
+    return public_category("curiosity", "blog_templates/curiosity_cabinet.html")
 
+
+@app.route("/blog/post/<int:post_id>")
+def view_post(post_id):
     conn = get_db()
-
-    posts = conn.execute(
-        """
-        SELECT *
-        FROM published_posts
-        WHERE category = ?
-        AND access_level = 'public'
-        ORDER BY id DESC
-        """,
-        ("curiosity",),
-    ).fetchall()
-
+    post = conn.execute("SELECT * FROM published_posts WHERE id = ?", (post_id,)).fetchone()
     conn.close()
+    if not post or post["access_level"] != "public":
+        abort(404)
+    return render_template("post.html", post=post, back_url=url_for("the_blog"))
 
-    return render_template(
-        "blog_templates/curiosity_cabinet.html",
-        posts=posts,
-    )
-
-
-# ============================================================
-# K. W. SNYDER WRITING
-# PRIVATE MEMBER-ONLY BRANCH
-# ============================================================
-
-@app.route("/kwsnyderwriting")
-def kwsnyderwriting():
-
-    if not require_member():
-        return redirect(
-            url_for("kwsnyderwriting_membership")
-        )
-
-    if not member_has_access():
-        return redirect(
-            url_for("kwsnyderwriting_membership")
-        )
-
-    conn = get_db()
-
-    posts = conn.execute(
-        """
-        SELECT *
-        FROM published_posts
-        WHERE category = ?
-        AND access_level = 'members'
-        ORDER BY id DESC
-        """,
-        ("kwsnyderwriting",),
-    ).fetchall()
-
-    conn.close()
-
-    return render_template(
-        "blog_templates/kwsnyderwriting.html",
-        posts=posts,
-    )
-
-
-# ============================================================
-# K. W. SNYDER MEMBERSHIP ENTRANCE
-# ============================================================
 
 @app.route("/kwsnyderwriting/membership")
 def kwsnyderwriting_membership():
-
-    return render_template(
-        "blog_templates/kwsnyderwriting_membership.html"
-    )
+    return render_template("blog_templates/kwsnyderwriting_membership.html")
 
 
-# ============================================================
-# K. W. SNYDER MEMBER LOGIN
-# ============================================================
-
-@app.route(
-    "/kwsnyderwriting/login",
-    methods=["GET", "POST"]
-)
+@app.route("/kwsnyderwriting/login", methods=["GET", "POST"])
 def member_login():
-
     if request.method == "POST":
-
-        email = request.form.get(
-            "email",
-            ""
-        ).strip().lower()
-
-        password = request.form.get(
-            "password",
-            ""
-        )
-
-        if not email or not password:
-            return redirect(
-                url_for(
-                    "kwsnyderwriting_membership"
-                )
-            )
-
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
         conn = get_db()
-
-        member = conn.execute(
-            """
-            SELECT *
-            FROM members
-            WHERE email = ?
-            """,
-            (email,),
-        ).fetchone()
-
+        member = conn.execute("SELECT * FROM members WHERE email = ?", (email,)).fetchone()
         conn.close()
-
-        if member and check_password_hash(
-            member["password_hash"],
-            password
-        ):
-
+        if member and check_password_hash(member["password_hash"], password):
             session["member_logged_in"] = True
             session["member_id"] = member["id"]
-
-            return redirect(
-                url_for("kwsnyderwriting")
-            )
-
-        return redirect(
-            url_for(
-                "kwsnyderwriting_membership"
-            )
-        )
-
-    return render_template(
-        "blog_templates/kwsnyderwriting_login.html"
-    )
+            if member["subscription_status"] == "active":
+                return redirect(url_for("kwsnyderwriting"))
+            return redirect(url_for("kwsnyderwriting_membership"))
+        return render_template("blog_templates/kwsnyderwriting_login.html", error="The email or password was not recognized.")
+    return render_template("blog_templates/kwsnyderwriting_login.html")
 
 
-# ============================================================
-# K. W. SNYDER MEMBER LOGOUT
-# ============================================================
+@app.route("/kwsnyderwriting/signup", methods=["GET", "POST"])
+def member_signup():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        if not email or len(password) < 8:
+            return render_template("blog_templates/kwsnyderwriting_signup.html", error="Please provide an email and a password of at least 8 characters.")
+        conn = get_db()
+        try:
+            conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.close()
+            return render_template("blog_templates/kwsnyderwriting_signup.html", error="An account with that email already exists.")
+        conn.close()
+        return redirect(url_for("member_login"))
+    return render_template("blog_templates/kwsnyderwriting_signup.html")
+
 
 @app.route("/kwsnyderwriting/logout")
 def member_logout():
-
-    session.pop(
-        "member_logged_in",
-        None
-    )
-
-    session.pop(
-        "member_id",
-        None
-    )
-
-    return redirect(
-        url_for("kwsnyderwriting_membership")
-    )
+    session.pop("member_logged_in", None)
+    session.pop("member_id", None)
+    return redirect(url_for("kwsnyderwriting_membership"))
 
 
-# ============================================================
-# STORE
-# ============================================================
+@app.route("/kwsnyderwriting")
+@member_required
+def kwsnyderwriting():
+    conn = get_db()
+    posts = conn.execute("""
+        SELECT * FROM published_posts
+        WHERE category = 'kwsnyderwriting' AND access_level = 'members'
+        ORDER BY id DESC
+    """).fetchall()
+    books = conn.execute("""
+        SELECT b.*, COUNT(c.id) AS chapter_count
+        FROM manuscript_books b
+        LEFT JOIN manuscript_chapters c ON c.book_id = b.id AND c.published = 1
+        GROUP BY b.id
+        ORDER BY b.id DESC
+    """).fetchall()
+    conn.close()
+    return render_template("blog_templates/kwsnyderwriting.html", posts=posts, books=books, member_logged_in=True)
+
+
+@app.route("/kwsnyderwriting/post/<int:post_id>")
+@member_required
+def view_member_post(post_id):
+    conn = get_db()
+    post = conn.execute("SELECT * FROM published_posts WHERE id = ? AND category = 'kwsnyderwriting' AND access_level = 'members'", (post_id,)).fetchone()
+    conn.close()
+    if not post:
+        abort(404)
+    return render_template("post.html", post=post, back_url=url_for("kwsnyderwriting"))
+
+
+@app.route("/kwsnyderwriting/novel/<int:book_id>")
+@member_required
+def view_novel(book_id):
+    conn = get_db()
+    book = conn.execute("SELECT * FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? AND published = 1 ORDER BY chapter_number", (book_id,)).fetchall()
+    conn.close()
+    if not book:
+        abort(404)
+    return render_template("blog_templates/novel.html", book=book, chapters=chapters)
+
+
+@app.route("/kwsnyderwriting/novel/<int:book_id>/chapter/<int:chapter_id>")
+@member_required
+def view_chapter(book_id, chapter_id):
+    conn = get_db()
+    chapter = conn.execute("SELECT * FROM manuscript_chapters WHERE id = ? AND book_id = ? AND published = 1", (chapter_id, book_id)).fetchone()
+    book = conn.execute("SELECT * FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    prev_chapter = conn.execute("SELECT id FROM manuscript_chapters WHERE book_id = ? AND chapter_number < ? AND published = 1 ORDER BY chapter_number DESC LIMIT 1", (book_id, chapter["chapter_number"] if chapter else 0)).fetchone()
+    next_chapter = conn.execute("SELECT id FROM manuscript_chapters WHERE book_id = ? AND chapter_number > ? AND published = 1 ORDER BY chapter_number LIMIT 1", (book_id, chapter["chapter_number"] if chapter else 0)).fetchone()
+    conn.close()
+    if not chapter or not book:
+        abort(404)
+    return render_template("blog_templates/chapter.html", book=book, chapter=chapter, previous=prev_chapter, next=next_chapter)
+
 
 @app.route("/store")
 def the_scriptorium():
@@ -491,649 +360,356 @@ def merch_shop():
     return render_template("merch.html")
 
 
-# ============================================================
-# ADMIN AUTHENTICATION
-# ============================================================
-
 @app.route("/admin")
 def admin_dashboard():
-
-    logged_in = require_admin()
-
-    return render_template(
-        "admin.html",
-        logged_in=logged_in,
-    )
+    return render_template("admin.html", logged_in=require_admin())
 
 
-@app.route(
-    "/admin/login",
-    methods=["POST"]
-)
+@app.route("/admin/login", methods=["POST"])
 def admin_login():
-
-    password = request.form.get(
-        "password",
-        ""
-    )
-
-    admin_password = os.environ.get(
-        "ADMIN_PASSWORD",
-        "scriptorium123",
-    )
-
-    if password == admin_password:
-
+    password = request.form.get("password", "")
+    if password == os.environ.get("ADMIN_PASSWORD", "scriptorium123"):
         session["admin_logged_in"] = True
-
-        return redirect(
-            url_for("admin_dashboard")
-        )
-
-    return redirect(
-        url_for("admin_dashboard")
-    )
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/logout")
 def admin_logout():
-
-    session.pop(
-        "admin_logged_in",
-        None
-    )
-
-    return redirect(
-        url_for("admin_dashboard")
-    )
+    session.pop("admin_logged_in", None)
+    return redirect(url_for("admin_dashboard"))
 
 
-# ============================================================
-# BLOG DRAFTS API
-# ============================================================
-
-@app.route(
-    "/api/drafts",
-    methods=["GET"]
-)
+@app.route("/api/drafts", methods=["GET"])
+@admin_required
 def get_drafts():
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
     conn = get_db()
-
-    drafts = conn.execute(
-        """
-        SELECT
-            id,
-            title,
-            category,
-            content,
-            date_created AS date
-        FROM drafts
-        ORDER BY id DESC
-        """
-    ).fetchall()
-
+    rows = conn.execute("SELECT id, title, category, content, date_created AS date FROM drafts ORDER BY id DESC").fetchall()
     conn.close()
-
-    return jsonify([
-        dict(draft)
-        for draft in drafts
-    ])
+    return jsonify([dict(row) for row in rows])
 
 
-@app.route(
-    "/api/drafts",
-    methods=["POST"]
-)
+@app.route("/api/drafts", methods=["POST"])
+@admin_required
 def create_draft():
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
     data = request.get_json() or {}
-
-    title = str(
-        data.get(
-            "title",
-            "Untitled Draft"
-        )
-    ).strip()
-
-    category = str(
-        data.get(
-            "category",
-            "curations"
-        )
-    ).strip()
-
-    content = str(
-        data.get(
-            "content",
-            ""
-        )
-    )
-
-    date_created = str(
-        data.get(
-            "date",
-            ""
-        )
-    ).strip()
-
-    if not title:
-        title = "Untitled Draft"
-
-    if not date_created:
-        date_created = datetime.now().strftime(
-            "%m/%d/%Y"
-        )
-
+    title = str(data.get("title", "Untitled Draft")).strip() or "Untitled Draft"
+    category = str(data.get("category", "curations")).strip()
+    content = str(data.get("content", ""))
+    date_created = str(data.get("date", "")).strip() or now_string()
     conn = get_db()
-
-    cursor = conn.execute(
-        """
-        INSERT INTO drafts
-        (
-            title,
-            category,
-            content,
-            date_created
-        )
-        VALUES (?, ?, ?, ?)
-        """,
-        (
-            title,
-            category,
-            content,
-            date_created,
-        ),
-    )
-
+    cur = conn.execute("INSERT INTO drafts(title, category, content, date_created) VALUES (?, ?, ?, ?)", (title, category, content, date_created))
     conn.commit()
-
-    draft_id = cursor.lastrowid
-
+    draft_id = cur.lastrowid
     conn.close()
-
-    return jsonify({
-        "success": True,
-        "id": draft_id,
-    }), 201
+    return jsonify({"success": True, "id": draft_id}), 201
 
 
-@app.route(
-    "/api/drafts/<int:draft_id>",
-    methods=["GET"]
-)
+@app.route("/api/drafts/<int:draft_id>", methods=["GET"])
+@admin_required
 def get_draft(draft_id):
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
     conn = get_db()
-
-    draft = conn.execute(
-        """
-        SELECT
-            id,
-            title,
-            category,
-            content,
-            date_created AS date
-        FROM drafts
-        WHERE id = ?
-        """,
-        (draft_id,),
-    ).fetchone()
-
+    row = conn.execute("SELECT id, title, category, content, date_created AS date FROM drafts WHERE id = ?", (draft_id,)).fetchone()
     conn.close()
-
-    if draft is None:
-        return jsonify({
-            "error": "Draft not found"
-        }), 404
-
-    return jsonify(dict(draft))
+    if not row:
+        return jsonify({"error": "Draft not found"}), 404
+    return jsonify(dict(row))
 
 
-@app.route(
-    "/api/drafts/<int:draft_id>",
-    methods=["DELETE"]
-)
-def delete_draft(draft_id):
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
-    conn = get_db()
-
-    cursor = conn.execute(
-        """
-        DELETE FROM drafts
-        WHERE id = ?
-        """,
-        (draft_id,),
-    )
-
-    conn.commit()
-
-    deleted = cursor.rowcount > 0
-
-    conn.close()
-
-    if not deleted:
-        return jsonify({
-            "error": "Draft not found"
-        }), 404
-
-    return jsonify({
-        "success": True
-    })
-
-
-# ============================================================
-# PUBLISHED POSTS API
-# ============================================================
-
-@app.route(
-    "/api/published",
-    methods=["GET"]
-)
-def get_published_posts():
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
-    conn = get_db()
-
-    posts = conn.execute(
-        """
-        SELECT
-            id,
-            title,
-            category,
-            category_name AS categoryName,
-            content,
-            date_published AS date,
-            access_level AS accessLevel
-        FROM published_posts
-        ORDER BY id DESC
-        """
-    ).fetchall()
-
-    conn.close()
-
-    return jsonify([
-        dict(post)
-        for post in posts
-    ])
-
-
-@app.route(
-    "/api/published",
-    methods=["POST"]
-)
-def create_published_post():
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
+@app.route("/api/drafts/<int:draft_id>", methods=["PUT"])
+@admin_required
+def update_draft(draft_id):
     data = request.get_json() or {}
-
-    title = str(
-        data.get(
-            "title",
-            ""
-        )
-    ).strip()
-
-    category = str(
-        data.get(
-            "category",
-            ""
-        )
-    ).strip()
-
-    category_name = str(
-        data.get(
-            "categoryName",
-            "Journal"
-        )
-    ).strip()
-
-    content = str(
-        data.get(
-            "content",
-            ""
-        )
-    )
-
-    date_published = str(
-        data.get(
-            "date",
-            ""
-        )
-    ).strip()
-
-    access_level = str(
-        data.get(
-            "accessLevel",
-            "public"
-        )
-    ).strip()
-
-    if not title:
-        return jsonify({
-            "error": "Post title is required"
-        }), 400
-
-    if access_level not in (
-        "public",
-        "members"
-    ):
-        return jsonify({
-            "error": "Invalid access level"
-        }), 400
-
-    # K.W. Snyder Writing is always members-only.
-    if category == "kwsnyderwriting":
-        access_level = "members"
-
-    if not date_published:
-        date_published = datetime.now().strftime(
-            "%m/%d/%Y"
-        )
-
     conn = get_db()
-
-    cursor = conn.execute(
-        """
-        INSERT INTO published_posts
-        (
-            title,
-            category,
-            category_name,
-            content,
-            date_published,
-            access_level
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            title,
-            category,
-            category_name,
-            content,
-            date_published,
-            access_level,
-        ),
-    )
-
-    conn.commit()
-
-    post_id = cursor.lastrowid
-
-    conn.close()
-
-    return jsonify({
-        "success": True,
-        "id": post_id,
-        "access_level": access_level,
-    }), 201
-
-
-@app.route(
-    "/api/published/<int:post_id>",
-    methods=["DELETE"]
-)
-def delete_published_post(post_id):
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
-    conn = get_db()
-
-    post = conn.execute(
-        """
-        SELECT id
-        FROM published_posts
-        WHERE id = ?
-        """,
-        (post_id,),
-    ).fetchone()
-
-    if post is None:
-
+    row = conn.execute("SELECT id FROM drafts WHERE id = ?", (draft_id,)).fetchone()
+    if not row:
         conn.close()
-
-        return jsonify({
-            "error": "Post not found"
-        }), 404
-
-    conn.execute(
-        """
-        DELETE FROM published_posts
-        WHERE id = ?
-        """,
-        (post_id,),
-    )
-
+        return jsonify({"error": "Draft not found"}), 404
+    conn.execute("UPDATE drafts SET title = ?, category = ?, content = ? WHERE id = ?", (str(data.get("title", "Untitled Draft")).strip() or "Untitled Draft", str(data.get("category", "curations")), str(data.get("content", "")), draft_id))
     conn.commit()
     conn.close()
-
-    return jsonify({
-        "success": True
-    })
+    return jsonify({"success": True})
 
 
-# ============================================================
-# MANUSCRIPTS API
-# ============================================================
-
-@app.route(
-    "/api/manuscripts",
-    methods=["GET"]
-)
-def get_manuscripts():
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
+@app.route("/api/drafts/<int:draft_id>", methods=["DELETE"])
+@admin_required
+def delete_draft(draft_id):
     conn = get_db()
-
-    manuscripts = conn.execute(
-        """
-        SELECT
-            id,
-            title,
-            content,
-            date_created AS date
-        FROM manuscripts
-        ORDER BY id DESC
-        """
-    ).fetchall()
-
+    cur = conn.execute("DELETE FROM drafts WHERE id = ?", (draft_id,))
+    conn.commit()
     conn.close()
-
-    return jsonify([
-        dict(book)
-        for book in manuscripts
-    ])
+    if cur.rowcount == 0:
+        return jsonify({"error": "Draft not found"}), 404
+    return jsonify({"success": True})
 
 
-@app.route(
-    "/api/manuscripts",
-    methods=["POST"]
-)
-def create_manuscript():
+@app.route("/api/published", methods=["GET"])
+@admin_required
+def get_published_posts():
+    conn = get_db()
+    rows = conn.execute("SELECT id, title, category, category_name AS categoryName, content, date_published AS date, access_level AS accessLevel FROM published_posts ORDER BY id DESC").fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
 
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
 
+@app.route("/api/published", methods=["POST"])
+@admin_required
+def create_published_post():
     data = request.get_json() or {}
-
-    title = str(
-        data.get(
-            "title",
-            "Untitled Book or Document"
-        )
-    ).strip()
-
-    content = str(
-        data.get(
-            "content",
-            ""
-        )
-    )
-
-    date_created = str(
-        data.get(
-            "date",
-            ""
-        )
-    ).strip()
-
-    if not title:
-        title = "Untitled Book or Document"
-
-    if not date_created:
-        date_created = datetime.now().strftime(
-            "%m/%d/%Y"
-        )
-
+    title = str(data.get("title", "")).strip()
+    category = str(data.get("category", "")).strip()
+    content = str(data.get("content", ""))
+    access = str(data.get("accessLevel", "public"))
+    if not title or not content.strip():
+        return jsonify({"error": "A title and content are required."}), 400
+    if category == "kwsnyderwriting":
+        access = "members"
+    if access not in {"public", "members"}:
+        access = "public"
     conn = get_db()
-
-    cursor = conn.execute(
-        """
-        INSERT INTO manuscripts
-        (
-            title,
-            content,
-            date_created
-        )
-        VALUES (?, ?, ?)
-        """,
-        (
-            title,
-            content,
-            date_created,
-        ),
-    )
-
+    cur = conn.execute("INSERT INTO published_posts(title, category, category_name, content, date_published, access_level) VALUES (?, ?, ?, ?, ?, ?)", (title, category, category_label(category), content, str(data.get("date", "")).strip() or now_string(), access))
     conn.commit()
-
-    manuscript_id = cursor.lastrowid
-
+    post_id = cur.lastrowid
     conn.close()
-
-    return jsonify({
-        "success": True,
-        "id": manuscript_id,
-    }), 201
+    return jsonify({"success": True, "id": post_id, "access_level": access}), 201
 
 
-@app.route(
-    "/api/manuscripts/<int:manuscript_id>",
-    methods=["GET"]
-)
-def get_manuscript(manuscript_id):
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
+@app.route("/api/published/<int:post_id>", methods=["GET"])
+@admin_required
+def get_published_post(post_id):
     conn = get_db()
-
-    manuscript = conn.execute(
-        """
-        SELECT
-            id,
-            title,
-            content,
-            date_created AS date
-        FROM manuscripts
-        WHERE id = ?
-        """,
-        (manuscript_id,),
-    ).fetchone()
-
+    row = conn.execute("SELECT id, title, category, category_name AS categoryName, content, date_published AS date, access_level AS accessLevel FROM published_posts WHERE id = ?", (post_id,)).fetchone()
     conn.close()
-
-    if manuscript is None:
-        return jsonify({
-            "error": "Manuscript not found"
-        }), 404
-
-    return jsonify(dict(manuscript))
+    if not row:
+        return jsonify({"error": "Post not found"}), 404
+    return jsonify(dict(row))
 
 
-@app.route(
-    "/api/manuscripts/<int:manuscript_id>",
-    methods=["DELETE"]
-)
-def delete_manuscript(manuscript_id):
-
-    if not require_admin():
-        return jsonify({
-            "error": "Unauthorized"
-        }), 401
-
+@app.route("/api/published/<int:post_id>", methods=["PUT"])
+@admin_required
+def update_published_post(post_id):
+    data = request.get_json() or {}
+    category = str(data.get("category", "curations"))
+    access = "members" if category == "kwsnyderwriting" else str(data.get("accessLevel", "public"))
     conn = get_db()
-
-    cursor = conn.execute(
-        """
-        DELETE FROM manuscripts
-        WHERE id = ?
-        """,
-        (manuscript_id,),
-    )
-
+    cur = conn.execute("UPDATE published_posts SET title = ?, category = ?, category_name = ?, content = ?, access_level = ? WHERE id = ?", (str(data.get("title", "Untitled Post")).strip() or "Untitled Post", category, category_label(category), str(data.get("content", "")), access, post_id))
     conn.commit()
-
-    deleted = cursor.rowcount > 0
-
     conn.close()
-
-    if not deleted:
-        return jsonify({
-            "error": "Manuscript not found"
-        }), 404
-
-    return jsonify({
-        "success": True
-    })
+    if cur.rowcount == 0:
+        return jsonify({"error": "Post not found"}), 404
+    return jsonify({"success": True})
 
 
-# ============================================================
-# STARTUP
-# ============================================================
+@app.route("/api/published/<int:post_id>/unpublish", methods=["POST"])
+@admin_required
+def unpublish_post(post_id):
+    conn = get_db()
+    post = conn.execute("SELECT * FROM published_posts WHERE id = ?", (post_id,)).fetchone()
+    if not post:
+        conn.close()
+        return jsonify({"error": "Post not found"}), 404
+    conn.execute("INSERT INTO drafts(title, category, content, date_created) VALUES (?, ?, ?, ?)", (post["title"], post["category"], post["content"], now_string()))
+    conn.execute("DELETE FROM published_posts WHERE id = ?", (post_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "message": "Post returned to drafts."})
+
+
+@app.route("/api/published/<int:post_id>", methods=["DELETE"])
+@admin_required
+def delete_published_post(post_id):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM published_posts WHERE id = ?", (post_id,))
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Post not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/manuscripts", methods=["GET"])
+@admin_required
+def get_manuscripts():
+    conn = get_db()
+    books = conn.execute("SELECT b.id, b.title, b.description, b.date_created, b.updated_at, COUNT(c.id) AS chapter_count, SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id GROUP BY b.id ORDER BY b.id DESC").fetchall()
+    legacy = conn.execute("SELECT id, title, content, date_created FROM manuscripts ORDER BY id DESC").fetchall()
+    conn.close()
+    return jsonify({"books": [dict(row) for row in books], "legacy": [dict(row) for row in legacy]})
+
+
+@app.route("/api/manuscripts", methods=["POST"])
+@admin_required
+def create_manuscript_book():
+    data = request.get_json() or {}
+    title = str(data.get("title", "Untitled Novel")).strip() or "Untitled Novel"
+    description = str(data.get("description", ""))
+    stamp = now_string()
+    conn = get_db()
+    cur = conn.execute("INSERT INTO manuscript_books(title, description, date_created, updated_at) VALUES (?, ?, ?, ?)", (title, description, stamp, stamp))
+    conn.commit()
+    book_id = cur.lastrowid
+    conn.close()
+    return jsonify({"success": True, "id": book_id}), 201
+
+
+@app.route("/api/manuscripts/<int:book_id>", methods=["GET"])
+@admin_required
+def get_manuscript_book(book_id):
+    conn = get_db()
+    book = conn.execute("SELECT * FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number", (book_id,)).fetchall()
+    conn.close()
+    if not book:
+        return jsonify({"error": "Novel not found"}), 404
+    return jsonify({"book": dict(book), "chapters": [dict(row) for row in chapters]})
+
+
+@app.route("/api/manuscripts/<int:book_id>", methods=["PUT"])
+@admin_required
+def update_manuscript_book(book_id):
+    data = request.get_json() or {}
+    conn = get_db()
+    cur = conn.execute("UPDATE manuscript_books SET title = ?, description = ?, updated_at = ? WHERE id = ?", (str(data.get("title", "Untitled Novel")).strip() or "Untitled Novel", str(data.get("description", "")), now_string(), book_id))
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Novel not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/manuscripts/<int:book_id>", methods=["DELETE"])
+@admin_required
+def delete_manuscript_book(book_id):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM manuscript_books WHERE id = ?", (book_id,))
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Novel not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/manuscripts/<int:book_id>/chapters", methods=["GET"])
+@admin_required
+def get_chapters(book_id):
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number", (book_id,)).fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.route("/api/manuscripts/<int:book_id>/chapters", methods=["POST"])
+@admin_required
+def create_chapter(book_id):
+    data = request.get_json() or {}
+    title = str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter"
+    content = str(data.get("content", ""))
+    try:
+        chapter_number = int(data.get("chapter_number"))
+    except (TypeError, ValueError):
+        chapter_number = 1
+    published = 1 if data.get("published") else 0
+    stamp = now_string()
+    conn = get_db()
+    if not conn.execute("SELECT id FROM manuscript_books WHERE id = ?", (book_id,)).fetchone():
+        conn.close()
+        return jsonify({"error": "Novel not found"}), 404
+    try:
+        cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, date_created, updated_at, published) VALUES (?, ?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, stamp, stamp, published))
+        conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (stamp, book_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "That chapter number already exists for this novel."}), 409
+    conn.close()
+    return jsonify({"success": True, "id": cur.lastrowid}), 201
+
+
+@app.route("/api/manuscripts/<int:book_id>/chapters/<int:chapter_id>", methods=["GET"])
+@admin_required
+def get_chapter(book_id, chapter_id):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM manuscript_chapters WHERE id = ? AND book_id = ?", (chapter_id, book_id)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Chapter not found"}), 404
+    return jsonify(dict(row))
+
+
+@app.route("/api/manuscripts/<int:book_id>/chapters/<int:chapter_id>", methods=["PUT"])
+@admin_required
+def update_chapter(book_id, chapter_id):
+    data = request.get_json() or {}
+    title = str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter"
+    content = str(data.get("content", ""))
+    try:
+        number = int(data.get("chapter_number"))
+    except (TypeError, ValueError):
+        number = 1
+    published = 1 if data.get("published") else 0
+    conn = get_db()
+    try:
+        cur = conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, updated_at = ?, published = ? WHERE id = ? AND book_id = ?", (number, title, content, now_string(), published, chapter_id, book_id))
+        conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (now_string(), book_id))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "That chapter number already exists for this novel."}), 409
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Chapter not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/manuscripts/<int:book_id>/chapters/<int:chapter_id>", methods=["DELETE"])
+@admin_required
+def delete_chapter(book_id, chapter_id):
+    conn = get_db()
+    cur = conn.execute("DELETE FROM manuscript_chapters WHERE id = ? AND book_id = ?", (chapter_id, book_id))
+    conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (now_string(), book_id))
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Chapter not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/legacy-manuscripts", methods=["POST"])
+@admin_required
+def create_legacy_manuscript():
+    data = request.get_json() or {}
+    title = str(data.get("title", "Untitled Document")).strip() or "Untitled Document"
+    content = str(data.get("content", ""))
+    conn = get_db()
+    cur = conn.execute("INSERT INTO manuscripts(title, content, date_created) VALUES (?, ?, ?)", (title, content, now_string()))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "id": cur.lastrowid}), 201
+
+
+@app.route("/api/site-content/about", methods=["GET"])
+@admin_required
+def get_about_content():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM site_content WHERE key = 'about_content'").fetchone()
+    conn.close()
+    return jsonify({"content": row["value"] if row else ""})
+
+
+@app.route("/api/site-content/about", methods=["PUT"])
+@admin_required
+def update_about_content():
+    data = request.get_json() or {}
+    content = str(data.get("content", ""))
+    conn = get_db()
+    conn.execute("INSERT INTO site_content(key, value, updated_at) VALUES ('about_content', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", (content, now_string()))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
 
 init_db()
 
-
 if __name__ == "__main__":
-    app.run(
-        debug=True
-    )
+    app.run(debug=True)
