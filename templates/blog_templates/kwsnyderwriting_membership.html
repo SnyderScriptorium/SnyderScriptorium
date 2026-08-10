@@ -4,7 +4,6 @@
 <section class="content-section" style="max-width:760px;margin:0 auto;text-align:center;">
   <h1>K. W. Snyder Writing</h1>
   <p class="private-label">A private branch of the Snyder Scriptorium</p>
-
   <div class="preview" style="padding:30px;margin-top:25px;">
     <h2>Enter the Private Writing Room</h2>
     <p>This branch is reserved for subscribers. Sign in if you already have an account, or create your member account to continue to the subscription process.</p>
@@ -13,14 +12,13 @@
       <a class="blog-block" style="display:inline-block;padding:11px 20px;" href="{{ url_for('member_signup') }}">Create Account</a>
     </div>
   </div>
-
   <div class="content-section" style="margin-top:28px;text-align:left;">
     <h2>What Membership Includes</h2>
     <p>Your subscription opens the private K. W. Snyder Writing library, including my shorter literary work and my novels as I make them available.</p>
     <p>The library is organized into <strong>Writing, Short Stories, Poems, Vignettes, and Novels</strong>. Novels have their own book pages and chapter-by-chapter reading experience.</p>
     <p>There is <strong>no fixed posting schedule</strong>. Writing does not always arrive on a predictable timetable, but I will be working toward sharing <strong>new writing at least once a month</strong>.</p>
     <p>This is a place for readers who want to follow my writing beyond the public blog and spend some time in the private room behind the writing desk.</p>
-    <p style="margin-top:22px"><a href="{{ url_for('membership_terms') }}">Read the Membership Terms &amp; Conditions</a></p>
+    <p style="margin-top:22px"><a href="{{ url_for('static', filename='membership_terms.html') }}">Read the Membership Terms &amp; Conditions</a></p>
   </div>
 </section>
 {% endblock %}
