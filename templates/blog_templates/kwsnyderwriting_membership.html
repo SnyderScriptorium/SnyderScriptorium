@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}K. W. Snyder Writing — Membership{% endblock %}
+{% block content %}
+<section class="content-section" style="max-width:720px;margin:0 auto;text-align:center;">
+  <h1>K. W. Snyder Writing</h1>
+  <p class="private-label">A private branch of the Snyder Scriptorium</p>
+  <div class="preview" style="padding:30px;margin-top:25px;">
+    <h2>Enter the Private Writing Room</h2>
+    <p>This branch is reserved for subscribers. Sign in if you already have an account, or create your member account to continue to the subscription process.</p>
+    <div class="actions" style="justify-content:center;">
+      <a class="blog-block" style="display:inline-block;padding:11px 20px;" href="{{ url_for('member_login') }}">Sign In</a>
+      <a class="blog-block" style="display:inline-block;padding:11px 20px;" href="{{ url_for('member_signup') }}">Create Account</a>
+    </div>
+  </div>
+</section>
+{% endblock %}
