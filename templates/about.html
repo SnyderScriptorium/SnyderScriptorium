@@ -1,49 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}
-About — Snyder Scriptorium
-{% endblock %}
+{% block title %}About — Snyder Scriptorium{% endblock %}
 
 {% block content %}
 <section class="about-page">
     <div class="page-heading">
         <h1>About</h1>
     </div>
-
     <div class="content-section">
-        <h2>The Snyder Scriptorium</h2>
-        <p>
-            The Snyder Scriptorium is a growing home for books,
-            writing, curiosity, and the stories that bring people
-            together.
-        </p>
-        <p>
-            What began as a place to share writing is becoming
-            something larger — a literary space where readers can
-            discover books, explore curious subjects, follow the
-            writing process, and eventually find books and goods
-            created through the Scriptorium.
-        </p>
-
-        <h2>K. W. Snyder</h2>
-        <p>
-            K. W. Snyder is the writer behind the Scriptorium.
-            This space is where the writing, research, reading,
-            and ideas behind the work come together.
-        </p>
-        <p>
-            The Scriptorium is being built slowly and intentionally,
-            with the goal of creating something that feels less
-            like a conventional website and more like stepping
-            into a quiet library tucked away in the woods.
-        </p>
-
-        <h2>A Place to Settle In</h2>
-        <p>
-            Whether you arrive for a book recommendation, a
-            curiosity rabbit hole, a writing update, or simply
-            to browse, you're welcome here.
-        </p>
+        {{ about_content|safe }}
     </div>
 </section>
 {% endblock %}
