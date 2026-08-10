@@ -7,21 +7,41 @@
     <p class="private-label">The private literary library of K. W. Snyder</p>
     {% if member_preview %}<p class="private-label">Preview mode — you are viewing this as a member without changing subscription status.</p><a href="{{ url_for('admin_exit_member_preview') }}">Exit Preview</a>{% endif %}
   </div>
+
   <div class="blog-feed">
-    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='writing') }}"><h2>Writing</h2><p>Standalone writing posts from the writing desk.</p></a>
+    <a class="blog-block" href="#writing"><h2>Writing</h2><p>Standalone writing posts from the writing desk.</p></a>
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}"><h2>Short Stories</h2><p>Standalone stories from the writing desk.</p></a>
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='poems') }}"><h2>Poems</h2><p>Poetry and verse.</p></a>
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='vignettes') }}"><h2>Vignettes</h2><p>Brief literary pieces and moments.</p></a>
     <a class="blog-block" href="#novels"><h2>Novels</h2><p>Long-form works, organized by book and published chapter.</p></a>
   </div>
+
+  <section id="writing" class="content-section" style="margin-top:25px">
+    <h2>Writing</h2>
+    <p class="private-label">Posts published from the K. W. Snyder Writing desk.</p>
+    <div class="blog-feed">
+      {% for post in posts if post['category'] == 'kwsnyderwriting' %}
+      <a class="blog-block" href="{{ url_for('view_member_post', post_id=post['id']) }}">
+        <h2>{{ post['title'] }}</h2>
+        <p>{{ post['date_published'] }}</p>
+      </a>
+      {% else %}<p class="private-label">No writing posts have been published here yet.</p>{% endfor %}
+    </div>
+  </section>
+
   <section id="novels" class="content-section" style="margin-top:25px">
     <h2>Novels</h2>
     <div class="blog-feed">
       {% for book in books %}
-      <a class="blog-block" href="{{ url_for('view_novel', book_id=book['id']) }}"><h2>{{ book['title'] }}</h2><p>{{ book['description'] or 'A work in progress.' }}</p><p class="private-label">{{ book['chapter_count'] or 0 }} published chapter{{ '' if (book['chapter_count'] or 0) == 1 else 's' }}</p></a>
+      <a class="blog-block" href="{{ url_for('view_novel', book_id=book['id']) }}">
+        <h2>{{ book['title'] }}</h2>
+        <p>{{ book['description'] or 'A work in progress.' }}</p>
+        <p class="private-label">{{ book['chapter_count'] or 0 }} published chapter{{ '' if (book['chapter_count'] or 0) == 1 else 's' }}</p>
+      </a>
       {% else %}<p class="private-label">No novels have been opened in the private library yet.</p>{% endfor %}
     </div>
   </section>
+
   <p style="margin-top:30px"><a href="{{ url_for('member_logout') }}">Sign Out</a></p>
 </section>
 {% endblock %}
