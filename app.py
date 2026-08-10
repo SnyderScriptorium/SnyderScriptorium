@@ -300,14 +300,28 @@ def admin_dashboard():
 @app.route("/admin/login", methods=["POST"])
 def admin_login():
     password = request.form.get("password", "")
-    configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
-    if configured_password and password == configured_password:
-        # Start a completely fresh session after successful authentication.
+    configured_password = os.environ.get("ADMIN_PASSWORD", "")
+    configured_password = configured_password.strip()
+
+    if not configured_password:
+        return render_template(
+            "admin.html",
+            logged_in=False,
+            login_error="Admin password is not configured on the server."
+        )
+
+    if password == configured_password:
         session.clear()
         session.permanent = False
         session["admin_logged_in"] = True
         session["admin_auth_version"] = ADMIN_AUTH_VERSION
-    return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("admin_dashboard"))
+
+    return render_template(
+        "admin.html",
+        logged_in=False,
+        login_error="The admin password was not recognized."
+    )
 
 
 @app.route("/admin/logout")

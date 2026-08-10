@@ -17,7 +17,7 @@
 <div class="brand"><h1>Scriptorium Control Panel</h1></div>
 
 <div id="login" class="panel login {% if logged_in %}hidden{% endif %}">
-<h2 class="section-title">Backend Access</h2><p class="note">Your writing studio is private. Nothing here is stored in browser storage.</p>
+<h2 class="section-title">Backend Access</h2>{% if login_error %}<div class="status error">{{ login_error }}</div>{% endif %}
 <form action="{{ url_for('admin_login') }}" method="POST"><label for="password">Master Password</label><input id="password" name="password" type="password" required><div class="actions"><button type="submit">Log In</button><button type="button" class="light" onclick="goHome()">Return to Home</button></div></form>
 </div>
 
