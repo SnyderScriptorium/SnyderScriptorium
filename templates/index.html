@@ -5,63 +5,35 @@ The Hearth — Snyder Scriptorium
 {% endblock %}
 
 {% block content %}
-
 <section class="hearth-page">
+    <div class="hearth-intro">
+        <h1>Snyder Scriptorium</h1>
+        <h2>K.W. Snyder Writing</h2>
+        <p>
+            Welcome to the Hearth of the Snyder Scriptorium —
+            a quiet corner for books, stories, curiosity, and
+            the work of writing.
+        </p>
+    </div>
 
-```
-<div class="hearth-intro">
+    <div class="home-image-container">
+        <img src="{{ url_for('static', filename='Home_library_PIc.png') }}"
+             alt="A cozy library representing the Snyder Scriptorium"
+             class="full-width-image">
+    </div>
 
-    <h1>Snyder Scriptorium</h1>
-
-    <h2>K.W. Snyder Writing</h2>
-
-    <p>
-        Welcome to the Hearth of the Snyder Scriptorium —
-        a quiet corner for books, stories, curiosity, and
-        the work of writing.
-    </p>
-
-</div>
-
-
-<!-- =====================================================
-     HOME PAGE FEATURE IMAGE
-     ===================================================== -->
-
-<div class="home-image-container">
-
-    <img
-        src="{{ url_for('static', filename='Home_library_PIc.png') }}"
-        alt="A cozy library representing the Snyder Scriptorium"
-        class="full-width-image"
-    >
-
-</div>
-
-
-<!-- =====================================================
-     WELCOME SECTION
-     ===================================================== -->
-
-<section class="content-section">
-
-    <h2>Welcome to the Scriptorium</h2>
-
-    <p>
-        This is the beginning of the Snyder Scriptorium —
-        a place built around books, writing, thoughtful
-        conversation, and the endless things worth being
-        curious about.
-    </p>
-
-    <p>
-        Take a look around, visit the blog, browse the
-        Scriptorium, or simply settle in for a while.
-    </p>
-
+    <section class="content-section">
+        <h2>Welcome to the Scriptorium</h2>
+        <p>
+            This is the beginning of the Snyder Scriptorium —
+            a place built around books, writing, thoughtful
+            conversation, and the endless things worth being
+            curious about.
+        </p>
+        <p>
+            Take a look around, visit the blog, browse the
+            Scriptorium, or simply settle in for a while.
+        </p>
+    </section>
 </section>
-```
-
-</section>
-
 {% endblock %}
