@@ -352,6 +352,34 @@ def view_chapter(book_id, chapter_id):
 
 
 
+@app.route("/kwsnyderwriting/novel/<int:book_id>/chapter/<int:chapter_id>/feedback", methods=["POST"])
+@member_required
+def submit_reader_feedback(book_id, chapter_id):
+    feedback = request.form.get("feedback", "").strip()
+    if not feedback:
+        return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_error="Please enter your feedback before submitting."))
+    if len(feedback) > 20000:
+        return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_error="Please keep feedback under 20,000 characters."))
+
+    member_id = session.get("member_id")
+    conn = get_db()
+    chapter = conn.execute("SELECT id, book_id, chapter_number, title FROM manuscript_chapters WHERE id = ? AND book_id = ? AND published = 1", (chapter_id, book_id)).fetchone()
+    book = conn.execute("SELECT id, title FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    member = conn.execute("SELECT email FROM members WHERE id = ?", (member_id,)).fetchone()
+    if not chapter or not book or not member:
+        conn.close()
+        abort(404)
+
+    subject = f"Reader Feedback — {book['title']} — Chapter {chapter['chapter_number']}: {chapter['title']}"
+    conn.execute(
+        "INSERT INTO inbox_messages(message_type, name, email, subject, message, post_id, book_id, chapter_id, member_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("reader_feedback", "Subscriber Reader", member["email"], subject, feedback, None, book_id, chapter_id, member_id),
+    )
+    conn.commit()
+    conn.close()
+    return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_sent="1"))
+
+
 @app.route("/contact", methods=["GET", "POST"])
 def contact():
     if request.method == "POST":

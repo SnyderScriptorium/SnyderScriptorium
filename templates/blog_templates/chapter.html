@@ -6,6 +6,27 @@
   <h1>Chapter {{ chapter['chapter_number'] }}: {{ chapter['title'] }}</h1>
   <p class="private-label">{{ book['title'] }}</p>
   <div class="preview" style="margin-top:25px;line-height:1.9;">{{ chapter['content']|safe }}</div>
+  {% if request.args.get('feedback_sent') == '1' %}
+    <div style="margin-top:30px;padding:15px;border:1px solid #C9B78F;border-radius:8px;background:#F7F1E6;">
+      <strong>Thank you.</strong> Your reader feedback has been sent to the author.
+    </div>
+  {% endif %}
+  {% if request.args.get('feedback_error') %}
+    <div style="margin-top:30px;padding:15px;border:1px solid #C9B78F;border-radius:8px;background:#F7F1E6;">
+      {{ request.args.get('feedback_error') }}
+    </div>
+  {% endif %}
+
+  <section style="margin-top:35px;padding-top:25px;border-top:1px solid #C9B78F;">
+    <h2>Reader Feedback</h2>
+    <p>If you're reading this chapter as a subscriber and would like to share your thoughts, send your feedback directly to the author.</p>
+    <form method="post" action="{{ url_for('submit_reader_feedback', book_id=book['id'], chapter_id=chapter['id']) }}">
+      <label for="reader-feedback">Your feedback</label>
+      <textarea id="reader-feedback" name="feedback" rows="8" maxlength="20000" required style="width:100%;box-sizing:border-box;margin-top:8px;padding:12px;border:1px solid #C9B78F;border-radius:6px;font:inherit;resize:vertical;" placeholder="What did you think of this chapter?"></textarea>
+      <button type="submit" style="margin-top:12px;padding:10px 16px;border:1px solid #C9B78F;border-radius:6px;background:#FFFDF8;cursor:pointer;font:inherit;">Send Feedback</button>
+    </form>
+  </section>
+
   <div class="actions" style="justify-content:space-between;margin-top:30px;">
     {% if previous %}<a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('view_chapter', book_id=book['id'], chapter_id=previous['id']) }}">← Previous</a>{% else %}<span></span>{% endif %}
     <a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('view_novel', book_id=book['id']) }}">Chapters</a>
