@@ -1,10 +1,6 @@
 (function () {
   'use strict';
 
-  function editorFor(id) {
-    return document.getElementById(id);
-  }
-
   function resetChapterEditor() {
     const title = document.getElementById('chapterTitle');
     const number = document.getElementById('chapterNumber');
@@ -16,7 +12,6 @@
     if (published) published.checked = false;
   }
 
-  // Keep Tab inside the rich-text editor. Shift+Tab outdents.
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Tab') return;
     const editor = event.target && event.target.closest
@@ -26,21 +21,14 @@
     event.preventDefault();
     event.stopPropagation();
     editor.focus();
-    try {
-      document.execCommand(event.shiftKey ? 'outdent' : 'indent', false, null);
-    } catch (_) {
-      document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
-    }
+    document.execCommand(event.shiftKey ? 'outdent' : 'indent', false, null);
   }, true);
 
-  // Prevent toolbar controls from stealing the editor selection before formatting.
   document.addEventListener('mousedown', function (event) {
     const control = event.target.closest && event.target.closest('.toolbar button, .toolbar select');
-    if (!control) return;
-    if (control.tagName === 'BUTTON') event.preventDefault();
+    if (control && control.tagName === 'BUTTON') event.preventDefault();
   }, true);
 
-  // Make the dashboard stable while its internal editors/lists scroll.
   const style = document.createElement('style');
   style.textContent = `
     html, body { min-height: 100%; }
@@ -53,6 +41,16 @@
   `;
   document.head.appendChild(style);
 
-  // Expose a safe reset helper for the existing saveChapter() flow.
   window.resetManuscriptEditor = resetChapterEditor;
+
+  // Ensure a successful chapter save starts a genuinely fresh chapter form.
+  window.addEventListener('load', function () {
+    if (typeof window.saveChapter !== 'function') return;
+    const originalSaveChapter = window.saveChapter;
+    window.saveChapter = async function () {
+      const result = await originalSaveChapter.apply(this, arguments);
+      resetChapterEditor();
+      return result;
+    };
+  });
 })();
