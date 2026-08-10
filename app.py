@@ -14,11 +14,15 @@ DATABASE = os.path.join(basedir, "scriptorium.db")
 app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
 app.secret_key = os.environ.get("SECRET_KEY", "snyder-scriptorium-development-key")
 app.config.update(
+    SESSION_COOKIE_NAME="snyder_scriptorium_session",
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("RENDER", "").lower() == "true" or os.environ.get("FLASK_ENV") == "production",
     SESSION_PERMANENT=False,
 )
+
+# Changing this value invalidates any older admin session immediately.
+ADMIN_AUTH_VERSION = "2026-08-10-2"
 
 
 def get_db():
@@ -43,7 +47,10 @@ def init_db():
 
 
 def require_admin():
-    return bool(session.get("admin_logged_in"))
+    return bool(
+        session.get("admin_logged_in") is True
+        and session.get("admin_auth_version") == ADMIN_AUTH_VERSION
+    )
 
 
 def require_member():
@@ -66,6 +73,8 @@ def admin_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         if not require_admin():
+            session.pop("admin_logged_in", None)
+            session.pop("admin_auth_version", None)
             return redirect(url_for("admin_dashboard"))
         return view(*args, **kwargs)
     return wrapped
@@ -280,15 +289,24 @@ def merch_shop():
 
 @app.route("/admin")
 def admin_dashboard():
-    return render_template("admin.html", logged_in=require_admin())
+    # Never expose the control panel to an unauthenticated request.
+    if not require_admin():
+        session.pop("admin_logged_in", None)
+        session.pop("admin_auth_version", None)
+        return render_template("admin.html", logged_in=False)
+    return render_template("admin.html", logged_in=True)
 
 
 @app.route("/admin/login", methods=["POST"])
 def admin_login():
     password = request.form.get("password", "")
-    if password == os.environ.get("ADMIN_PASSWORD", "scriptorium123"):
+    configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
+    if configured_password and password == configured_password:
+        # Start a completely fresh session after successful authentication.
         session.clear()
+        session.permanent = False
         session["admin_logged_in"] = True
+        session["admin_auth_version"] = ADMIN_AUTH_VERSION
     return redirect(url_for("admin_dashboard"))
 
 
@@ -407,30 +425,25 @@ def get_published_post(post_id):
 @admin_required
 def update_published_post(post_id):
     data = request.get_json() or {}
-    category = str(data.get("category", "curations"))
-    access = "members" if category == "kwsnyderwriting" else str(data.get("accessLevel", "public"))
+    title = str(data.get("title", "")).strip()
+    category = str(data.get("category", "")).strip()
+    content = str(data.get("content", ""))
+    access = str(data.get("accessLevel", "public"))
+    if not title or not content.strip():
+        return jsonify({"error": "A title and content are required."}), 400
+    if category == "kwsnyderwriting":
+        access = "members"
+    if access not in {"public", "members"}:
+        access = "public"
     conn = get_db()
-    cur = conn.execute("UPDATE published_posts SET title = ?, category = ?, category_name = ?, content = ?, access_level = ? WHERE id = ?", (str(data.get("title", "Untitled Post")).strip() or "Untitled Post", category, category_label(category), str(data.get("content", "")), access, post_id))
-    conn.commit()
-    conn.close()
-    if cur.rowcount == 0:
-        return jsonify({"error": "Post not found"}), 404
-    return jsonify({"success": True})
-
-
-@app.route("/api/published/<int:post_id>/unpublish", methods=["POST"])
-@admin_required
-def unpublish_post(post_id):
-    conn = get_db()
-    post = conn.execute("SELECT * FROM published_posts WHERE id = ?", (post_id,)).fetchone()
-    if not post:
+    row = conn.execute("SELECT id FROM published_posts WHERE id = ?", (post_id,)).fetchone()
+    if not row:
         conn.close()
         return jsonify({"error": "Post not found"}), 404
-    conn.execute("INSERT INTO drafts(title, category, content, date_created) VALUES (?, ?, ?, ?)", (post["title"], post["category"], post["content"], now_string()))
-    conn.execute("DELETE FROM published_posts WHERE id = ?", (post_id,))
+    conn.execute("UPDATE published_posts SET title = ?, category = ?, category_name = ?, content = ?, access_level = ? WHERE id = ?", (title, category, category_label(category), content, access, post_id))
     conn.commit()
     conn.close()
-    return jsonify({"success": True, "message": "Post returned to drafts."})
+    return jsonify({"success": True})
 
 
 @app.route("/api/published/<int:post_id>", methods=["DELETE"])
@@ -441,7 +454,22 @@ def delete_published_post(post_id):
     conn.commit()
     conn.close()
     if cur.rowcount == 0:
-        return jsonify({"error": "Post not found"}), 404
+        return jsonify({"error": "Published post not found"}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/published/<int:post_id>/unpublish", methods=["POST"])
+@admin_required
+def unpublish_post(post_id):
+    conn = get_db()
+    row = conn.execute("SELECT title, category, content, date_published FROM published_posts WHERE id = ?", (post_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Published post not found"}), 404
+    conn.execute("INSERT INTO drafts(title, category, content, date_created) VALUES (?, ?, ?, ?)", (row["title"], row["category"], row["content"], row["date_published"]))
+    conn.execute("DELETE FROM published_posts WHERE id = ?", (post_id,))
+    conn.commit()
+    conn.close()
     return jsonify({"success": True})
 
 
@@ -449,21 +477,29 @@ def delete_published_post(post_id):
 @admin_required
 def get_manuscripts():
     conn = get_db()
-    books = conn.execute("SELECT b.id, b.title, b.description, b.date_created, b.updated_at, COUNT(c.id) AS chapter_count, SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id GROUP BY b.id ORDER BY b.id DESC").fetchall()
-    legacy = conn.execute("SELECT id, title, content, date_created FROM manuscripts ORDER BY id DESC").fetchall()
+    books = conn.execute("""
+        SELECT b.id, b.title, b.description,
+               COUNT(c.id) AS chapter_count,
+               SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count
+        FROM manuscript_books b
+        LEFT JOIN manuscript_chapters c ON c.book_id = b.id
+        GROUP BY b.id
+        ORDER BY b.id DESC
+    """).fetchall()
     conn.close()
-    return jsonify({"books": [dict(row) for row in books], "legacy": [dict(row) for row in legacy]})
+    return jsonify({"books": [dict(row) for row in books]})
 
 
 @app.route("/api/manuscripts", methods=["POST"])
 @admin_required
-def create_manuscript_book():
+def create_manuscript():
     data = request.get_json() or {}
-    title = str(data.get("title", "Untitled Novel")).strip() or "Untitled Novel"
+    title = str(data.get("title", "")).strip()
     description = str(data.get("description", ""))
-    stamp = now_string()
+    if not title:
+        return jsonify({"error": "A title is required."}), 400
     conn = get_db()
-    cur = conn.execute("INSERT INTO manuscript_books(title, description, date_created, updated_at) VALUES (?, ?, ?, ?)", (title, description, stamp, stamp))
+    cur = conn.execute("INSERT INTO manuscript_books(title, description, date_created) VALUES (?, ?, ?)", (title, description, now_string()))
     conn.commit()
     book_id = cur.lastrowid
     conn.close()
@@ -472,76 +508,64 @@ def create_manuscript_book():
 
 @app.route("/api/manuscripts/<int:book_id>", methods=["GET"])
 @admin_required
-def get_manuscript_book(book_id):
+def get_manuscript(book_id):
     conn = get_db()
     book = conn.execute("SELECT * FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
     chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number", (book_id,)).fetchall()
     conn.close()
     if not book:
-        return jsonify({"error": "Novel not found"}), 404
+        return jsonify({"error": "Book not found"}), 404
     return jsonify({"book": dict(book), "chapters": [dict(row) for row in chapters]})
 
 
 @app.route("/api/manuscripts/<int:book_id>", methods=["PUT"])
 @admin_required
-def update_manuscript_book(book_id):
+def update_manuscript(book_id):
     data = request.get_json() or {}
     conn = get_db()
-    cur = conn.execute("UPDATE manuscript_books SET title = ?, description = ?, updated_at = ? WHERE id = ?", (str(data.get("title", "Untitled Novel")).strip() or "Untitled Novel", str(data.get("description", "")), now_string(), book_id))
+    row = conn.execute("SELECT id FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Book not found"}), 404
+    conn.execute("UPDATE manuscript_books SET title = ?, description = ? WHERE id = ?", (str(data.get("title", "")).strip(), str(data.get("description", "")), book_id))
     conn.commit()
     conn.close()
-    if cur.rowcount == 0:
-        return jsonify({"error": "Novel not found"}), 404
     return jsonify({"success": True})
 
 
 @app.route("/api/manuscripts/<int:book_id>", methods=["DELETE"])
 @admin_required
-def delete_manuscript_book(book_id):
+def delete_manuscript(book_id):
     conn = get_db()
-    cur = conn.execute("DELETE FROM manuscript_books WHERE id = ?", (book_id,))
+    row = conn.execute("SELECT id FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Book not found"}), 404
+    conn.execute("DELETE FROM manuscript_chapters WHERE book_id = ?", (book_id,))
+    conn.execute("DELETE FROM manuscript_books WHERE id = ?", (book_id,))
     conn.commit()
     conn.close()
-    if cur.rowcount == 0:
-        return jsonify({"error": "Novel not found"}), 404
     return jsonify({"success": True})
-
-
-@app.route("/api/manuscripts/<int:book_id>/chapters", methods=["GET"])
-@admin_required
-def get_chapters(book_id):
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number", (book_id,)).fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in rows])
 
 
 @app.route("/api/manuscripts/<int:book_id>/chapters", methods=["POST"])
 @admin_required
 def create_chapter(book_id):
     data = request.get_json() or {}
+    chapter_number = int(data.get("chapter_number", 0))
     title = str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter"
     content = str(data.get("content", ""))
-    try:
-        chapter_number = int(data.get("chapter_number"))
-    except (TypeError, ValueError):
-        chapter_number = 1
     published = 1 if data.get("published") else 0
-    stamp = now_string()
     conn = get_db()
-    if not conn.execute("SELECT id FROM manuscript_books WHERE id = ?", (book_id,)).fetchone():
+    book = conn.execute("SELECT id FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    if not book:
         conn.close()
-        return jsonify({"error": "Novel not found"}), 404
-    try:
-        cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, date_created, updated_at, published) VALUES (?, ?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, stamp, stamp, published))
-        conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (stamp, book_id))
-        conn.commit()
-    except IntegrityError:
-        conn.rollback()
-        conn.close()
-        return jsonify({"error": "That chapter number already exists for this novel."}), 409
+        return jsonify({"error": "Book not found"}), 404
+    cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, published, date_created) VALUES (?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, published, now_string()))
+    conn.commit()
+    chapter_id = cur.lastrowid
     conn.close()
-    return jsonify({"success": True, "id": cur.lastrowid}), 201
+    return jsonify({"success": True, "id": chapter_id}), 201
 
 
 @app.route("/api/manuscripts/<int:book_id>/chapters/<int:chapter_id>", methods=["GET"])
@@ -559,25 +583,14 @@ def get_chapter(book_id, chapter_id):
 @admin_required
 def update_chapter(book_id, chapter_id):
     data = request.get_json() or {}
-    title = str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter"
-    content = str(data.get("content", ""))
-    try:
-        number = int(data.get("chapter_number"))
-    except (TypeError, ValueError):
-        number = 1
-    published = 1 if data.get("published") else 0
     conn = get_db()
-    try:
-        cur = conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, updated_at = ?, published = ? WHERE id = ? AND book_id = ?", (number, title, content, now_string(), published, chapter_id, book_id))
-        conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (now_string(), book_id))
-        conn.commit()
-    except IntegrityError:
-        conn.rollback()
+    row = conn.execute("SELECT id FROM manuscript_chapters WHERE id = ? AND book_id = ?", (chapter_id, book_id)).fetchone()
+    if not row:
         conn.close()
-        return jsonify({"error": "That chapter number already exists for this novel."}), 409
-    conn.close()
-    if cur.rowcount == 0:
         return jsonify({"error": "Chapter not found"}), 404
+    conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, published = ? WHERE id = ? AND book_id = ?", (int(data.get("chapter_number", 0)), str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter", str(data.get("content", "")), 1 if data.get("published") else 0, chapter_id, book_id))
+    conn.commit()
+    conn.close()
     return jsonify({"success": True})
 
 
@@ -586,7 +599,6 @@ def update_chapter(book_id, chapter_id):
 def delete_chapter(book_id, chapter_id):
     conn = get_db()
     cur = conn.execute("DELETE FROM manuscript_chapters WHERE id = ? AND book_id = ?", (chapter_id, book_id))
-    conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (now_string(), book_id))
     conn.commit()
     conn.close()
     if cur.rowcount == 0:
@@ -594,20 +606,7 @@ def delete_chapter(book_id, chapter_id):
     return jsonify({"success": True})
 
 
-@app.route("/api/legacy-manuscripts", methods=["POST"])
-@admin_required
-def create_legacy_manuscript():
-    data = request.get_json() or {}
-    title = str(data.get("title", "Untitled Document")).strip() or "Untitled Document"
-    content = str(data.get("content", ""))
-    conn = get_db()
-    cur = conn.execute("INSERT INTO manuscripts(title, content, date_created) VALUES (?, ?, ?)", (title, content, now_string()))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "id": cur.lastrowid}), 201
-
-
-@app.route("/api/site-content/about", methods=["GET"])
+@app.route("/api/about", methods=["GET"])
 @admin_required
 def get_about_content():
     conn = get_db()
@@ -616,23 +615,22 @@ def get_about_content():
     return jsonify({"content": row["value"] if row else ""})
 
 
-@app.route("/api/site-content/about", methods=["PUT"])
+@app.route("/api/about", methods=["PUT"])
 @admin_required
 def update_about_content():
     data = request.get_json() or {}
     content = str(data.get("content", ""))
     conn = get_db()
-    conn.execute("INSERT INTO site_content(key, value, updated_at) VALUES ('about_content', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at", (content, now_string()))
+    row = conn.execute("SELECT key FROM site_content WHERE key = 'about_content'").fetchone()
+    if row:
+        conn.execute("UPDATE site_content SET value = ? WHERE key = 'about_content'", (content,))
+    else:
+        conn.execute("INSERT INTO site_content(key, value) VALUES ('about_content', ?)", (content,))
     conn.commit()
     conn.close()
     return jsonify({"success": True})
 
 
-# PostgreSQL is the persistent source of truth when DATABASE_URL is configured.
-# If a local SQLite database is present at the moment of migration, copy it first.
-init_db()
-if os.environ.get("DATABASE_URL", "").strip():
-    migrate_sqlite_to_postgres()
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    init_db()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
