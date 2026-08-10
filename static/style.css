@@ -1,5 +1,10 @@
 * { box-sizing: border-box; }
 
+html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -8,6 +13,7 @@ body {
     font-family: "Cormorant Garamond", Georgia, serif;
     font-size: 18px;
     line-height: 1.7;
+    overflow-x: hidden;
 }
 
 .site-header {
@@ -21,10 +27,7 @@ body {
     gap: 6px 24px;
 }
 
-.site-title {
-    grid-column: 2;
-    grid-row: 1;
-}
+.site-title { grid-column: 2; grid-row: 1; }
 
 .site-title h1 {
     margin: 0;
@@ -40,6 +43,7 @@ body {
     grid-column: 2;
     grid-row: 2;
     width: fit-content;
+    max-width: 100%;
     border-bottom: 1px solid rgba(36, 51, 59, .38);
     padding: 7px 0 14px;
 }
@@ -70,6 +74,7 @@ body {
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,.08);
     min-height: 400px;
+    overflow-wrap: anywhere;
 }
 
 .page-heading h1,
@@ -117,7 +122,7 @@ body {
 @media (max-width: 700px) {
     .site-header { display: block; text-align: center; padding: 18px 15px 0; }
     .site-title h1 { font-size: 2.9rem; }
-    .site-navigation { margin-top: 10px; padding-bottom: 12px; }
+    .site-navigation { margin-top: 10px; padding-bottom: 12px; width: 100%; }
     .site-navigation ul { justify-content: center; margin-top: 4px; gap: 10px 18px; }
     .site-navigation a { font-size: 1.18rem; }
     .site-main { width: min(100% - 20px, 950px); padding: 22px 18px; margin-top: 30px; }
