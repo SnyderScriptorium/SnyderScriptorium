@@ -1,0 +1,36 @@
+name: Polish admin UI
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[admin-polish]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch admin UI
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('templates/admin.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('body{margin:0;padding:20px;', 'html{scroll-behavior:auto}body{margin:0;padding:20px;overscroll-behavior-y:none;')
+          s=s.replace('background:var(--paper);border:1px solid var(--line);border-radius:0 0 5px 5px;outline:none}', 'background:var(--paper);border:1px solid var(--line);border-radius:0 0 5px 5px;outline:none;tab-size:4;')
+          s=s.replace('>General<', '>Essays<')
+          s=s.replace('value="General"', 'value="Essays"')
+          s=s.replace("===\"General\"", "===\"Essays\"")
+          s=s.replace("case \"General\":", "case \"Essays\":")
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/admin-ui-polish.yml
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add templates/admin.html .github/workflows/admin-ui-polish.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'Polish admin scrolling and rename writing category to Essays [admin-polish]'
+          git push
