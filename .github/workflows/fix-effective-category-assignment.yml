@@ -1,0 +1,34 @@
+name: Fix effective category assignments
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix JS assignments
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('templates/admin.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('effectivePostCategory()="curations";','setPostCategory("curations");')
+          s=s.replace('effectivePostCategory()=d.category;','setPostCategory(d.category);')
+          s=s.replace('effectivePostCategory()=p.category;','setPostCategory(p.category);')
+          needle='window.effectivePostCategory=()=>c.value==="kwsnyderwriting"?(c.dataset.effectiveKW||sub.value):c.value;'
+          replacement=needle+'window.setPostCategory=function(v){if(v==="kw_short_stories"||v==="kw_poems"||v==="kw_vignettes"){c.value="kwsnyderwriting";sub.value=v;c.dataset.effectiveKW=v;}else{c.value=v;}};'
+          if needle in s and 'window.setPostCategory=function' not in s:
+              s=s.replace(needle,replacement,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add templates/admin.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix K W category editor assignments'
+          git push
