@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Analytics — Snyder Scriptorium{% endblock %}
+{% block content %}
+<style>
+.analytics-wrap{max-width:1000px;margin:0 auto}.analytics-head{display:flex;justify-content:space-between;align-items:end;gap:15px;flex-wrap:wrap}.analytics-head h1{color:#5C4033;font-weight:400;margin:0}.periods{display:flex;gap:7px;flex-wrap:wrap;margin:22px 0}.periods a{padding:8px 13px;border:1px solid #C9B78F;border-radius:5px;background:#FFFDF8;color:#5C4033;text-decoration:none}.periods a.active{background:#5C4033;color:#fff}.view-total{background:#F7F1E6;border:1px solid #C9B78F;border-radius:8px;padding:22px;margin-bottom:20px}.view-total .number{font-size:2.2rem;color:#24333B}.view-total .label{color:#6F6257}.analytics-table{width:100%;border-collapse:collapse;background:#FFFDF8;border:1px solid #C9B78F}.analytics-table th,.analytics-table td{padding:11px 13px;border-bottom:1px solid #E4D8C2;text-align:left}.analytics-table th{color:#5C4033;background:#EFE7D8;font-weight:500}.analytics-table td.views{text-align:right;font-weight:600}.analytics-table .category{color:#6F6257;font-size:.9rem}.chart-row{display:flex;align-items:end;gap:5px;height:170px;padding:20px 10px 0;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;margin-bottom:20px}.bar{flex:1;min-width:3px;background:#75695D;border-radius:3px 3px 0 0;position:relative}.bar span{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:.72rem;background:#24333B;color:#fff;padding:3px 5px;border-radius:3px;white-space:nowrap}.bar:hover span{display:block}.chart-note{text-align:center;color:#6F6257;font-size:.85rem;margin:5px 0 20px}.back{display:inline-block;margin-top:20px;color:#5C4033}
+</style>
+<section class="analytics-wrap">
+  <div class="analytics-head">
+    <div><h1>Site Analytics</h1><p class="note">Blogger-style pageview reporting for your Scriptorium.</p></div>
+    <div><strong>All time:</strong> {{ all_time_views }}</div>
+  </div>
+
+  <nav class="periods" aria-label="Analytics period">
+    {% for key,label in [('day','Today'),('7d','Last 7 Days'),('month','This Month'),('3m','Last 3 Months'),('6m','Last 6 Months'),('all','All Time')] %}
+      <a class="{% if period == key %}active{% endif %}" href="{{ url_for('analytics_page', period=key) }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <div class="view-total"><div class="number">{{ total_views }}</div><div class="label">Views for this period</div></div>
+
+  <h2 class="section-title">Views by day</h2>
+  {% if daily_views %}
+    {% set max_views = daily_views|map(attribute='views')|max %}
+    <div class="chart-row" aria-label="Daily views chart">
+      {% for item in daily_views %}
+        <div class="bar" style="height:{{ ((item.views / max_views) * 100) if max_views else 0 }}%"><span>{{ item.day }} · {{ item.views }}</span></div>
+      {% endfor %}
+    </div>
+    <p class="chart-note">Hover a bar to see the date and view count.</p>
+  {% else %}<p class="note">No views have been recorded for this period yet.</p>{% endif %}
+
+  <h2 class="section-title">Views by post and page</h2>
+  <table class="analytics-table">
+    <thead><tr><th>Post / Page</th><th>Category</th><th>Type</th><th style="text-align:right">Views</th></tr></thead>
+    <tbody>
+    {% for item in content_views %}
+      <tr><td>{{ item.title }}</td><td class="category">{{ item.category or 'Site page' }}</td><td>{{ item.content_type }}</td><td class="views">{{ item.views }}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="note">No pageviews recorded yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <a class="back" href="{{ url_for('admin_dashboard') }}">← Back to Control Panel</a>
+</section>
+{% endblock %}
