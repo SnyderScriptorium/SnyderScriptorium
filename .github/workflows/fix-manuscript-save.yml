@@ -1,0 +1,61 @@
+name: Fix manuscript save timestamps
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: "!contains(github.event.head_commit.message, '[manuscript-save-fix]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch manuscript save routes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app.py')
+          s = p.read_text(encoding='utf-8')
+          old = 'cur = conn.execute("INSERT INTO manuscript_books(title, description, date_created) VALUES (?, ?, ?)", (title, description, now_string()))'
+          new = 'cur = conn.execute("INSERT INTO manuscript_books(title, description, date_created, updated_at) VALUES (?, ?, ?, ?)", (title, description, now_string(), now_string()))'
+          if old not in s:
+              raise SystemExit('Book insert statement not found; refusing to modify app.py.')
+          s = s.replace(old, new, 1)
+          old = 'cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, published, date_created) VALUES (?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, published, now_string()))'
+          new = 'cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, published, date_created, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, published, now_string(), now_string()))'
+          if old not in s:
+              raise SystemExit('Chapter insert statement not found; refusing to modify app.py.')
+          s = s.replace(old, new, 1)
+          old = 'conn.execute("UPDATE manuscript_books SET title = ?, description = ? WHERE id = ?", (str(data.get("title", "")).strip(), str(data.get("description", "")), book_id))'
+          new = 'conn.execute("UPDATE manuscript_books SET title = ?, description = ?, updated_at = ? WHERE id = ?", (str(data.get("title", "")).strip(), str(data.get("description", "")), now_string(), book_id))'
+          if old not in s:
+              raise SystemExit('Book update statement not found; refusing to modify app.py.')
+          s = s.replace(old, new, 1)
+          old = 'conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, published = ? WHERE id = ? AND book_id = ?", (int(data.get("chapter_number", 0)), str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter", str(data.get("content", "")), 1 if data.get("published") else 0, chapter_id, book_id))'
+          new = 'conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, published = ?, updated_at = ? WHERE id = ? AND book_id = ?", (int(data.get("chapter_number", 0)), str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter", str(data.get("content", "")), 1 if data.get("published") else 0, now_string(), chapter_id, book_id))'
+          if old not in s:
+              raise SystemExit('Chapter update statement not found; refusing to modify app.py.')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('database.py')
+          s = p.read_text(encoding='utf-8')
+          old = '    conn.execute("ALTER TABLE manuscript_books ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")\n    conn.execute("ALTER TABLE manuscript_chapters ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")'
+          new = '    conn.execute("UPDATE manuscript_books SET updated_at = CURRENT_TIMESTAMP::text WHERE updated_at IS NULL")\n    conn.execute("UPDATE manuscript_chapters SET updated_at = CURRENT_TIMESTAMP::text WHERE updated_at IS NULL")\n    conn.execute("ALTER TABLE manuscript_books ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")\n    conn.execute("ALTER TABLE manuscript_chapters ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")'
+          if old not in s:
+              raise SystemExit('PostgreSQL manuscript timestamp migration block not found; refusing to modify database.py.')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/fix-manuscript-save.yml
+      - name: Commit manuscript save fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.py database.py .github/workflows/fix-manuscript-save.yml
+          git commit -m 'Fix manuscript save timestamps [manuscript-save-fix]'
+          git push
