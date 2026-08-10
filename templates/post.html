@@ -2,7 +2,13 @@
 {% block title %}{{ post['title'] }} — Snyder Scriptorium{% endblock %}
 {% block content %}
 <article class="content-section" style="max-width:780px;margin:0 auto;">
-  <p><a href="{{ back_url }}">← Back</a></p>
+  <p>
+    {% if post['category'] in ['kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes'] %}
+      <a href="{{ url_for('kwsnyderwriting') }}">← Back to K. W. Snyder Writing</a>
+    {% else %}
+      <a href="{{ back_url }}">← Back</a>
+    {% endif %}
+  </p>
   <h1>{{ post['title'] }}</h1>
   <p class="private-label">{{ post['category_name'] }} · {{ post['date_published'] }}</p>
   <div class="preview" style="margin-top:25px;line-height:1.85;">
