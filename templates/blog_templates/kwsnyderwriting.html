@@ -5,54 +5,23 @@
   <div class="page-heading">
     <h1>K. W. Snyder Writing</h1>
     <p class="private-label">The private literary library of K. W. Snyder</p>
+    {% if member_preview %}<p class="private-label">Preview mode — you are viewing this as a member without changing subscription status.</p><a href="{{ url_for('admin_exit_member_preview') }}">Exit Preview</a>{% endif %}
   </div>
-
-  <div class="blog-feed" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:25px;">
-    <button class="library-tab" onclick="showShelf('stories',this)">Short Stories</button>
-    <button class="library-tab" onclick="showShelf('poems',this)">Poems</button>
-    <button class="library-tab" onclick="showShelf('vignettes',this)">Vignettes</button>
-    <button class="library-tab" onclick="showShelf('essays',this)">Essays</button>
-    <button class="library-tab" onclick="showShelf('novels',this)">Novels</button>
+  <div class="blog-feed">
+    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}"><h2>Short Stories</h2><p>Standalone stories from the writing desk.</p></a>
+    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='poems') }}"><h2>Poems</h2><p>Poetry and verse.</p></a>
+    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='vignettes') }}"><h2>Vignettes</h2><p>Brief literary pieces and moments.</p></a>
+    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}" style="display:none">Legacy</a>
+    <a class="blog-block" href="{{ url_for('kwsnyderwriting') }}#novels"><h2>Novels</h2><p>Long-form works, organized by book and published chapter.</p></a>
   </div>
-
-  <div id="stories" class="shelf content-section">
-    <h2>Short Stories</h2>
-    <p class="private-label">Short-story shelving is ready for the private writing collection.</p>
-  </div>
-  <div id="poems" class="shelf content-section" style="display:none">
-    <h2>Poems</h2>
-    <p class="private-label">Poetry shelving is ready for the private writing collection.</p>
-  </div>
-  <div id="vignettes" class="shelf content-section" style="display:none">
-    <h2>Vignettes</h2>
-    <p class="private-label">Vignette shelving is ready for the private writing collection.</p>
-  </div>
-  <div id="essays" class="shelf content-section" style="display:none">
-    <h2>Essays</h2>
-    <p class="private-label">Essay shelving is ready for the private writing collection.</p>
-  </div>
-  <div id="novels" class="shelf content-section" style="display:none">
+  <section id="novels" class="content-section" style="margin-top:25px">
     <h2>Novels</h2>
     <div class="blog-feed">
       {% for book in books %}
-      <a class="blog-block" href="{{ url_for('view_novel', book_id=book['id']) }}">
-        <h2>{{ book['title'] }}</h2>
-        <p>{{ book['description'] or 'A work in progress.' }}</p>
-        <p class="private-label">{{ book['chapter_count'] or 0 }} completed chapter{{ '' if (book['chapter_count'] or 0) == 1 else 's' }}</p>
-      </a>
-      {% else %}
-      <p class="private-label">No novels have been opened in the private library yet.</p>
-      {% endfor %}
+      <a class="blog-block" href="{{ url_for('view_novel', book_id=book['id']) }}"><h2>{{ book['title'] }}</h2><p>{{ book['description'] or 'A work in progress.' }}</p><p class="private-label">{{ book['chapter_count'] or 0 }} published chapter{{ '' if (book['chapter_count'] or 0) == 1 else 's' }}</p></a>
+      {% else %}<p class="private-label">No novels have been opened in the private library yet.</p>{% endfor %}
     </div>
-  </div>
-
-  <p style="margin-top:30px;"><a href="{{ url_for('member_logout') }}">Sign Out</a></p>
+  </section>
+  <p style="margin-top:30px"><a href="{{ url_for('member_logout') }}">Sign Out</a></p>
 </section>
-<style>
-.library-tab{background:#FFFDF8;color:#24333B;border:1px solid #C9B78F;padding:10px 14px;border-radius:5px;font:inherit;cursor:pointer}.library-tab.active,.library-tab:hover{background:#5C4033;color:#fff}.shelf{background:#FFFDF8;border:1px solid #D1BE94;border-radius:7px;padding:22px}
-</style>
-<script>
-function showShelf(id,button){document.querySelectorAll('.shelf').forEach(s=>s.style.display='none');document.querySelectorAll('.library-tab').forEach(b=>b.classList.remove('active'));document.getElementById(id).style.display='block';button.classList.add('active')}
-document.addEventListener('DOMContentLoaded',()=>showShelf('stories',document.querySelector('.library-tab')))
-</script>
 {% endblock %}

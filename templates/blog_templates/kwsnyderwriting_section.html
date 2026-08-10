@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ section_title }} — K. W. Snyder Writing{% endblock %}
+{% block content %}
+<section class="blog-page">
+  <div class="page-heading"><h1>{{ section_title }}</h1><p class="private-label">K. W. Snyder Writing</p></div>
+  <div class="blog-feed">
+    {% for post in posts %}
+    <a class="blog-block" href="{{ url_for('view_member_post', post_id=post['id']) }}"><h2>{{ post['title'] }}</h2><p>{{ post['date_published'] }}</p></a>
+    {% else %}<p class="private-label">Nothing has been published here yet.</p>{% endfor %}
+  </div>
+  <p style="margin-top:25px"><a href="{{ url_for('kwsnyderwriting') }}">Back to K. W. Snyder Writing</a></p>
+</section>
+{% endblock %}

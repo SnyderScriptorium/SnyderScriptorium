@@ -59,6 +59,8 @@ def require_member():
 
 
 def member_has_access():
+    if session.get("member_preview") is True and require_admin():
+        return True
     if not require_member():
         return False
     member_id = session.get("member_id")
@@ -118,6 +120,9 @@ def category_label(category):
         "reviews": "Book Reviews",
         "curiosity": "Curiosity Cabinet",
         "kwsnyderwriting": "K. W. Snyder Writing",
+        "kw_short_stories": "Short Stories",
+        "kw_poems": "Poems",
+        "kw_vignettes": "Vignettes",
     }.get(category, "Journal")
 
 
@@ -300,7 +305,8 @@ def kwsnyderwriting():
     conn = get_db()
     posts = conn.execute("""
         SELECT * FROM published_posts
-        WHERE category = 'kwsnyderwriting' AND access_level = 'members'
+        WHERE category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes')
+          AND access_level = 'members'
         ORDER BY id DESC
     """).fetchall()
     books = conn.execute("""
@@ -311,18 +317,49 @@ def kwsnyderwriting():
         ORDER BY b.id DESC
     """).fetchall()
     conn.close()
-    return render_template("blog_templates/kwsnyderwriting.html", posts=posts, books=books, member_logged_in=True)
+    return render_template("blog_templates/kwsnyderwriting.html", posts=posts, books=books, member_logged_in=True, member_preview=session.get("member_preview") is True)
 
 
 @app.route("/kwsnyderwriting/post/<int:post_id>")
 @member_required
 def view_member_post(post_id):
     conn = get_db()
-    post = conn.execute("SELECT * FROM published_posts WHERE id = ? AND category = 'kwsnyderwriting' AND access_level = 'members'", (post_id,)).fetchone()
+    post = conn.execute("SELECT * FROM published_posts WHERE id = ? AND category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes') AND access_level = 'members'", (post_id,)).fetchone()
     conn.close()
     if not post:
         abort(404)
-    return render_template("post.html", post=post, back_url=url_for("kwsnyderwriting"))
+    return render_template("post.html", post=post, back_url=url_for("kwsnyderwriting_section", section=post["category"]))
+
+
+@app.route("/kwsnyderwriting/<section>")
+@member_required
+def kwsnyderwriting_section(section):
+    section_map = {
+        "short-stories": ("kw_short_stories", "Short Stories"),
+        "poems": ("kw_poems", "Poems"),
+        "vignettes": ("kw_vignettes", "Vignettes"),
+    }
+    if section not in section_map:
+        abort(404)
+    category, title = section_map[section]
+    conn = get_db()
+    posts = conn.execute("SELECT * FROM published_posts WHERE category = ? AND access_level = 'members' ORDER BY id DESC", (category,)).fetchall()
+    conn.close()
+    return render_template("blog_templates/kwsnyderwriting_section.html", posts=posts, section_title=title, section_slug=section)
+
+
+@app.route("/admin/preview-member")
+@admin_required
+def admin_preview_member():
+    session["member_preview"] = True
+    return redirect(url_for("kwsnyderwriting"))
+
+
+@app.route("/admin/preview-member/exit")
+@admin_required
+def admin_exit_member_preview():
+    session.pop("member_preview", None)
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/kwsnyderwriting/novel/<int:book_id>")
