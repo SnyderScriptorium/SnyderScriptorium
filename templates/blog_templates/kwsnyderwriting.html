@@ -8,11 +8,11 @@
     {% if member_preview %}<p class="private-label">Preview mode — you are viewing this as a member without changing subscription status.</p><a href="{{ url_for('admin_exit_member_preview') }}">Exit Preview</a>{% endif %}
   </div>
   <div class="blog-feed">
+    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='writing') }}"><h2>Writing</h2><p>Standalone writing posts from the writing desk.</p></a>
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}"><h2>Short Stories</h2><p>Standalone stories from the writing desk.</p></a>
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='poems') }}"><h2>Poems</h2><p>Poetry and verse.</p></a>
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='vignettes') }}"><h2>Vignettes</h2><p>Brief literary pieces and moments.</p></a>
-    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}" style="display:none">Legacy</a>
-    <a class="blog-block" href="{{ url_for('kwsnyderwriting') }}#novels"><h2>Novels</h2><p>Long-form works, organized by book and published chapter.</p></a>
+    <a class="blog-block" href="#novels"><h2>Novels</h2><p>Long-form works, organized by book and published chapter.</p></a>
   </div>
   <section id="novels" class="content-section" style="margin-top:25px">
     <h2>Novels</h2>
