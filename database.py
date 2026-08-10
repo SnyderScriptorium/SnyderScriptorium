@@ -2,7 +2,6 @@ import os
 import sqlite3
 from contextlib import contextmanager
 
-
 DATABASE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "scriptorium.db")
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
@@ -135,7 +134,7 @@ def postgres_init_db(conn):
             title TEXT NOT NULL,
             description TEXT DEFAULT '',
             date_created TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
             access_level TEXT NOT NULL DEFAULT 'members'
         )
         """,
@@ -147,7 +146,7 @@ def postgres_init_db(conn):
             title TEXT NOT NULL,
             content TEXT NOT NULL,
             date_created TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,
             published INTEGER NOT NULL DEFAULT 0,
             UNIQUE(book_id, chapter_number)
         )
@@ -209,6 +208,34 @@ def postgres_init_db(conn):
     ]
     for statement in statements:
         conn.execute(statement)
+
+    # Existing deployments may already have these tables with NOT NULL
+    # timestamps but without defaults. The defaults make the existing Admin
+    # manuscript create/update endpoints safe on PostgreSQL as well.
+    conn.execute("ALTER TABLE manuscript_books ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")
+    conn.execute("ALTER TABLE manuscript_chapters ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")
+
+    # K. W. Snyder Writing is private by definition. Enforce that at the
+    # database boundary so an accidental public flag in the Admin UI cannot
+    # expose private writing through the public post route.
+    conn.execute("""
+        CREATE OR REPLACE FUNCTION force_kw_members_access()
+        RETURNS trigger AS $$
+        BEGIN
+            IF NEW.category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes') THEN
+                NEW.access_level := 'members';
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql
+    """)
+    conn.execute("DROP TRIGGER IF EXISTS trg_force_kw_members_access ON published_posts")
+    conn.execute("""
+        CREATE TRIGGER trg_force_kw_members_access
+        BEFORE INSERT OR UPDATE OF category, access_level ON published_posts
+        FOR EACH ROW EXECUTE FUNCTION force_kw_members_access()
+    """)
+
     conn.execute(
         """
         INSERT INTO site_content(key, value, updated_at)
@@ -229,6 +256,66 @@ def init_db():
     if using_postgres():
         postgres_init_db(conn)
     else:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                content TEXT NOT NULL,
+                date_created TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS published_posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                category_name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                date_published TEXT NOT NULL,
+                access_level TEXT NOT NULL DEFAULT 'public'
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS manuscript_books (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                date_created TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                access_level TEXT NOT NULL DEFAULT 'members'
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS manuscript_chapters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                chapter_number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                date_created TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                published INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(book_id, chapter_number),
+                FOREIGN KEY(book_id) REFERENCES manuscript_books(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_force_kw_members_access_insert
+            AFTER INSERT ON published_posts
+            WHEN NEW.category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes') AND NEW.access_level != 'members'
+            BEGIN
+                UPDATE published_posts SET access_level = 'members' WHERE id = NEW.id;
+            END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_force_kw_members_access_update
+            AFTER UPDATE OF category, access_level ON published_posts
+            WHEN NEW.category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes') AND NEW.access_level != 'members'
+            BEGIN
+                UPDATE published_posts SET access_level = 'members' WHERE id = NEW.id;
+            END
+        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS inbox_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -299,7 +386,6 @@ def migrate_sqlite_to_postgres():
         raise
 
 
-# Kept here for callers that need to catch a database uniqueness error.
 try:
     from psycopg import IntegrityError
 except ImportError:
