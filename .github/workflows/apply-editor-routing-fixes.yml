@@ -1,0 +1,95 @@
+name: Apply editor and K W routing fixes
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[routing-editor-fix]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch admin editor and category routing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('templates/admin.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Add a real second-level K. W. Snyder category selector without
+          # disturbing the existing stored category values.
+          marker = '<label>Access</label>'
+          if 'id="postKWSubcategory"' not in s:
+              insert = '''<div id="postKWSubcategoryWrap" class="hidden"><label> K. W. Snyder Writing — Subcategory</label><select id="postKWSubcategory"><option value="kwsnyderwriting">General Writing</option><option value="kw_short_stories">Short Stories</option><option value="kw_poems">Poems</option><option value="kw_vignettes">Vignettes</option></select></div>'''
+              if marker not in s:
+                  raise SystemExit('Could not find Access marker')
+              s = s.replace(marker, insert + marker, 1)
+
+          # Inject behavior before the first closing body/script area.
+          js = r'''<script>
+(function(){
+  function wireKWSnyderSubcategory(){
+    const cat=document.getElementById('postCategory');
+    const wrap=document.getElementById('postKWSubcategoryWrap');
+    const sub=document.getElementById('postKWSubcategory');
+    if(!cat||!wrap||!sub||cat.dataset.kwWired==='1') return;
+    cat.dataset.kwWired='1';
+    const kwOptions=[...cat.options].filter(o=>o.value==='kw_short_stories'||o.value==='kw_poems'||o.value==='kw_vignettes');
+    kwOptions.forEach(o=>o.hidden=true);
+    function sync(){
+      const isKW=cat.value==='kwsnyderwriting'||cat.value.startsWith('kw_');
+      wrap.classList.toggle('hidden',!isKW);
+      if(cat.value.startsWith('kw_')&&cat.value!=='kwsnyderwriting') sub.value=cat.value;
+      if(isKW) cat.value='kwsnyderwriting';
+    }
+    cat.addEventListener('change',sync);
+    sub.addEventListener('change',function(){
+      cat.dataset.effectiveKW=sub.value;
+    });
+    cat.dataset.effectiveKW=sub.value;
+    window.effectivePostCategory=function(){
+      return cat.value==='kwsnyderwriting' ? (cat.dataset.effectiveKW||sub.value||'kwsnyderwriting') : cat.value;
+    };
+    sync();
+  }
+
+  function wireManuscriptEditor(){
+    document.addEventListener('keydown',function(e){
+      const ed=e.target && e.target.closest && e.target.closest('#chapterEditor[contenteditable="true"]');
+      if(!ed || e.key!=='Tab') return;
+      e.preventDefault();
+      e.stopPropagation();
+      document.execCommand('indent',false,null);
+    },true);
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    wireKWSnyderSubcategory();
+    wireManuscriptEditor();
+  });
+})();
+</script>'''
+          if 'function wireManuscriptEditor' not in s:
+              pos=s.rfind('</body>')
+              if pos<0: pos=s.rfind('</html>')
+              if pos<0: raise SystemExit('Could not find document end')
+              s=s[:pos]+js+'\n'+s[pos:]
+
+          # Make the existing post save/publish functions use the selected
+          # second-level K. W. Snyder category when present.
+          if 'window.effectivePostCategory' in s:
+              s=s.replace('$("postCategory").value','effectivePostCategory()')
+              s=s.replace("$('postCategory').value",'effectivePostCategory()')
+
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Remove workflow and commit
+        run: |
+          rm -f .github/workflows/apply-editor-routing-fixes.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add templates/admin.html .github/workflows/apply-editor-routing-fixes.yml
+          git commit -m 'Fix K W routing and manuscript editor [routing-editor-fix]'
+          git push
