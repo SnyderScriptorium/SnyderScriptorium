@@ -173,6 +173,23 @@ def postgres_init_db(conn):
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS inbox_messages (
+            id BIGSERIAL PRIMARY KEY,
+            message_type TEXT NOT NULL DEFAULT 'contact',
+            name TEXT NOT NULL DEFAULT '',
+            email TEXT NOT NULL DEFAULT '',
+            subject TEXT NOT NULL DEFAULT '',
+            message TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'new',
+            is_read INTEGER NOT NULL DEFAULT 0,
+            post_id BIGINT,
+            book_id BIGINT,
+            chapter_id BIGINT,
+            member_id BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS site_content (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL DEFAULT '',
@@ -212,6 +229,23 @@ def init_db():
     if using_postgres():
         postgres_init_db(conn)
     else:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS inbox_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_type TEXT NOT NULL DEFAULT 'contact',
+                name TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                subject TEXT NOT NULL DEFAULT '',
+                message TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'new',
+                is_read INTEGER NOT NULL DEFAULT 0,
+                post_id INTEGER,
+                book_id INTEGER,
+                chapter_id INTEGER,
+                member_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS page_views (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

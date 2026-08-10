@@ -351,6 +351,23 @@ def view_chapter(book_id, chapter_id):
     return render_template("blog_templates/chapter.html", book=book, chapter=chapter, previous=prev_chapter, next=next_chapter)
 
 
+
+@app.route("/contact", methods=["GET", "POST"])
+def contact():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip()
+        subject = request.form.get("subject", "").strip()
+        message = request.form.get("message", "").strip()
+        if not name or not email or not message:
+            return render_template("contact.html", error="Please provide your name, email, and message.", name=name, email=email, subject=subject, message=message)
+        conn = get_db()
+        conn.execute("INSERT INTO inbox_messages(message_type, name, email, subject, message) VALUES (?, ?, ?, ?, ?)", ("contact", name, email, subject, message))
+        conn.commit()
+        conn.close()
+        return render_template("contact.html", success="Your message has been sent. Thank you for reaching out.")
+    return render_template("contact.html")
+
 @app.route("/store")
 def the_scriptorium():
     return render_template("store.html")
@@ -402,6 +419,49 @@ def admin_login():
 def admin_logout():
     session.clear()
     return redirect(url_for("admin_dashboard"))
+
+
+
+@app.route("/admin/inbox")
+@admin_required
+def admin_inbox():
+    return render_template("admin_inbox.html")
+
+
+@app.route("/api/inbox", methods=["GET"])
+@admin_required
+def get_inbox():
+    status = request.args.get("status", "").strip()
+    conn = get_db()
+    if status:
+        rows = conn.execute("SELECT * FROM inbox_messages WHERE status = ? ORDER BY id DESC", (status,)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM inbox_messages ORDER BY id DESC").fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.route("/api/inbox/<int:message_id>", methods=["PATCH"])
+@admin_required
+def update_inbox_message(message_id):
+    data = request.get_json() or {}
+    status = str(data.get("status", "")).strip()
+    allowed = {"new", "open", "in_progress", "resolved", "archived"}
+    conn = get_db()
+    row = conn.execute("SELECT id FROM inbox_messages WHERE id = ?", (message_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Inbox message not found."}), 404
+    if status and status not in allowed:
+        conn.close()
+        return jsonify({"error": "Invalid inbox status."}), 400
+    if status:
+        conn.execute("UPDATE inbox_messages SET status = ?, is_read = 1 WHERE id = ?", (status, message_id))
+    else:
+        conn.execute("UPDATE inbox_messages SET is_read = 1 WHERE id = ?", (message_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
 
 
 @app.route("/api/analytics", methods=["GET"])
