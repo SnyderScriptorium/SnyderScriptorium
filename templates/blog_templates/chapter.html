@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Chapter {{ chapter['chapter_number'] }} — {{ book['title'] }}{% endblock %}
+{% block content %}
+<article class="content-section" style="max-width:780px;margin:0 auto;">
+  <p><a href="{{ url_for('view_novel', book_id=book['id']) }}">← Back to {{ book['title'] }}</a></p>
+  <h1>Chapter {{ chapter['chapter_number'] }}: {{ chapter['title'] }}</h1>
+  <p class="private-label">{{ book['title'] }}</p>
+  <div class="preview" style="margin-top:25px;line-height:1.9;">{{ chapter['content']|safe }}</div>
+  <div class="actions" style="justify-content:space-between;margin-top:30px;">
+    {% if previous %}<a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('view_chapter', book_id=book['id'], chapter_id=previous['id']) }}">← Previous</a>{% else %}<span></span>{% endif %}
+    <a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('view_novel', book_id=book['id']) }}">Chapters</a>
+    {% if next %}<a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('view_chapter', book_id=book['id'], chapter_id=next['id']) }}">Next →</a>{% else %}<span></span>{% endif %}
+  </div>
+</article>
+{% endblock %}
