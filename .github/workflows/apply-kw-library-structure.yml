@@ -1,0 +1,71 @@
+name: Build KW Writing Library
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-kw-library-structure.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply library structure
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('app.py')
+          s = app.read_text()
+
+          s = s.replace(
+          'def member_has_access():\n    if not require_member():\n        return False',
+          'def member_has_access():\n    if session.get("member_preview") is True and require_admin():\n        return True\n    if not require_member():\n        return False')
+
+          s = s.replace(
+          '        "kwsnyderwriting": "K. W. Snyder Writing",\n    }.get(category, "Journal")',
+          '        "kwsnyderwriting": "K. W. Snyder Writing",\n        "kw_short_stories": "Short Stories",\n        "kw_poems": "Poems",\n        "kw_vignettes": "Vignettes",\n    }.get(category, "Journal")')
+
+          old = '''@app.route("/kwsnyderwriting")\n@member_required\ndef kwsnyderwriting():\n    conn = get_db()\n    posts = conn.execute("""\n        SELECT * FROM published_posts\n        WHERE category = 'kwsnyderwriting' AND access_level = 'members'\n        ORDER BY id DESC\n    """).fetchall()\n    books = conn.execute("""\n        SELECT b.*, COUNT(c.id) AS chapter_count\n        FROM manuscript_books b\n        LEFT JOIN manuscript_chapters c ON c.book_id = b.id AND c.published = 1\n        GROUP BY b.id\n        ORDER BY b.id DESC\n    """).fetchall()\n    conn.close()\n    return render_template("blog_templates/kwsnyderwriting.html", posts=posts, books=books, member_logged_in=True)'''
+          new = '''@app.route("/kwsnyderwriting")\n@member_required\ndef kwsnyderwriting():\n    conn = get_db()\n    posts = conn.execute("""\n        SELECT * FROM published_posts\n        WHERE category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes')\n          AND access_level = 'members'\n        ORDER BY id DESC\n    """).fetchall()\n    books = conn.execute("""\n        SELECT b.*, COUNT(c.id) AS chapter_count\n        FROM manuscript_books b\n        LEFT JOIN manuscript_chapters c ON c.book_id = b.id AND c.published = 1\n        GROUP BY b.id\n        ORDER BY b.id DESC\n    """).fetchall()\n    conn.close()\n    return render_template("blog_templates/kwsnyderwriting.html", posts=posts, books=books, member_logged_in=True, member_preview=session.get("member_preview") is True)'''
+          if old not in s:
+              raise SystemExit('Could not locate KWS main route')
+          s = s.replace(old, new)
+
+          old = '''@app.route("/kwsnyderwriting/post/<int:post_id>")\n@member_required\ndef view_member_post(post_id):\n    conn = get_db()\n    post = conn.execute("SELECT * FROM published_posts WHERE id = ? AND category = 'kwsnyderwriting' AND access_level = 'members'", (post_id,)).fetchone()\n    conn.close()\n    if not post:\n        abort(404)\n    return render_template("post.html", post=post, back_url=url_for("kwsnyderwriting"))'''
+          new = '''@app.route("/kwsnyderwriting/post/<int:post_id>")\n@member_required\ndef view_member_post(post_id):\n    conn = get_db()\n    post = conn.execute("SELECT * FROM published_posts WHERE id = ? AND category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes') AND access_level = 'members'", (post_id,)).fetchone()\n    conn.close()\n    if not post:\n        abort(404)\n    return render_template("post.html", post=post, back_url=url_for("kwsnyderwriting_section", section=post["category"]))'''
+          if old not in s:
+              raise SystemExit('Could not locate member post route')
+          s = s.replace(old, new)
+
+          marker = '''@app.route("/kwsnyderwriting/novel/<int:book_id>")'''
+          insert = '''@app.route("/kwsnyderwriting/<section>")\n@member_required\ndef kwsnyderwriting_section(section):\n    section_map = {\n        "short-stories": ("kw_short_stories", "Short Stories"),\n        "poems": ("kw_poems", "Poems"),\n        "vignettes": ("kw_vignettes", "Vignettes"),\n    }\n    if section not in section_map:\n        abort(404)\n    category, title = section_map[section]\n    conn = get_db()\n    posts = conn.execute("SELECT * FROM published_posts WHERE category = ? AND access_level = 'members' ORDER BY id DESC", (category,)).fetchall()\n    conn.close()\n    return render_template("blog_templates/kwsnyderwriting_section.html", posts=posts, section_title=title, section_slug=section)\n\n\n@app.route("/admin/preview-member")\n@admin_required\ndef admin_preview_member():\n    session["member_preview"] = True\n    return redirect(url_for("kwsnyderwriting"))\n\n\n@app.route("/admin/preview-member/exit")\n@admin_required\ndef admin_exit_member_preview():\n    session.pop("member_preview", None)\n    return redirect(url_for("admin_dashboard"))\n\n\n'''
+          if marker not in s:
+              raise SystemExit('Could not locate novel route marker')
+          s = s.replace(marker, insert + marker, 1)
+          app.write_text(s)
+
+          admin = Path('templates/admin.html')
+          a = admin.read_text()
+          a = a.replace('<option value="kwsnyderwriting">K. W. Snyder Writing — Members Only</option>', '<option value="kwsnyderwriting">K. W. Snyder Writing — General</option><option value="kw_short_stories">K. W. Snyder Writing — Short Stories</option><option value="kw_poems">K. W. Snyder Writing — Poems</option><option value="kw_vignettes">K. W. Snyder Writing — Vignettes</option>')
+          a = a.replace('<p class="note">This is your private administrative preview. It lets you see the members-only writing library while keeping the public/member access rules intact.</p><div id="kwPreviewContent"></div>', '<p class="note">This is your private administrative preview. It lets you see the members-only writing library while keeping the public/member access rules intact.</p><div class="actions"><button type="button" onclick="location.href=\'/admin/preview-member\'">Preview as Member</button></div><div id="kwPreviewContent"></div>')
+          admin.write_text(a)
+
+          kw = Path('templates/blog_templates/kwsnyderwriting.html')
+          kw.write_text('''{% extends "base.html" %}\n{% block title %}K. W. Snyder Writing — Private Library{% endblock %}\n{% block content %}\n<section class="blog-page">\n  <div class="page-heading">\n    <h1>K. W. Snyder Writing</h1>\n    <p class="private-label">The private literary library of K. W. Snyder</p>\n    {% if member_preview %}<p class="private-label">Preview mode — you are viewing this as a member without changing subscription status.</p><a href="{{ url_for('admin_exit_member_preview') }}">Exit Preview</a>{% endif %}\n  </div>\n  <div class="blog-feed">\n    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}"><h2>Short Stories</h2><p>Standalone stories from the writing desk.</p></a>\n    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='poems') }}"><h2>Poems</h2><p>Poetry and verse.</p></a>\n    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='vignettes') }}"><h2>Vignettes</h2><p>Brief literary pieces and moments.</p></a>\n    <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}" style="display:none">Legacy</a>\n    <a class="blog-block" href="{{ url_for('kwsnyderwriting') }}#novels"><h2>Novels</h2><p>Long-form works, organized by book and published chapter.</p></a>\n  </div>\n  <section id="novels" class="content-section" style="margin-top:25px">\n    <h2>Novels</h2>\n    <div class="blog-feed">\n      {% for book in books %}\n      <a class="blog-block" href="{{ url_for('view_novel', book_id=book['id']) }}"><h2>{{ book['title'] }}</h2><p>{{ book['description'] or 'A work in progress.' }}</p><p class="private-label">{{ book['chapter_count'] or 0 }} published chapter{{ '' if (book['chapter_count'] or 0) == 1 else 's' }}</p></a>\n      {% else %}<p class="private-label">No novels have been opened in the private library yet.</p>{% endfor %}\n    </div>\n  </section>\n  <p style="margin-top:30px"><a href="{{ url_for('member_logout') }}">Sign Out</a></p>\n</section>\n{% endblock %}\n''')
+
+          Path('templates/blog_templates/kwsnyderwriting_section.html').write_text('''{% extends "base.html" %}\n{% block title %}{{ section_title }} — K. W. Snyder Writing{% endblock %}\n{% block content %}\n<section class="blog-page">\n  <div class="page-heading"><h1>{{ section_title }}</h1><p class="private-label">K. W. Snyder Writing</p></div>\n  <div class="blog-feed">\n    {% for post in posts %}\n    <a class="blog-block" href="{{ url_for('view_member_post', post_id=post['id']) }}"><h2>{{ post['title'] }}</h2><p>{{ post['date_published'] }}</p></a>\n    {% else %}<p class="private-label">Nothing has been published here yet.</p>{% endfor %}\n  </div>\n  <p style="margin-top:25px"><a href="{{ url_for('kwsnyderwriting') }}">Back to K. W. Snyder Writing</a></p>\n</section>\n{% endblock %}\n''')
+          PY
+          python -m py_compile app.py
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.py templates/admin.html templates/blog_templates/kwsnyderwriting.html templates/blog_templates/kwsnyderwriting_section.html
+          git commit -m 'Build structured KW Writing library and member preview' || exit 0
+          git push
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/apply-kw-library-structure.yml
+          git commit -m 'Remove temporary KW library workflow'
+          git push
