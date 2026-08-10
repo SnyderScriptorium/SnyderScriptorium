@@ -1,0 +1,36 @@
+name: Load admin fixes
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  inject:
+    if: "!contains(github.event.head_commit.message, '[admin-fixes]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject admin fixes script
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('templates/admin.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '<script src="{{ url_for(\'static\', filename=\'admin_fixes.js\') }}"></script>'
+          if marker not in s:
+              if '</body>' not in s:
+                  raise SystemExit('admin.html has no closing body tag')
+              s = s.replace('</body>', marker + '\n</body>', 1)
+              p.write_text(s, encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add templates/admin.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Load admin editor fixes [admin-fixes]'
+          git push
+      - name: Remove one-time workflow
+        run: |
+          git rm .github/workflows/load-admin-fixes.yml
+          git commit -m 'Remove one-time admin fixes workflow [admin-fixes]'
+          git push
