@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ book['title'] }} — K. W. Snyder Writing{% endblock %}
+{% block content %}
+<section class="content-section" style="max-width:780px;margin:0 auto;">
+  <p><a href="{{ url_for('kwsnyderwriting') }}">← Back to K. W. Snyder Writing</a></p>
+  <h1>{{ book['title'] }}</h1>
+  <p class="private-label">{{ book['description'] or 'A work in progress.' }}</p>
+  <div class="blog-feed" style="margin-top:25px;">
+    {% for chapter in chapters %}
+    <a class="blog-block" href="{{ url_for('view_chapter', book_id=book['id'], chapter_id=chapter['id']) }}">
+      <h2>Chapter {{ chapter['chapter_number'] }}: {{ chapter['title'] }}</h2>
+      <p>{{ chapter['content']|striptags|truncate(150, True, '…') }}</p>
+    </a>
+    {% else %}
+    <p class="private-label">No completed chapters are available yet.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
