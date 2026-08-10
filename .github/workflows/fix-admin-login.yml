@@ -1,0 +1,82 @@
+name: Apply admin login fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('app.py')
+          text = app.read_text()
+          old = '''@app.route("/admin/login", methods=["POST"])
+          def admin_login():
+              password = request.form.get("password", "")
+              configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
+              if configured_password and password == configured_password:
+                  # Start a completely fresh session after successful authentication.
+                  session.clear()
+                  session.permanent = False
+                  session["admin_logged_in"] = True
+                  session["admin_auth_version"] = ADMIN_AUTH_VERSION
+              return redirect(url_for("admin_dashboard"))'''
+          new = '''@app.route("/admin/login", methods=["POST"])
+          def admin_login():
+              password = request.form.get("password", "")
+              configured_password = os.environ.get("ADMIN_PASSWORD", "")
+              configured_password = configured_password.strip()
+
+              if not configured_password:
+                  return render_template(
+                      "admin.html",
+                      logged_in=False,
+                      login_error="Admin password is not configured on the server."
+                  )
+
+              if password == configured_password:
+                  session.clear()
+                  session.permanent = False
+                  session["admin_logged_in"] = True
+                  session["admin_auth_version"] = ADMIN_AUTH_VERSION
+                  return redirect(url_for("admin_dashboard"))
+
+              return render_template(
+                  "admin.html",
+                  logged_in=False,
+                  login_error="The admin password was not recognized."
+              )'''
+          if old not in text:
+              raise SystemExit('Expected admin_login block not found')
+          app.write_text(text.replace(old, new, 1))
+
+          template = Path('templates/admin.html')
+          text = template.read_text()
+          text = text.replace(
+              '<h2 class="section-title">Backend Access</h2><p class="note">Your writing studio is private. Nothing here is stored in browser storage.</p>',
+              '<h2 class="section-title">Backend Access</h2>{% if login_error %}<div class="status error">{{ login_error }}</div>{% endif %}'
+          )
+          template.write_text(text)
+          PY
+
+          rm .github/workflows/fix-admin-login.yml
+
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.py templates/admin.html .github/workflows/fix-admin-login.yml
+          git commit -m "Fix admin login feedback and validation"
+          git push
