@@ -1,0 +1,144 @@
+name: KWS membership and editor fixes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: "!contains(github.event.head_commit.message, '[kws-fix]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          # 1) All K. W. Snyder subcategories are members-only.
+          p = Path('app.py')
+          s = p.read_text(encoding='utf-8')
+          s2 = s.replace('if category == "kwsnyderwriting":\n        access = "members"', 'if category == "kwsnyderwriting" or category.startswith("kw_"):\n        access = "members"')
+          if s2 == s:
+              raise SystemExit('Could not find KWS access rules in app.py')
+          p.write_text(s2, encoding='utf-8')
+
+          # 2) Give the post writer a two-step KWS category choice and make the
+          #    selected subcategory the actual stored category.
+          p = Path('templates/admin.html')
+          s = p.read_text(encoding='utf-8')
+          old = '''<div class="two"><div><label>Title</label><input id="postTitle" type="text"></div><div><label>Category</label><select id="postCategory" onchange="syncAccess()"><option value="curations">Book Curations</option><option value="reviews">Book Reviews</option><option value="curiosity">Curiosity Cabinet</option><option value="kwsnyderwriting">K. W. Snyder Writing — General</option><option value="kw_short_stories">K. W. Snyder Writing — Short Stories</option><option value="kw_poems">K. W. Snyder Writing — Poems</option><option value="kw_vignettes">K. W. Snyder Writing — Vignettes</option></select></div></div>'''
+          new = '''<div class="two"><div><label>Title</label><input id="postTitle" type="text"></div><div><label>Category</label><select id="postCategoryGroup" onchange="syncPostCategory()"><option value="curations">Book Curations</option><option value="reviews">Book Reviews</option><option value="curiosity">Curiosity Cabinet</option><option value="kwsnyderwriting">K. W. Snyder Writing</option></select><div id="kwsSubcategoryWrap" class="hidden" style="margin-top:8px"><label for="postCategorySub">K. W. Snyder Writing section</label><select id="postCategorySub" onchange="syncPostCategory()"><option value="">Choose where this writing belongs…</option><option value="kwsnyderwriting">Writing</option><option value="kw_short_stories">Short Stories</option><option value="kw_poems">Poems</option><option value="kw_vignettes">Vignettes</option></select></div><select id="postCategory" class="hidden" aria-hidden="true" tabindex="-1"><option value=""></option></select></div></div>'''
+          if old not in s:
+              raise SystemExit('Could not find post category markup in admin.html')
+          s = s.replace(old, new, 1)
+
+          # Inject manuscript editor behavior without disturbing the existing editor implementation.
+          patch = r'''<script>
+(function(){
+  function syncPostCategory(){
+    const group=document.getElementById('postCategoryGroup');
+    const sub=document.getElementById('postCategorySub');
+    const hidden=document.getElementById('postCategory');
+    const wrap=document.getElementById('kwsSubcategoryWrap');
+    if(!group||!sub||!hidden)return;
+    if(group.value==='kwsnyderwriting'){
+      wrap.classList.remove('hidden');
+      hidden.value=sub.value;
+    }else{
+      wrap.classList.add('hidden');
+      hidden.value=group.value;
+      sub.value='';
+    }
+    if(typeof syncAccess==='function') syncAccess();
+  }
+  window.syncPostCategory=syncPostCategory;
+  document.addEventListener('DOMContentLoaded',function(){syncPostCategory();});
+
+  const chapterEditor=document.getElementById('chapterEditor');
+  if(chapterEditor){
+    chapterEditor.addEventListener('keydown',function(e){
+      if(e.key==='Tab'){
+        e.preventDefault();
+        document.execCommand('insertText',false,'\u00a0\u00a0\u00a0\u00a0');
+      }
+    });
+  }
+
+  if(typeof window.saveChapter==='function'){
+    const originalSaveChapter=window.saveChapter;
+    window.saveChapter=async function(){
+      const result=await originalSaveChapter.apply(this,arguments);
+      setTimeout(function(){
+        const status=document.getElementById('status');
+        if(status && !status.classList.contains('error')){
+          const editor=document.getElementById('chapterEditor');
+          if(editor) editor.innerHTML='';
+          const title=document.getElementById('chapterTitle');
+          const number=document.getElementById('chapterNumber');
+          const published=document.getElementById('chapterPublished');
+          if(title) title.value='';
+          if(number) number.value='';
+          if(published) published.checked=false;
+        }
+      },250);
+      return result;
+    };
+  }
+})();
+</script>'''
+          if '</body>' not in s:
+              raise SystemExit('Could not find admin body close')
+          s=s.replace('</body>',patch+'\n</body>',1)
+          p.write_text(s,encoding='utf-8')
+
+          # 3) Public membership terms page.
+          Path('templates/blog_templates/membership_terms.html').write_text('''{% extends "base.html" %}\n{% block title %}Membership Terms — Snyder Scriptorium{% endblock %}\n{% block content %}\n<section class="content-section" style="max-width:820px;margin:0 auto;">\n  <div class="page-heading"><h1>K. W. Snyder Writing — Membership Terms</h1><p class="private-label">Plain-English membership rules</p></div>\n  <p>These terms are intended to keep the private writing library fair, respectful, and sustainable for everyone.</p>\n  <h2>1. Your membership</h2><p>Your membership is for you. Please do not share your account or allow another person to use your member access.</p>\n  <h2>2. Private writing and copyright</h2><p>The K. W. Snyder Writing library and its writing are protected by copyright. Members may read the material for their personal use, but may not copy, repost, publish, sell, redistribute, or give away subscriber-only material without permission.</p>\n  <h2>3. Site abuse and harassment</h2><p>Harassment, threats, fraud, attempts to bypass access controls, deliberate abuse of the website, unauthorized sharing of member content, or other serious misuse of the service are not permitted. Access may be suspended or terminated when an account materially violates these rules.</p>\n  <h2>4. Wrongful payment disputes</h2><p>You are welcome to report a genuine billing problem, including a duplicate charge or another charge that the system processed incorrectly. A knowingly false or wrongful payment dispute, chargeback, or payment claim made to obtain free access or otherwise abuse the service may result in suspension or termination of the account.</p>\n  <h2>5. Publishing schedule</h2><p>There is no fixed posting schedule. I will work toward sharing new writing at least once a month, but membership does not guarantee a particular number of posts, chapters, dates, or publication frequency.</p>\n  <h2>6. Changes and access</h2><p>The membership offering may change over time as the Scriptorium grows. Material changes to these terms or the membership offering will be communicated appropriately. Access may be paused when a subscription payment is legitimately overdue or otherwise fails according to the payment provider's rules.</p>\n  <h2>7. Questions</h2><p>If something has gone wrong with your account or billing, please contact the Scriptorium rather than attempting to work around the membership system.</p>\n  <p style="margin-top:28px"><a href="{{ url_for('kwsnyderwriting_membership') }}">Back to Membership</a></p>\n</section>\n{% endblock %}\n''',encoding='utf-8')
+
+          # 4) Add the route if it is not already present.
+          p=Path('app.py'); s=p.read_text(encoding='utf-8')
+          if "def membership_terms" not in s:
+              marker='@app.route("/kwsnyderwriting"'
+              idx=s.find(marker)
+              if idx<0: raise SystemExit('Could not locate KWS route area in app.py')
+              route='''@app.route("/membership-terms")\ndef membership_terms():\n    return render_template("blog_templates/membership_terms.html")\n\n\n'''
+              s=s[:idx]+route+s[idx:]
+              p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Update membership and member pages
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('templates/blog_templates/kwsnyderwriting_membership.html')
+          p.write_text('''{% extends "base.html" %}\n{% block title %}K. W. Snyder Writing — Membership{% endblock %}\n{% block content %}\n<section class="content-section" style="max-width:760px;margin:0 auto;text-align:center;">\n  <h1>K. W. Snyder Writing</h1>\n  <p class="private-label">A private branch of the Snyder Scriptorium</p>\n  <div class="preview" style="padding:30px;margin-top:25px;">\n    <h2>Enter the Private Writing Room</h2>\n    <p>This branch is reserved for subscribers. Sign in if you already have an account, or create your member account to continue to the subscription process.</p>\n    <div class="actions" style="justify-content:center;">\n      <a class="blog-block" style="display:inline-block;padding:11px 20px;" href="{{ url_for('member_login') }}">Sign In</a>\n      <a class="blog-block" style="display:inline-block;padding:11px 20px;" href="{{ url_for('member_signup') }}">Create Account</a>\n    </div>\n  </div>\n  <div class="content-section" style="margin-top:28px;text-align:left;">\n    <h2>What Membership Includes</h2>\n    <p>Your subscription opens the private K. W. Snyder Writing library, including my shorter literary work and my novels as I make them available.</p>\n    <p>The library is organized into <strong>Writing, Short Stories, Poems, Vignettes, and Novels</strong>. Novels have their own book pages and chapter-by-chapter reading experience.</p>\n    <p>There is <strong>no fixed posting schedule</strong>. Writing does not always arrive on a predictable timetable, but I will be working toward sharing <strong>new writing at least once a month</strong>.</p>\n    <p>This is a place for readers who want to follow my writing beyond the public blog and spend some time in the private room behind the writing desk.</p>\n    <p style="margin-top:22px"><a href="{{ url_for('membership_terms') }}">Read the Membership Terms &amp; Conditions</a></p>\n  </div>\n</section>\n{% endblock %}\n''',encoding='utf-8')
+
+          p=Path('templates/blog_templates/kwsnyderwriting.html')
+          s=p.read_text(encoding='utf-8')
+          old='''  <div id="kw-library-menu" class="blog-feed">'''
+          new='''  <div id="kw-library-menu" class="blog-feed">'''
+          # Add a free information tile after the menu closes.
+          needle='''  </div>\n\n  <section id="kw-writing-list"'''
+          repl='''  </div>\n\n  <div class="content-section" style="margin-top:25px;text-align:center;">\n    <a class="blog-block" href="{{ url_for('membership_terms') }}"><h2>About Membership &amp; Terms</h2><p>Membership information, publishing expectations, and the rules for the private library.</p></a>\n  </div>\n\n  <section id="kw-writing-list"'''
+          if needle not in s: raise SystemExit('Could not find KWS menu insertion point')
+          s=s.replace(needle,repl,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.py templates/admin.html templates/blog_templates/kwsnyderwriting_membership.html templates/blog_templates/kwsnyderwriting.html templates/blog_templates/membership_terms.html
+          git commit -m 'Add KWS sections, membership terms, and editor fixes [kws-fix]'
+          git push
+
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/kw-membership-ui-fix.yml
+          git commit -m 'Remove temporary KWS fix workflow [kws-fix]'
+          git push
