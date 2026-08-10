@@ -757,7 +757,7 @@ def create_manuscript():
     if not title:
         return jsonify({"error": "A title is required."}), 400
     conn = get_db()
-    cur = conn.execute("INSERT INTO manuscript_books(title, description, date_created) VALUES (?, ?, ?)", (title, description, now_string()))
+    cur = conn.execute("INSERT INTO manuscript_books(title, description, date_created, updated_at) VALUES (?, ?, ?, ?)", (title, description, now_string(), now_string()))
     conn.commit()
     book_id = cur.lastrowid
     conn.close()
@@ -785,7 +785,7 @@ def update_manuscript(book_id):
     if not row:
         conn.close()
         return jsonify({"error": "Book not found"}), 404
-    conn.execute("UPDATE manuscript_books SET title = ?, description = ? WHERE id = ?", (str(data.get("title", "")).strip(), str(data.get("description", "")), book_id))
+    conn.execute("UPDATE manuscript_books SET title = ?, description = ?, updated_at = ? WHERE id = ?", (str(data.get("title", "")).strip(), str(data.get("description", "")), now_string(), book_id))
     conn.commit()
     conn.close()
     return jsonify({"success": True})
@@ -819,7 +819,7 @@ def create_chapter(book_id):
     if not book:
         conn.close()
         return jsonify({"error": "Book not found"}), 404
-    cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, published, date_created) VALUES (?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, published, now_string()))
+    cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, published, date_created, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, published, now_string(), now_string()))
     conn.commit()
     chapter_id = cur.lastrowid
     conn.close()
@@ -846,7 +846,7 @@ def update_chapter(book_id, chapter_id):
     if not row:
         conn.close()
         return jsonify({"error": "Chapter not found"}), 404
-    conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, published = ? WHERE id = ? AND book_id = ?", (int(data.get("chapter_number", 0)), str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter", str(data.get("content", "")), 1 if data.get("published") else 0, chapter_id, book_id))
+    conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, published = ?, updated_at = ? WHERE id = ? AND book_id = ?", (int(data.get("chapter_number", 0)), str(data.get("title", "Untitled Chapter")).strip() or "Untitled Chapter", str(data.get("content", "")), 1 if data.get("published") else 0, now_string(), chapter_id, book_id))
     conn.commit()
     conn.close()
     return jsonify({"success": True})

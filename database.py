@@ -212,6 +212,8 @@ def postgres_init_db(conn):
     # Existing deployments may already have these tables with NOT NULL
     # timestamps but without defaults. The defaults make the existing Admin
     # manuscript create/update endpoints safe on PostgreSQL as well.
+    conn.execute("UPDATE manuscript_books SET updated_at = CURRENT_TIMESTAMP::text WHERE updated_at IS NULL")
+    conn.execute("UPDATE manuscript_chapters SET updated_at = CURRENT_TIMESTAMP::text WHERE updated_at IS NULL")
     conn.execute("ALTER TABLE manuscript_books ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")
     conn.execute("ALTER TABLE manuscript_chapters ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP::text")
 
