@@ -1,125 +1,46 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}The Snyder Scriptorium{% endblock %}</title>
 
-```
-<title>{% block title %}The Snyder Scriptorium{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-<link
-    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;700&display=swap"
-    rel="stylesheet"
->
-
-<link
-    rel="stylesheet"
-    href="{{ url_for('static', filename='css/style.css') }}"
->
-
-{% block head %}{% endblock %}
-```
-
+    {% block head %}{% endblock %}
 </head>
-
 <body>
 
-```
-<!-- =====================================================
-     MASTER SITE HEADER
-     ===================================================== -->
-
 <header class="site-header">
-
     <a href="{{ url_for('the_hearth') }}" class="site-logo-link">
-        <img
-            src="{{ url_for('static', filename='logo3.png') }}"
-            alt="Snyder Scriptorium Logo"
-            class="site-logo"
-        >
+        <img src="{{ url_for('static', filename='logo3.png') }}" alt="Snyder Scriptorium Logo" class="site-logo">
     </a>
 
     <div class="site-title">
         <h1>The Snyder Scriptorium</h1>
     </div>
 
-    <!-- =================================================
-         MAIN PUBLIC NAVIGATION
-         ================================================= -->
-
     <nav class="site-navigation" aria-label="Main navigation">
         <ul>
-
-            <li>
-                <a href="{{ url_for('the_hearth') }}">
-                    The Hearth
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ url_for('about') }}">
-                    About
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ url_for('the_blog') }}">
-                    The Blog
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ url_for('the_scriptorium') }}">
-                    The Scriptorium
-                </a>
-            </li>
-
-            <li>
-                <a href="{{ url_for('merch_shop') }}">
-                    Merch Shop
-                </a>
-            </li>
-
+            <li><a href="{{ url_for('the_hearth') }}">The Hearth</a></li>
+            <li><a href="{{ url_for('about') }}">About</a></li>
+            <li><a href="{{ url_for('the_blog') }}">The Blog</a></li>
+            <li><a href="{{ url_for('the_scriptorium') }}">The Scriptorium</a></li>
+            <li><a href="{{ url_for('merch_shop') }}">Merch Shop</a></li>
         </ul>
     </nav>
-
 </header>
 
-
-<!-- =====================================================
-     MAIN PAGE CONTENT
-     ===================================================== -->
-
 <main class="site-main">
-
     {% block content %}{% endblock %}
-
 </main>
 
-
-<!-- =====================================================
-     SITE FOOTER
-     ===================================================== -->
-
 <footer class="site-footer">
-
-    <p>
-        &copy; 2026 The Snyder Scriptorium.
-        All rights reserved.
-    </p>
-
-    <p>
-        <a href="{{ url_for('admin_dashboard') }}">
-            Admin
-        </a>
-    </p>
-
+    <p>&copy; 2026 The Snyder Scriptorium. All rights reserved.</p>
+    <p><a href="{{ url_for('admin_dashboard') }}">Admin</a></p>
 </footer>
 
-
 {% block scripts %}{% endblock %}
-```
-
 </body>
 </html>
