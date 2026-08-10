@@ -21,6 +21,11 @@ body {
     gap: 6px 24px;
 }
 
+.site-title {
+    grid-column: 2;
+    grid-row: 1;
+}
+
 .site-title h1 {
     margin: 0;
     color: #24333B;
@@ -32,6 +37,8 @@ body {
 }
 
 .site-navigation {
+    grid-column: 2;
+    grid-row: 2;
     width: fit-content;
     border-bottom: 1px solid rgba(36, 51, 59, .38);
     padding: 7px 0 14px;
