@@ -1,0 +1,33 @@
+name: Fix admin editor toolbar
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: "!contains(github.event.head_commit.message, '[toolbar-fix]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair toolbar CSS and rename Essays
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('templates/admin.html')
+          s = p.read_text(encoding='utf-8')
+          # Repair the malformed editor CSS rule so toolbar controls keep their normal compact Word-style layout.
+          s = s.replace('outline:none;tab-size:4;.toolbar{', 'outline:none;tab-size:4}.toolbar{')
+          # Rename the K. W. Snyder general writing bucket to Essays everywhere in the admin UI.
+          s = s.replace('K. W. Snyder Writing — General', 'K. W. Snyder Writing — Essays')
+          s = s.replace('value="kwsnyderwriting">General Writing</option>', 'value="kwsnyderwriting">Essays</option>')
+          # Keep the subcategory selector as the second level while ensuring the selected category is stored correctly.
+          p.write_text(s, encoding='utf-8')
+          PY
+          rm -f .github/workflows/fix-admin-toolbar-and-essays.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add templates/admin.html .github/workflows/fix-admin-toolbar-and-essays.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'Restore editor toolbar layout and rename General to Essays [toolbar-fix]'
+          git push
