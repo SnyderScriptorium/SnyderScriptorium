@@ -6,18 +6,23 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from database import get_db as database_get_db, init_db as database_init_db, migrate_sqlite_to_postgres, IntegrityError
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 DATABASE = os.path.join(basedir, "scriptorium.db")
 
 app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
 app.secret_key = os.environ.get("SECRET_KEY", "snyder-scriptorium-development-key")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("RENDER", "").lower() == "true" or os.environ.get("FLASK_ENV") == "production",
+    SESSION_PERMANENT=False,
+)
 
 
 def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return database_get_db()
 
 
 def now_string():
@@ -34,94 +39,7 @@ def add_column_if_missing(conn, table, column, definition):
 
 
 def init_db():
-    conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS drafts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            category TEXT NOT NULL,
-            content TEXT NOT NULL,
-            date_created TEXT NOT NULL
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS published_posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            category TEXT NOT NULL,
-            category_name TEXT NOT NULL,
-            content TEXT NOT NULL,
-            date_published TEXT NOT NULL,
-            access_level TEXT NOT NULL DEFAULT 'public'
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS manuscripts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            date_created TEXT NOT NULL
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS manuscript_books (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            date_created TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            access_level TEXT NOT NULL DEFAULT 'members'
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS manuscript_chapters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            book_id INTEGER NOT NULL,
-            chapter_number INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            date_created TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            published INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY(book_id) REFERENCES manuscript_books(id) ON DELETE CASCADE,
-            UNIQUE(book_id, chapter_number)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS members (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            subscription_status TEXT NOT NULL DEFAULT 'inactive',
-            date_created TEXT NOT NULL
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            member_id INTEGER NOT NULL,
-            provider TEXT,
-            subscription_id TEXT,
-            status TEXT NOT NULL DEFAULT 'inactive',
-            date_started TEXT,
-            date_ends TEXT,
-            FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS site_content (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL DEFAULT '',
-            updated_at TEXT NOT NULL
-        )
-    """)
-    add_column_if_missing(conn, "published_posts", "access_level", "TEXT NOT NULL DEFAULT 'public'")
-    conn.execute("""
-        INSERT OR IGNORE INTO site_content(key, value, updated_at)
-        VALUES ('about_content', ?, ?)
-    """, ("The Snyder Scriptorium is a growing home for books, writing, curiosity, and the stories that bring people together.", now_string()))
-    conn.commit()
-    conn.close()
+    database_init_db()
 
 
 def require_admin():
@@ -278,7 +196,7 @@ def member_signup():
         try:
             conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
             conn.commit()
-        except sqlite3.IntegrityError:
+        except IntegrityError:
             conn.close()
             return render_template("blog_templates/kwsnyderwriting_signup.html", error="An account with that email already exists.")
         conn.close()
@@ -369,13 +287,14 @@ def admin_dashboard():
 def admin_login():
     password = request.form.get("password", "")
     if password == os.environ.get("ADMIN_PASSWORD", "scriptorium123"):
+        session.clear()
         session["admin_logged_in"] = True
     return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/logout")
 def admin_logout():
-    session.pop("admin_logged_in", None)
+    session.clear()
     return redirect(url_for("admin_dashboard"))
 
 
@@ -617,7 +536,7 @@ def create_chapter(book_id):
         cur = conn.execute("INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, date_created, updated_at, published) VALUES (?, ?, ?, ?, ?, ?, ?)", (book_id, chapter_number, title, content, stamp, stamp, published))
         conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (stamp, book_id))
         conn.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify({"error": "That chapter number already exists for this novel."}), 409
@@ -652,7 +571,7 @@ def update_chapter(book_id, chapter_id):
         cur = conn.execute("UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, updated_at = ?, published = ? WHERE id = ? AND book_id = ?", (number, title, content, now_string(), published, chapter_id, book_id))
         conn.execute("UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (now_string(), book_id))
         conn.commit()
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify({"error": "That chapter number already exists for this novel."}), 409
@@ -709,7 +628,11 @@ def update_about_content():
     return jsonify({"success": True})
 
 
+# PostgreSQL is the persistent source of truth when DATABASE_URL is configured.
+# If a local SQLite database is present at the moment of migration, copy it first.
 init_db()
+if os.environ.get("DATABASE_URL", "").strip():
+    migrate_sqlite_to_postgres()
 
 if __name__ == "__main__":
     app.run(debug=True)
