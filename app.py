@@ -299,6 +299,11 @@ def member_logout():
     return redirect(url_for("kwsnyderwriting_membership"))
 
 
+@app.route("/membership-terms")
+def membership_terms():
+    return render_template("blog_templates/membership_terms.html")
+
+
 @app.route("/kwsnyderwriting")
 @member_required
 def kwsnyderwriting():
@@ -656,7 +661,7 @@ def create_published_post():
     access = str(data.get("accessLevel", "public"))
     if not title or not content.strip():
         return jsonify({"error": "A title and content are required."}), 400
-    if category == "kwsnyderwriting":
+    if category == "kwsnyderwriting" or category.startswith("kw_"):
         access = "members"
     if access not in {"public", "members"}:
         access = "public"
@@ -689,7 +694,7 @@ def update_published_post(post_id):
     access = str(data.get("accessLevel", "public"))
     if not title or not content.strip():
         return jsonify({"error": "A title and content are required."}), 400
-    if category == "kwsnyderwriting":
+    if category == "kwsnyderwriting" or category.startswith("kw_"):
         access = "members"
     if access not in {"public", "members"}:
         access = "public"
