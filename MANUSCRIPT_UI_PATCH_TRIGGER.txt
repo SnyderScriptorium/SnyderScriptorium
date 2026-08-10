@@ -1,0 +1,1 @@
+Temporary trigger for the manuscript UI repair. This file will be removed by the workflow after the patch is applied.
