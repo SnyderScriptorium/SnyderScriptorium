@@ -7,20 +7,31 @@
     <p class="private-label">The private literary library of K. W. Snyder</p>
   </div>
 
-  <div class="blog-feed" style="margin-bottom:30px;">
-    <a class="blog-block" href="#short-stories"><h2>Short Stories</h2><p>Private short fiction and works in progress.</p></a>
-    <a class="blog-block" href="#poems"><h2>Poems</h2><p>Poetry collected in the private writing room.</p></a>
-    <a class="blog-block" href="#vignettes"><h2>Vignettes</h2><p>Small scenes, moments, and pieces of prose.</p></a>
-    <a class="blog-block" href="#essays"><h2>Essays</h2><p>Long-form thoughts, reflections, and literary essays.</p></a>
-    <a class="blog-block" href="#novels"><h2>Novels</h2><p>Long-form works organized by book and completed chapters.</p></a>
+  <div class="blog-feed" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:25px;">
+    <button class="library-tab" onclick="showShelf('stories',this)">Short Stories</button>
+    <button class="library-tab" onclick="showShelf('poems',this)">Poems</button>
+    <button class="library-tab" onclick="showShelf('vignettes',this)">Vignettes</button>
+    <button class="library-tab" onclick="showShelf('essays',this)">Essays</button>
+    <button class="library-tab" onclick="showShelf('novels',this)">Novels</button>
   </div>
 
-  <div id="short-stories" class="content-section"><h2>Short Stories</h2>{% for post in posts if post['title'] and false %}{% endfor %}<p class="private-label">Short-story shelving is ready for the private writing collection.</p></div>
-  <div id="poems" class="content-section"><h2>Poems</h2><p class="private-label">Poetry shelving is ready for the private writing collection.</p></div>
-  <div id="vignettes" class="content-section"><h2>Vignettes</h2><p class="private-label">Vignette shelving is ready for the private writing collection.</p></div>
-  <div id="essays" class="content-section"><h2>Essays</h2><p class="private-label">Essay shelving is ready for the private writing collection.</p></div>
-
-  <div id="novels" class="content-section">
+  <div id="stories" class="shelf content-section">
+    <h2>Short Stories</h2>
+    <p class="private-label">Short-story shelving is ready for the private writing collection.</p>
+  </div>
+  <div id="poems" class="shelf content-section" style="display:none">
+    <h2>Poems</h2>
+    <p class="private-label">Poetry shelving is ready for the private writing collection.</p>
+  </div>
+  <div id="vignettes" class="shelf content-section" style="display:none">
+    <h2>Vignettes</h2>
+    <p class="private-label">Vignette shelving is ready for the private writing collection.</p>
+  </div>
+  <div id="essays" class="shelf content-section" style="display:none">
+    <h2>Essays</h2>
+    <p class="private-label">Essay shelving is ready for the private writing collection.</p>
+  </div>
+  <div id="novels" class="shelf content-section" style="display:none">
     <h2>Novels</h2>
     <div class="blog-feed">
       {% for book in books %}
@@ -35,6 +46,13 @@
     </div>
   </div>
 
-  <div class="actions" style="margin-top:30px;"><a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('member_logout') }}">Sign Out</a></div>
+  <p style="margin-top:30px;"><a href="{{ url_for('member_logout') }}">Sign Out</a></p>
 </section>
+<style>
+.library-tab{background:#FFFDF8;color:#24333B;border:1px solid #C9B78F;padding:10px 14px;border-radius:5px;font:inherit;cursor:pointer}.library-tab.active,.library-tab:hover{background:#5C4033;color:#fff}.shelf{background:#FFFDF8;border:1px solid #D1BE94;border-radius:7px;padding:22px}
+</style>
+<script>
+function showShelf(id,button){document.querySelectorAll('.shelf').forEach(s=>s.style.display='none');document.querySelectorAll('.library-tab').forEach(b=>b.classList.remove('active'));document.getElementById(id).style.display='block';button.classList.add('active')}
+document.addEventListener('DOMContentLoaded',()=>showShelf('stories',document.querySelector('.library-tab')))
+</script>
 {% endblock %}
