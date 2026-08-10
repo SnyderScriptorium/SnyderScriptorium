@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Create Member Account — K. W. Snyder Writing{% endblock %}
+{% block content %}
+<section class="content-section" style="max-width:560px;margin:0 auto;">
+  <h1>Create Member Account</h1>
+  <p class="private-label">Account creation is separate from subscription activation.</p>
+  {% if error %}<p class="private-label">{{ error }}</p>{% endif %}
+  <form method="POST">
+    <label>Email</label><input type="email" name="email" required>
+    <label>Password</label><input type="password" name="password" minlength="8" required>
+    <div class="actions"><button type="submit">Create Account</button><a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('kwsnyderwriting_membership') }}">Back</a></div>
+  </form>
+</section>
+{% endblock %}
