@@ -179,6 +179,16 @@ def postgres_init_db(conn):
             updated_at TEXT NOT NULL
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS page_views (
+            id BIGSERIAL PRIMARY KEY,
+            path TEXT NOT NULL,
+            page_type TEXT NOT NULL DEFAULT 'page',
+            content_id BIGINT,
+            category TEXT,
+            viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
     ]
     for statement in statements:
         conn.execute(statement)
@@ -202,6 +212,17 @@ def init_db():
     if using_postgres():
         postgres_init_db(conn)
     else:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS page_views (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT NOT NULL,
+                page_type TEXT NOT NULL DEFAULT 'page',
+                content_id INTEGER,
+                category TEXT,
+                viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
         conn.close()
         return
     conn.close()
