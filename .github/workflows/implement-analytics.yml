@@ -1,0 +1,272 @@
+name: Implement Analytics Phase 1
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add database analytics tables
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('database.py')
+          s = p.read_text()
+          marker = '''        """
+        CREATE TABLE IF NOT EXISTS site_content (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        )
+        """,
+'''
+          insert = marker + '''        """
+        CREATE TABLE IF NOT EXISTS page_views (
+            id BIGSERIAL PRIMARY KEY,
+            path TEXT NOT NULL,
+            page_type TEXT NOT NULL DEFAULT 'page',
+            content_id BIGINT,
+            category TEXT,
+            viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+'''
+          if 'CREATE TABLE IF NOT EXISTS page_views' not in s:
+              if marker not in s:
+                  raise SystemExit('database marker not found')
+              s = s.replace(marker, insert, 1)
+              p.write_text(s)
+          PY
+
+      - name: Add analytics tracking and API
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app.py')
+          s = p.read_text()
+          marker = '''def category_label(category):
+'''
+          helper = '''def record_page_view(path, page_type="page", content_id=None, category=None):
+    """Record a public/member page view in the persistent database."""
+    if path.startswith("/static/") or path.startswith("/api/"):
+        return
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO page_views(path, page_type, content_id, category) VALUES (?, ?, ?, ?)",
+            (path, page_type, content_id, category),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        # Analytics must never prevent a visitor from reading the site.
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def category_label(category):
+'''
+          if 'def record_page_view(' not in s:
+              if marker not in s:
+                  raise SystemExit('category marker not found')
+              s = s.replace(marker, helper, 1)
+
+          old = '''@app.route("/about")
+def about():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM site_content WHERE key = 'about_content'").fetchone()
+    conn.close()
+    return render_template("about.html", about_content=row["value"] if row else "")
+'''
+          new = '''@app.route("/about")
+def about():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM site_content WHERE key = 'about_content'").fetchone()
+    conn.close()
+    record_page_view(request.path, "page")
+    return render_template("about.html", about_content=row["value"] if row else "")
+'''
+          if old in s and 'record_page_view(request.path, "page")' not in s[s.find(old):s.find(old)+len(new)+100]:
+              s = s.replace(old, new, 1)
+
+          old = '''@app.route("/blog")
+def the_blog():
+    return render_template("blog_templates/theblog.html")
+'''
+          new = '''@app.route("/blog")
+def the_blog():
+    record_page_view(request.path, "section", category="blog")
+    return render_template("blog_templates/theblog.html")
+'''
+          s = s.replace(old, new, 1)
+
+          old = '''def public_category(category, template):
+    conn = get_db()
+    posts = conn.execute("""
+        SELECT * FROM published_posts
+        WHERE category = ? AND access_level = 'public'
+        ORDER BY id DESC
+    """, (category,)).fetchall()
+    conn.close()
+    return render_template(template, posts=posts, category_name=category_label(category))
+'''
+          new = '''def public_category(category, template):
+    conn = get_db()
+    posts = conn.execute("""
+        SELECT * FROM published_posts
+        WHERE category = ? AND access_level = 'public'
+        ORDER BY id DESC
+    """, (category,)).fetchall()
+    conn.close()
+    record_page_view(request.path, "section", category=category)
+    return render_template(template, posts=posts, category_name=category_label(category))
+'''
+          if old not in s:
+              raise SystemExit('public_category marker not found')
+          s = s.replace(old, new, 1)
+
+          old = '''    if not post or post["access_level"] != "public":
+        abort(404)
+    return render_template("post.html", post=post, back_url=url_for("the_blog"))
+'''
+          new = '''    if not post or post["access_level"] != "public":
+        abort(404)
+    record_page_view(request.path, "post", post_id, post["category"])
+    return render_template("post.html", post=post, back_url=url_for("the_blog"))
+'''
+          if old not in s:
+              raise SystemExit('public post marker not found')
+          s = s.replace(old, new, 1)
+
+          old = '''@app.route("/store")
+def the_scriptorium():
+    return render_template("store.html")
+'''
+          new = '''@app.route("/store")
+def the_scriptorium():
+    record_page_view(request.path, "page")
+    return render_template("store.html")
+'''
+          s = s.replace(old, new, 1)
+          old = '''@app.route("/merch")
+def merch_shop():
+    return render_template("merch.html")
+'''
+          new = '''@app.route("/merch")
+def merch_shop():
+    record_page_view(request.path, "page")
+    return render_template("merch.html")
+'''
+          s = s.replace(old, new, 1)
+
+          marker = '''@app.route("/api/drafts", methods=["GET"])
+'''
+          analytics_routes = '''@app.route("/api/analytics", methods=["GET"])
+@admin_required
+def get_analytics():
+    from datetime import datetime, timedelta, timezone
+    period = request.args.get("period", "30")
+    now = datetime.now(timezone.utc)
+    if period == "all":
+        start = None
+    else:
+        try:
+            days = max(1, min(int(period), 3650))
+        except ValueError:
+            days = 30
+        start = now - timedelta(days=days)
+
+    conn = get_db()
+    where = "" if start is None else " WHERE viewed_at >= ?"
+    params = () if start is None else (start.isoformat(),)
+    total = conn.execute("SELECT COUNT(*) AS count FROM page_views" + where, params).fetchone()["count"]
+    posts = conn.execute("SELECT path, content_id, category, COUNT(*) AS views FROM page_views WHERE page_type = 'post'" + (" AND viewed_at >= ?" if start else "") + " GROUP BY path, content_id, category ORDER BY views DESC", (() if not start else (start.isoformat(),))).fetchall()
+    categories = conn.execute("SELECT category, COUNT(*) AS views FROM page_views WHERE category IS NOT NULL" + (" AND viewed_at >= ?" if start else "") + " GROUP BY category ORDER BY views DESC", (() if not start else (start.isoformat(),))).fetchall()
+    daily = conn.execute("SELECT DATE(viewed_at) AS day, COUNT(*) AS views FROM page_views" + where + " GROUP BY DATE(viewed_at) ORDER BY day", params).fetchall()
+    conn.close()
+
+    return jsonify({
+        "period": period,
+        "total_views": total,
+        "daily": [dict(r) for r in daily],
+        "categories": [dict(r) for r in categories],
+        "posts": [dict(r) for r in posts],
+    })
+
+
+@app.route("/api/drafts", methods=["GET"])
+'''
+          if '@app.route("/api/analytics"' not in s:
+              if marker not in s:
+                  raise SystemExit('API marker not found')
+              s = s.replace(marker, analytics_routes, 1)
+          p.write_text(s)
+          PY
+
+      - name: Upgrade analytics dashboard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('templates/admin.html')
+          s = p.read_text()
+          old = '''<section id="stats" class="hidden"><h2 class="section-title">Analytics</h2><div class="three"><div class="card"><div><h3>Drafts</h3><small>Saved writing</small></div><strong id="statDrafts">0</strong></div><div class="card"><div><h3>Published</h3><small>Live posts</small></div><strong id="statPublished">0</strong></div><div class="card"><div><h3>Novels</h3><small>Manuscript books</small></div><strong id="statBooks">0</strong></div></div><p class="note" style="margin-top:18px">Content counts are database-backed. Visitor view tracking will be added as a separate analytics layer before the site is considered launch-ready.</p></section>'''
+          new = '''<section id="stats" class="hidden">
+<h2 class="section-title">Analytics</h2>
+<div class="actions" style="margin-bottom:15px"><button type="button" class="light" onclick="loadStats('7')">7 Days</button><button type="button" class="light" onclick="loadStats('30')">30 Days</button><button type="button" class="light" onclick="loadStats('90')">90 Days</button><button type="button" class="light" onclick="loadStats('365')">1 Year</button><button type="button" class="light" onclick="loadStats('all')">All Time</button></div>
+<div class="three"><div class="card"><div><h3>Total Views</h3><small>Selected period</small></div><strong id="statViews">0</strong></div><div class="card"><div><h3>Published</h3><small>Live posts</small></div><strong id="statPublished">0</strong></div><div class="card"><div><h3>Novels</h3><small>Manuscript books</small></div><strong id="statBooks">0</strong></div></div>
+<div class="preview" style="margin-top:18px"><h3 class="section-title">Views Over Time</h3><canvas id="viewsChart" height="220" style="width:100%;display:block"></canvas></div>
+<div class="two" style="margin-top:18px"><div class="preview"><h3 class="section-title">Views by Section</h3><div id="analyticsCategories" class="list"></div></div><div class="preview"><h3 class="section-title">Most Viewed Posts</h3><div id="analyticsPosts" class="list"></div></div></div>
+<p class="note" style="margin-top:18px">Analytics are stored in the database. Visitor tracking is designed so analytics failures never prevent someone from reading the site.</p></section>'''
+          if old not in s:
+              raise SystemExit('stats section not found')
+          s = s.replace(old, new, 1)
+
+          old = '''async function loadStats(){await refreshCounts()}'''
+          new = '''async function loadStats(period='30'){
+  await refreshCounts();
+  try{
+    const d=await api(`/api/analytics?period=${encodeURIComponent(period)}`);
+    $("statViews").textContent=d.total_views||0;
+    renderAnalytics(d);
+  }catch(e){showStatus(e.message,true)}
+}
+function renderAnalytics(d){
+  const canvas=$("viewsChart"),ctx=canvas.getContext("2d"),ratio=window.devicePixelRatio||1,w=Math.max(320,canvas.clientWidth||700),h=220;
+  canvas.width=w*ratio;canvas.height=h*ratio;ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);
+  const points=d.daily||[],max=Math.max(1,...points.map(x=>Number(x.views)||0)),left=42,right=12,top=15,bottom=32,cw=w-left-right,ch=h-top-bottom;
+  ctx.strokeStyle="#C9B78F";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(left,top);ctx.lineTo(left,h-bottom);ctx.lineTo(w-right,h-bottom);ctx.stroke();
+  if(points.length){ctx.strokeStyle="#5C4033";ctx.lineWidth=2;ctx.beginPath();points.forEach((p,i)=>{const x=left+(points.length===1?cw/2:(i/(points.length-1))*cw),y=top+ch-(Number(p.views)/max)*ch;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle="#5C4033";points.forEach((p,i)=>{const x=left+(points.length===1?cw/2:(i/(points.length-1))*cw),y=top+ch-(Number(p.views)/max)*ch;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill()});ctx.fillStyle="#6F6257";ctx.font="12px Georgia";ctx.fillText(String(points[0].day||""),left,h-8);if(points.length>1)ctx.fillText(String(points[points.length-1].day||""),Math.max(left,w-95),h-8);ctx.fillText(String(max),4,top+4);ctx.fillText("0",20,h-bottom+4)}else{ctx.fillStyle="#6F6257";ctx.font="15px Georgia";ctx.fillText("No visitor views recorded for this period yet.",left,top+40)}
+  $("analyticsCategories").innerHTML=d.categories?.length?d.categories.map(x=>`<div class="card"><span>${esc(cat(x.category)||x.category)}</span><strong>${x.views}</strong></div>`).join(""):"<p class='note'>No section views yet.</p>";
+  $("analyticsPosts").innerHTML=d.posts?.length?d.posts.slice(0,10).map(x=>`<div class="card"><div><strong>${esc(x.path)}</strong><br><small>${esc(cat(x.category)||x.category||"")}</small></div><strong>${x.views}</strong></div>`).join(""):"<p class='note'>No post views yet.</p>";
+}
+window.addEventListener('resize',()=>{if(!$("stats").classList.contains('hidden'))loadStats(window.analyticsPeriod||'30')})'''
+          if old not in s:
+              raise SystemExit('loadStats marker not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('if(name==="stats")loadStats()', 'if(name==="stats")loadStats(window.analyticsPeriod||\'30\')', 1)
+          p.write_text(s)
+          PY
+
+      - name: Commit analytics implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.py database.py templates/admin.html
+          git commit -m "Add database-backed analytics dashboard" || exit 0
+          git push
+
+      - name: Remove temporary workflow
+        run: |
+          rm -f .github/workflows/implement-analytics.yml
+          git add .github/workflows/implement-analytics.yml
+          git commit -m "Remove temporary analytics implementation workflow" || exit 0
+          git push
