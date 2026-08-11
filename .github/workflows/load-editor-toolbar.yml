@@ -1,0 +1,37 @@
+name: Load editor toolbar
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure editor toolbar script is loaded
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('templates/admin.html')
+          text = p.read_text(encoding='utf-8')
+          marker = '<script src="{{ url_for(\'static\', filename=\'editor_toolbar.js\') }}"></script>'
+          if marker not in text:
+              text = text.replace('</body>', marker + '\n</body>')
+              p.write_text(text, encoding='utf-8')
+              print('Inserted editor toolbar script.')
+          else:
+              print('Editor toolbar script already loaded.')
+          PY
+      - name: Commit change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add templates/admin.html
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'Load visible editor formatting toolbar'
+            git push
+          fi
