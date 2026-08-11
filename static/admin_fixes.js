@@ -6,18 +6,44 @@ function ed(n){return n&&n.closest?n.closest(EDITOR):null}
 function inside(e){const s=getSelection();return !!(e&&s&&s.rangeCount&&e.contains(s.anchorNode)&&e.contains(s.focusNode))}
 function remember(e){const s=getSelection();if(inside(e))ranges.set(e,s.getRangeAt(0).cloneRange())}
 function restore(e){const r=ranges.get(e),s=getSelection();if(!r||!e.contains(r.commonAncestorContainer))return false;s.removeAllRanges();s.addRange(r);return true}
-function focus(e){if(!e)return false;e.contentEditable='true';e.removeAttribute('disabled');e.removeAttribute('readonly');e.focus({preventScroll:true});restore(e);return true}
+function focus(e){if(!e)return false;e.contentEditable='true';e.removeAttribute('disabled');e.removeAttribute('readonly');e.focus({preventScroll:true});return true}
 function keep(e,fn){const x=scrollX,y=scrollY,ex=e.scrollLeft,ey=e.scrollTop;fn();scrollTo(x,y);e.scrollLeft=ex;e.scrollTop=ey;requestAnimationFrame(()=>{scrollTo(x,y);e.scrollLeft=ex;e.scrollTop=ey})}
 function block(e){if(!inside(e))return null;let n=getSelection().anchorNode;if(n&&n.nodeType===3)n=n.parentElement;return n&&n.closest?(n.closest('p,h1,h2,h3,h4,h5,h6,blockquote,pre,div,li')||e):e}
 function indent(e,out){const b=block(e);if(!b||b===e)return;const cur=parseFloat(b.style.marginLeft)||0;const next=Math.max(0,cur+(out?-2:2));b.style.marginLeft=next?next+'em':''}
 
-document.addEventListener('focusin',e=>{const x=ed(e.target);if(x)x.contentEditable='true'},true);
+document.addEventListener('focusin',e=>{const x=ed(e.target);if(x){x.contentEditable='true';remember(x)}},true);
 document.addEventListener('click',e=>{const x=ed(e.target);if(x){x.contentEditable='true';remember(x)}},true);
 document.addEventListener('selectionchange',()=>document.querySelectorAll(EDITOR).forEach(x=>{if(inside(x))remember(x)}));
-// Do not intercept paste. Native paste keeps Blogger/Word/Docs formatting and leaves it editable.
-document.addEventListener('paste',e=>{const x=ed(e.target);if(x){x.contentEditable='true';remember(x)}},true);
+
+// Reliable paste for BOTH editors.  We insert the clipboard HTML at the actual
+// caret/selection so new material can be pasted, while retaining Word/Blogger
+// formatting.  Plain text is supported as a fallback.
+document.addEventListener('paste',e=>{
+  const x=ed(e.target);
+  if(!x)return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  focus(x);
+  let s=getSelection();
+  let r=(s&&s.rangeCount&&inside(x))?s.getRangeAt(0):null;
+  if(!r){
+    r=document.createRange();
+    r.selectNodeContents(x);
+    r.collapse(false);
+    s=getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  }
+  const html=e.clipboardData&&e.clipboardData.getData('text/html');
+  const text=e.clipboardData&&e.clipboardData.getData('text/plain');
+  const value=html||((text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r\n|\r|\n/g,'<br>'));
+  if(!value)return;
+  keep(x,()=>document.execCommand('insertHTML',false,value));
+  remember(x);
+},true);
+
 // One shared Tab behavior for both editors.
-document.addEventListener('keydown',e=>{const x=ed(e.target);if(!x)return;if(e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();x.contentEditable='true';remember(x);focus(x);keep(x,()=>indent(x,e.shiftKey));remember(x)}},true);
+document.addEventListener('keydown',e=>{const x=ed(e.target);if(!x)return;if(e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();focus(x);remember(x);keep(x,()=>indent(x,e.shiftKey));remember(x)}},true);
 
 function exec(e,c,v){focus(e);restore(e);document.execCommand('styleWithCSS',false,true);keep(e,()=>document.execCommand(c,false,v==null?null:v));remember(e)}
 function size(e,pt){focus(e);restore(e);const s=getSelection();if(!s.rangeCount||!inside(e))return;const r=s.getRangeAt(0);keep(e,()=>{const span=document.createElement('span');span.style.fontSize=pt+'pt';if(r.collapsed){span.appendChild(document.createTextNode('\u200b'));r.insertNode(span);const n=document.createRange();n.setStart(span.firstChild,1);n.collapse(true);s.removeAllRanges();s.addRange(n)}else{span.appendChild(r.extractContents());r.insertNode(span);const n=document.createRange();n.selectNodeContents(span);s.removeAllRanges();s.addRange(n)}});remember(e)}
