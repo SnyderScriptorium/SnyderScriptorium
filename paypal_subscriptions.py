@@ -1,21 +1,6 @@
-"""PayPal Subscriptions integration foundation.
+"""PayPal Subscriptions integration foundation and server-side helpers.
 
-Live credentials are intentionally read only from environment variables.
-The site can use the same product with separate plans so early subscribers can
-remain grandfathered at their original price while new members move to a new
-plan later.
-
-Environment variables:
-  PAYPAL_ENV=sandbox|live
-  PAYPAL_CLIENT_ID
-  PAYPAL_CLIENT_SECRET
-  PAYPAL_WEBHOOK_ID
-
-Plan IDs are also environment variables so they can be created/changed in
-PayPal without putting credentials or account-specific IDs in source control:
-  PAYPAL_PLAN_FOUNDING_3
-  PAYPAL_PLAN_STANDARD_4
-  PAYPAL_PLAN_STANDARD_5
+Credentials are read only from environment variables.
 """
 
 import os
@@ -23,11 +8,8 @@ from datetime import datetime, timezone
 
 import requests
 
-
 PRODUCT_NAME = "K. W. Snyder Writing Membership"
-PRODUCT_DESCRIPTION = (
-    "Monthly membership providing access to the private K. W. Snyder Writing library."
-)
+PRODUCT_DESCRIPTION = "Monthly membership providing access to the private K. W. Snyder Writing library."
 
 PLAN_CONFIG = {
     "founding_3": {"price": "3.00", "currency": "USD", "label": "Founding Member — $3/month"},
@@ -63,78 +45,79 @@ def paypal_request(method, path, payload=None, headers=None):
     request_headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     if headers:
         request_headers.update(headers)
-    response = requests.request(
-        method,
-        f"{paypal_base_url()}{path}",
-        json=payload,
-        headers=request_headers,
-        timeout=20,
-    )
+    response = requests.request(method, f"{paypal_base_url()}{path}", json=payload, headers=request_headers, timeout=20)
     response.raise_for_status()
     return response.json() if response.content else {}
 
 
+def get_subscription(subscription_id):
+    return paypal_request("GET", f"/v1/billing/subscriptions/{subscription_id}")
+
+
+def verify_webhook(headers, webhook_event):
+    webhook_id = os.environ.get("PAYPAL_WEBHOOK_ID", "").strip()
+    required = [
+        "PAYPAL-TRANSMISSION-ID",
+        "PAYPAL-TRANSMISSION-TIME",
+        "PAYPAL-CERT-URL",
+        "PAYPAL-AUTH-ALGO",
+        "PAYPAL-TRANSMISSION-SIG",
+    ]
+    if not webhook_id or any(not headers.get(name) for name in required):
+        return False
+    payload = {
+        "transmission_id": headers["PAYPAL-TRANSMISSION-ID"],
+        "transmission_time": headers["PAYPAL-TRANSMISSION-TIME"],
+        "cert_url": headers["PAYPAL-CERT-URL"],
+        "auth_algo": headers["PAYPAL-AUTH-ALGO"],
+        "transmission_sig": headers["PAYPAL-TRANSMISSION-SIG"],
+        "webhook_id": webhook_id,
+        "webhook_event": webhook_event,
+    }
+    try:
+        result = paypal_request("POST", "/v1/notifications/verify-webhook-signature", payload)
+        return result.get("verification_status") == "SUCCESS"
+    except Exception:
+        return False
+
+
 def create_product(home_url):
-    """Create the PayPal catalog product once in Sandbox/Live."""
     return paypal_request(
-        "POST",
-        "/v1/catalogs/products",
-        {
-            "name": PRODUCT_NAME,
-            "description": PRODUCT_DESCRIPTION,
-            "type": "SERVICE",
-            "category": "SOFTWARE",
-            "home_url": home_url,
-        },
+        "POST", "/v1/catalogs/products",
+        {"name": PRODUCT_NAME, "description": PRODUCT_DESCRIPTION, "type": "SERVICE", "category": "SOFTWARE", "home_url": home_url},
         {"PayPal-Request-Id": f"snyder-product-{int(datetime.now(timezone.utc).timestamp())}"},
     )
 
 
 def create_monthly_plan(product_id, plan_key):
-    """Create a fixed monthly plan. Existing subscribers keep their old plan ID."""
     if plan_key not in PLAN_CONFIG:
         raise ValueError(f"Unknown plan key: {plan_key}")
     cfg = PLAN_CONFIG[plan_key]
     return paypal_request(
-        "POST",
-        "/v1/billing/plans",
+        "POST", "/v1/billing/plans",
         {
             "product_id": product_id,
             "name": cfg["label"],
             "description": cfg["label"],
-            "billing_cycles": [{
-                "frequency": {"interval_unit": "MONTH", "interval_count": 1},
-                "tenure_type": "REGULAR",
-                "sequence": 1,
-                "total_cycles": 0,
-                "pricing_scheme": {"fixed_price": {"value": cfg["price"], "currency_code": cfg["currency"]}},
-            }],
-            "payment_preferences": {
-                "auto_bill_outstanding": True,
-                "payment_failure_threshold": 2,
-            },
+            "billing_cycles": [{"frequency": {"interval_unit": "MONTH", "interval_count": 1}, "tenure_type": "REGULAR", "sequence": 1, "total_cycles": 0, "pricing_scheme": {"fixed_price": {"value": cfg["price"], "currency_code": cfg["currency"]}}}],
+            "payment_preferences": {"auto_bill_outstanding": True, "payment_failure_threshold": 2},
         },
         {"PayPal-Request-Id": f"snyder-plan-{plan_key}-{int(datetime.now(timezone.utc).timestamp())}"},
     )
 
 
 def plan_id(plan_key):
-    env_name = {
-        "founding_3": "PAYPAL_PLAN_FOUNDING_3",
-        "standard_4": "PAYPAL_PLAN_STANDARD_4",
-        "standard_5": "PAYPAL_PLAN_STANDARD_5",
-    }.get(plan_key)
+    env_name = {"founding_3": "PAYPAL_PLAN_FOUNDING_3", "standard_4": "PAYPAL_PLAN_STANDARD_4", "standard_5": "PAYPAL_PLAN_STANDARD_5"}.get(plan_key)
     if not env_name:
         raise ValueError(f"Unknown plan key: {plan_key}")
     return os.environ.get(env_name, "").strip()
 
 
 def subscription_status_accessible(status):
-    return status in {"active"}
+    return status == "active"
 
 
 def subscription_event_to_status(event_type):
-    """Map PayPal subscription events to the site's membership status."""
     return {
         "BILLING.SUBSCRIPTION.ACTIVATED": "active",
         "PAYMENT.SALE.COMPLETED": "active",
