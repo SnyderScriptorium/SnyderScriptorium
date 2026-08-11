@@ -1,0 +1,100 @@
+/* K. W. Snyder Writing — member authentication */
+.member-auth-section {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.member-auth-card {
+  margin-top: 28px;
+  padding: 34px 36px;
+  border: 1px solid rgba(84, 67, 47, 0.20);
+  border-radius: 18px;
+  background: rgba(250, 247, 240, 0.78);
+  box-shadow: 0 10px 30px rgba(54, 43, 31, 0.08);
+}
+
+.member-auth-form {
+  display: grid;
+  gap: 9px;
+}
+
+.member-auth-form label {
+  margin-top: 10px;
+  font-family: Georgia, serif;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  color: #4d4032;
+}
+
+.member-auth-form input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 13px 15px;
+  border: 1px solid rgba(84, 67, 47, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.95);
+  color: #332b23;
+  font: inherit;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.member-auth-form input:focus {
+  border-color: rgba(70, 101, 124, 0.72);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(70, 101, 124, 0.12);
+}
+
+.member-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 11px;
+  align-items: center;
+  margin-top: 22px;
+}
+
+.member-auth-button,
+.member-auth-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1px solid rgba(70, 101, 124, 0.35);
+  border-radius: 999px;
+  text-decoration: none;
+  font: 500 0.95rem Georgia, serif;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.member-auth-button {
+  background: #46657c;
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(45, 62, 75, 0.16);
+}
+
+.member-auth-link {
+  background: rgba(255, 253, 248, 0.82);
+  color: #46657c;
+}
+
+.member-auth-button:hover,
+.member-auth-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 17px rgba(45, 62, 75, 0.14);
+}
+
+.member-auth-error {
+  margin: 12px 0 0;
+  padding: 11px 14px;
+  border-left: 3px solid #8a6257;
+  border-radius: 6px;
+  background: rgba(138, 98, 87, 0.08);
+  color: #674a42;
+}
+
+.member-auth-note {
+  color: #6b5d4e;
+}
