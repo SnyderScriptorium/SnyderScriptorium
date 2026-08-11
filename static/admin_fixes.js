@@ -2,6 +2,11 @@
 'use strict';
 const EDITOR='.editor';
 const ranges=new WeakMap();
+const FONT_OPTIONS=[
+ ['Cormorant Garamond','Cormorant Garamond'],['Playfair Display','Playfair Display'],['Libre Baskerville','Libre Baskerville'],['Bodoni Moda','Bodoni Moda'],['EB Garamond','EB Garamond'],['Cinzel','Cinzel'],['IM FELL English','IM FELL English'],['UnifrakturMaguntia','UnifrakturMaguntia'],['Italianno','Italianno'],['Great Vibes','Great Vibes'],['Alex Brush','Alex Brush'],['Allura','Allura'],['Lora','Lora'],['Crimson Text','Crimson Text'],['Cormorant Infant','Cormorant Infant'],['Georgia','Georgia'],['Times New Roman','Times New Roman']
+];
+const FONT_SIZES=[8,9,10,11,12,14,16,18,20,22,24,26,28,32,36,48,72];
+function loadEditorFonts(){if(document.getElementById('snyder-editor-fonts'))return;const link=document.createElement('link');link.id='snyder-editor-fonts';link.rel='stylesheet';link.href='https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=Cinzel:wght@400;500;600&family=Comfortaa:wght@400;500&family=Cormorant+Garamond:wght@400;500;600&family=Cormorant+Infant:wght@400;500;600&family=Crimson+Text:wght@400;600&family=EB+Garamond:wght@400;500;600&family=Great+Vibes&family=IM+Fell+English&family=Italianno&family=Lora:wght@400;500;600&family=Libre+Baskerville:wght@400;700&family=Playfair+Display:wght@400;500;600;700&family=UnifrakturMaguntia&display=swap';document.head.appendChild(link)}
 function ed(n){return n&&n.closest?n.closest(EDITOR):null}
 function inside(e){const s=getSelection();return !!(e&&s&&s.rangeCount&&e.contains(s.anchorNode)&&e.contains(s.focusNode))}
 function remember(e){const s=getSelection();if(inside(e))ranges.set(e,s.getRangeAt(0).cloneRange())}
@@ -32,13 +37,15 @@ function colorPicker(e,initial){
  input.addEventListener('change',()=>{const c=input.value;exec(e,'foreColor',c);saveRecentColor(c);render()});
  wrap.appendChild(input);wrap.appendChild(recent);render();return wrap
 }
+function populateFontSelect(font){if(!font||font.dataset.snyderFonts)return;font.dataset.snyderFonts='1';font.innerHTML='';opt(font,'','Font');FONT_OPTIONS.forEach(([value,label])=>{const o=document.createElement('option');o.value=value;o.textContent=label;o.style.fontFamily='"'+value+'",serif';font.appendChild(o)})}
 function enhance(tb){if(!tb||tb.dataset.fixed)return;const e=tb.nextElementSibling&&tb.nextElementSibling.matches(EDITOR)?tb.nextElementSibling:null;if(!e)return;tb.dataset.fixed='1';const ss=tb.querySelectorAll('select'),font=ss[0],sz=ss[1];
-if(sz){sz.innerHTML='';opt(sz,'','Size');[8,9,10,11,12,14,16,18,20,22,24,26,28,32,36,40,44,48,54,60,64].forEach(n=>opt(sz,n,n+'pt'));sz.onmousedown=()=>remember(e);sz.onchange=function(){if(this.value)size(e,+this.value);this.value=''}}
+populateFontSelect(font);
+if(sz){sz.innerHTML='';opt(sz,'','Size');FONT_SIZES.forEach(n=>opt(sz,n,n+'pt'));sz.onmousedown=()=>remember(e);sz.onchange=function(){if(this.value)size(e,+this.value);this.value=''}}
 if(font){font.onmousedown=()=>remember(e);font.onchange=function(){if(this.value)exec(e,'fontName',this.value);this.selectedIndex=0}}
 const colorPickerWrap=colorPicker(e,'#24333B');const d=tb.querySelector('.divider');if(d)tb.insertBefore(colorPickerWrap,d);else tb.appendChild(colorPickerWrap);
 const format=document.createElement('select');format.title='Paragraph / heading style';[['P','Paragraph'],['H1','Heading 1'],['H2','Heading 2'],['H3','Heading 3'],['H4','Heading 4'],['BLOCKQUOTE','Quote']].forEach(a=>opt(format,a[0],a[1]));format.onmousedown=()=>remember(e);format.onchange=function(){if(this.value)exec(e,'formatBlock',this.value);this.value='P'};if(font)tb.insertBefore(format,font);else tb.prepend(format);
 tb.querySelectorAll('button').forEach(b=>b.addEventListener('mousedown',q=>{remember(e);q.preventDefault()}))}
-function enhance(){document.querySelectorAll('.toolbar').forEach(enhance);document.querySelectorAll(EDITOR).forEach(e=>e.contentEditable='true')}
+function enhance(){loadEditorFonts();document.querySelectorAll('.toolbar').forEach(enhance);document.querySelectorAll(EDITOR).forEach(e=>e.contentEditable='true')}
 function resetChapter(){const t=document.getElementById('chapterTitle'),n=document.getElementById('chapterNumber'),e=document.getElementById('chapterEditor'),p=document.getElementById('chapterPublished');if(t)t.value='';if(n)n.value='';if(e)e.innerHTML='';if(p)p.checked=false}
 window.resetManuscriptEditor=resetChapter;
 const PUBLISHED_FILTERS=[['all','All Posts'],['curations','Book Curations'],['reviews','Book Reviews'],['curiosity','Curiosity Cabinet'],['kwsnyderwriting','K. W. Snyder Writing'],['kw_short_stories','Short Stories'],['kw_poems','Poems'],['kw_vignettes','Vignettes']];
