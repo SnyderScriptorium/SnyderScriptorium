@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request, session
 
 from database import get_db
-from paypal_subscriptions import get_subscription
+from paypal_subscriptions import get_subscription, verify_webhook
 
 paypal_member = Blueprint("paypal_member", __name__)
 
@@ -17,6 +17,35 @@ def _iso_or_now(value=None):
 
 def _status_for_member(paypal_status):
     return "active" if paypal_status == "ACTIVE" else "inactive"
+
+
+def _save_subscription(member_id, subscription_id, status, started=None, ends=None):
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM subscriptions WHERE member_id = ? ORDER BY id DESC LIMIT 1",
+            (member_id,),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE subscriptions SET provider = ?, subscription_id = ?, status = ?, date_started = ?, date_ends = ? WHERE id = ?",
+                ("paypal", subscription_id, status, started, ends, existing["id"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO subscriptions(member_id, provider, subscription_id, status, date_started, date_ends) VALUES (?, ?, ?, ?, ?, ?)",
+                (member_id, "paypal", subscription_id, status, started, ends),
+            )
+        conn.execute("UPDATE members SET subscription_status = ? WHERE id = ?", (status, member_id))
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
 
 
 @paypal_member.post("/api/paypal/attach-subscription")
@@ -41,42 +70,10 @@ def attach_subscription():
     if paypal_status not in {"APPROVAL_PENDING", "APPROVED", "ACTIVE", "SUSPENDED", "CANCELLED", "EXPIRED"}:
         return jsonify({"ok": False, "error": "PayPal returned an unexpected subscription status."}), 400
 
-    member_id = session["member_id"]
     status = _status_for_member(paypal_status)
     started = subscription.get("start_time") or subscription.get("create_time") or _iso_or_now()
     ends = (subscription.get("billing_info") or {}).get("next_billing_time")
-
-    conn = get_db()
-    try:
-        existing = conn.execute(
-            "SELECT id FROM subscriptions WHERE member_id = ? ORDER BY id DESC LIMIT 1",
-            (member_id,),
-        ).fetchone()
-
-        if existing:
-            conn.execute(
-                "UPDATE subscriptions SET provider = ?, subscription_id = ?, status = ?, date_started = ?, date_ends = ? WHERE id = ?",
-                ("paypal", subscription_id, status, started, ends, existing["id"]),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO subscriptions(member_id, provider, subscription_id, status, date_started, date_ends) VALUES (?, ?, ?, ?, ?, ?)",
-                (member_id, "paypal", subscription_id, status, started, ends),
-            )
-
-        conn.execute(
-            "UPDATE members SET subscription_status = ? WHERE id = ?",
-            (status, member_id),
-        )
-        conn.commit()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        conn.close()
-        raise
-    conn.close()
+    _save_subscription(session["member_id"], subscription_id, status, started, ends)
 
     return jsonify({
         "ok": True,
@@ -85,6 +82,86 @@ def attach_subscription():
         "memberStatus": status,
         "active": status == "active",
     })
+
+
+@paypal_member.post("/api/paypal/webhook")
+def paypal_webhook():
+    """Receive and verify PayPal subscription lifecycle notifications."""
+    event = request.get_json(silent=True) or {}
+    if not event:
+        return jsonify({"ok": False, "error": "Missing PayPal webhook payload."}), 400
+
+    if not verify_webhook(request.headers, event):
+        return jsonify({"ok": False, "error": "PayPal webhook verification failed."}), 400
+
+    event_type = str(event.get("event_type") or "").strip()
+    resource = event.get("resource") or {}
+    subscription_id = str(
+        resource.get("id")
+        or resource.get("billing_agreement_id")
+        or resource.get("subscription_id")
+        or ""
+    ).strip()
+
+    # Receipt is successful even for event types this integration does not use.
+    if not subscription_id:
+        return jsonify({"ok": True, "handled": False}), 200
+
+    status_map = {
+        "BILLING.SUBSCRIPTION.ACTIVATED": "active",
+        "PAYMENT.SALE.COMPLETED": "active",
+        "BILLING.SUBSCRIPTION.PAYMENT.FAILED": "past_due",
+        "BILLING.SUBSCRIPTION.SUSPENDED": "paused",
+        "BILLING.SUBSCRIPTION.CANCELLED": "cancelled",
+        "BILLING.SUBSCRIPTION.EXPIRED": "expired",
+    }
+
+    if event_type == "BILLING.SUBSCRIPTION.UPDATED":
+        paypal_status = str(resource.get("status") or "").upper()
+        status = _status_for_member(paypal_status)
+        if paypal_status == "SUSPENDED":
+            status = "paused"
+        elif paypal_status == "CANCELLED":
+            status = "cancelled"
+        elif paypal_status == "EXPIRED":
+            status = "expired"
+        elif paypal_status == "ACTIVE":
+            status = "active"
+        elif paypal_status:
+            status = "past_due"
+    else:
+        status = status_map.get(event_type)
+
+    if status is None:
+        return jsonify({"ok": True, "handled": False}), 200
+
+    # Confirm the subscription belongs to this exact Scriptorium plan.
+    try:
+        subscription = get_subscription(subscription_id)
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not retrieve the PayPal subscription."}), 502
+    if subscription.get("plan_id") != PLAN_ID:
+        return jsonify({"ok": True, "handled": False}), 200
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT member_id FROM subscriptions WHERE provider = ? AND subscription_id = ? ORDER BY id DESC LIMIT 1",
+            ("paypal", subscription_id),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        # The webhook may arrive before the browser finishes attach-subscription.
+        # Do not grant access based on an unassociated PayPal subscription.
+        return jsonify({"ok": True, "handled": False, "reason": "subscription_not_attached"}), 200
+
+    started = subscription.get("start_time") or subscription.get("create_time")
+    ends = (subscription.get("billing_info") or {}).get("next_billing_time")
+    _save_subscription(row["member_id"], subscription_id, status, started, ends)
+
+    return jsonify({"ok": True, "handled": True, "event": event_type, "status": status}), 200
 
 
 def register_paypal_member(app):
