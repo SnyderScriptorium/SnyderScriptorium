@@ -42,10 +42,18 @@
     {% else %}
     <div class="member-auth-card" style="margin-top:28px;text-align:center;">
       <p class="member-auth-note">Please sign in or create your member account before starting a subscription.</p>
+      <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
+        <a class="member-auth-button member-auth-link-button" href="{{ url_for('member_login') }}">Sign In</a>
+        <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Account</a>
+      </div>
     </div>
     {% endif %}
 
-    <p style="margin-top:22px"><a href="{{ url_for('static', filename='membership_terms.html') }}">Read the Membership Terms &amp; Conditions</a></p>
+    <div class="membership-terms-notice" style="margin-top:28px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);text-align:left;">
+      <h2 style="margin-top:0;">Before You Subscribe</h2>
+      <p style="margin-bottom:10px;">Please review the Membership Terms &amp; Conditions before completing your subscription.</p>
+      <p style="margin:0"><a href="{{ url_for('static', filename='membership_terms.html') }}">Read the Membership Terms &amp; Conditions</a></p>
+    </div>
   </div>
 </section>
 {% endblock %}
