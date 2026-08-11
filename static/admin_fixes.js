@@ -10,37 +10,11 @@ function focus(e){if(!e)return false;e.contentEditable='true';e.removeAttribute(
 function keep(e,fn){const x=scrollX,y=scrollY,ex=e.scrollLeft,ey=e.scrollTop;fn();scrollTo(x,y);e.scrollLeft=ex;e.scrollTop=ey;requestAnimationFrame(()=>{scrollTo(x,y);e.scrollLeft=ex;e.scrollTop=ey})}
 function block(e){const s=getSelection();if(!inside(e))return null;let n=s.anchorNode;if(n&&n.nodeType===3)n=n.parentElement;return n&&n.closest?(n.closest('p,h1,h2,h3,h4,h5,h6,blockquote,pre,div,li')||e):e}
 function indent(e,out){const b=block(e);if(!b||b===e)return;const cur=parseFloat(b.style.marginLeft)||0;const next=Math.max(0,cur+(out?-2:2));b.style.marginLeft=next?next+'em':''}
-
 document.addEventListener('focusin',e=>{const x=ed(e.target);if(x){x.contentEditable='true';remember(x)}},true);
 document.addEventListener('click',e=>{const x=ed(e.target);if(x){x.contentEditable='true';remember(x)}},true);
 document.addEventListener('selectionchange',()=>document.querySelectorAll(EDITOR).forEach(x=>{if(inside(x))remember(x)}));
-
-document.addEventListener('paste',e=>{
-  const x=ed(e.target);
-  if(!x)return;
-  e.preventDefault();
-  e.stopImmediatePropagation();
-  focus(x);
-  let s=getSelection();
-  let r=(s&&s.rangeCount&&inside(x))?s.getRangeAt(0):null;
-  if(!r){
-    r=document.createRange();
-    r.selectNodeContents(x);
-    r.collapse(false);
-    s=getSelection();
-    s.removeAllRanges();
-    s.addRange(r);
-  }
-  const html=e.clipboardData&&e.clipboardData.getData('text/html');
-  const text=e.clipboardData&&e.clipboardData.getData('text/plain');
-  const value=html||((text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r\n|\r|\n/g,'<br>'));
-  if(!value)return;
-  keep(x,()=>document.execCommand('insertHTML',false,value));
-  remember(x);
-},true);
-
+document.addEventListener('paste',e=>{const x=ed(e.target);if(!x)return;e.preventDefault();e.stopImmediatePropagation();focus(x);let s=getSelection();let r=(s&&s.rangeCount&&inside(x))?s.getRangeAt(0):null;if(!r){r=document.createRange();r.selectNodeContents(x);r.collapse(false);s=getSelection();s.removeAllRanges();s.addRange(r)}const html=e.clipboardData&&e.clipboardData.getData('text/html');const text=e.clipboardData&&e.clipboardData.getData('text/plain');const value=html||((text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r\n|\r|\n/g,'<br>'));if(!value)return;keep(x,()=>document.execCommand('insertHTML',false,value));remember(x)},true);
 document.addEventListener('keydown',e=>{const x=ed(e.target);if(!x)return;if(e.key==='Tab'){e.preventDefault();e.stopImmediatePropagation();focus(x);remember(x);keep(x,()=>indent(x,e.shiftKey));remember(x)}},true);
-
 function exec(e,c,v){focus(e);restore(e);document.execCommand('styleWithCSS',false,true);keep(e,()=>document.execCommand(c,false,v==null?null:v));remember(e)}
 function size(e,pt){focus(e);restore(e);const s=getSelection();if(!s.rangeCount||!inside(e))return;const r=s.getRangeAt(0);keep(e,()=>{const span=document.createElement('span');span.style.fontSize=pt+'pt';if(r.collapsed){span.appendChild(document.createTextNode('\u200b'));r.insertNode(span);const n=document.createRange();n.setStart(span.firstChild,1);n.collapse(true);s.removeAllRanges();s.addRange(n)}else{span.appendChild(r.extractContents());r.insertNode(span);const n=document.createRange();n.selectNodeContents(span);s.removeAllRanges();s.addRange(n)}});remember(e)}
 function opt(s,v,t){const o=document.createElement('option');o.value=v;o.textContent=t;s.appendChild(o)}
@@ -56,119 +30,15 @@ tb.querySelectorAll('button').forEach(b=>b.addEventListener('mousedown',q=>{reme
 function enhance(){document.querySelectorAll('.toolbar').forEach(enhance);document.querySelectorAll(EDITOR).forEach(e=>e.contentEditable='true')}
 function resetChapter(){const t=document.getElementById('chapterTitle'),n=document.getElementById('chapterNumber'),e=document.getElementById('chapterEditor'),p=document.getElementById('chapterPublished');if(t)t.value='';if(n)n.value='';if(e)e.innerHTML='';if(p)p.checked=false}
 window.resetManuscriptEditor=resetChapter;
-
-/* Published-post organization. The existing backend/API remains unchanged; this
-   only makes the long Published Posts screen easier to navigate. */
-const PUBLISHED_FILTERS=[
-  ['all','All Posts'],
-  ['curations','Book Curations'],
-  ['reviews','Book Reviews'],
-  ['curiosity','Curiosity Cabinet'],
-  ['kwsnyderwriting','K. W. Snyder Writing'],
-  ['kw_short_stories','Short Stories'],
-  ['kw_poems','Poems'],
-  ['kw_vignettes','Vignettes']
-];
+const PUBLISHED_FILTERS=[['all','All Posts'],['curations','Book Curations'],['reviews','Book Reviews'],['curiosity','Curiosity Cabinet'],['kwsnyderwriting','K. W. Snyder Writing'],['kw_short_stories','Short Stories'],['kw_poems','Poems'],['kw_vignettes','Vignettes']];
 const PUBLISHED_LABELS={curations:'Book Curations',reviews:'Book Reviews',curiosity:'Curiosity Cabinet',kwsnyderwriting:'Essays',kw_short_stories:'Short Stories',kw_poems:'Poems',kw_vignettes:'Vignettes'};
-let publishedCache=[];
-let activePublishedFilter='all';
+let publishedCache=[];let activePublishedFilter='all';let publishedSearch='';
 function publishedText(value){return String(value==null?'':value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;')}
-function publishedCategoryName(category){return PUBLISHED_LABELS[category]||category_label_fallback(category)}
-function category_label_fallback(category){return ({curations:'Book Curations',reviews:'Book Reviews',curiosity:'Curiosity Cabinet',kwsnyderwriting:'K. W. Snyder Writing',kw_short_stories:'Short Stories',kw_poems:'Poems',kw_vignettes:'Vignettes'})[category]||'Other'}
-function ensurePublishedFilterBar(){
-  const list=document.getElementById('publishedList');
-  if(!list)return null;
-  let bar=document.getElementById('publishedFilterBar');
-  if(!bar){
-    bar=document.createElement('div');
-    bar.id='publishedFilterBar';
-    bar.className='published-filter-bar';
-    list.parentNode.insertBefore(bar,list);
-  }
-  bar.innerHTML=PUBLISHED_FILTERS.map(([key,label])=>`<button type="button" class="published-filter ${key===activePublishedFilter?'active':''}" data-filter="${key}">${publishedText(label)}</button>`).join('');
-  bar.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{activePublishedFilter=btn.dataset.filter;renderPublishedPosts();ensurePublishedFilterBar()}));
-  return bar;
-}
-function renderPublishedPosts(){
-  const list=document.getElementById('publishedList');
-  if(!list)return;
-  const filtered=activePublishedFilter==='all'?publishedCache:publishedCache.filter(p=>p.category===activePublishedFilter);
-  list.innerHTML=filtered.length?'':'<p class="note">No published posts in this category.</p>';
-  filtered.forEach(p=>{
-    const c=document.createElement('div');
-    c.className='card published-card';
-    const preview=(p.content||'').replace(/<[^>]*>/g,'').slice(0,120);
-    c.innerHTML=`<div><h3>${publishedText(p.title)}</h3><small>${publishedText(p.date||'')} · ${publishedText(publishedCategoryName(p.category))} · ${p.accessLevel==='members'?'Members Only':'Public'}</small><p>${publishedText(preview)}${preview.length>=120?'…':''}</p></div><div class="small-actions"><button type="button" class="published-edit-button">Edit</button><button type="button" class="gold published-unpublish-button">Unpublish</button><button type="button" class="danger published-delete-button">Delete</button></div>`;
-    c.querySelector('.published-edit-button').addEventListener('click',()=>window.editPublished(p.id));
-    c.querySelector('.published-unpublish-button').addEventListener('click',()=>window.unpublish(p.id));
-    c.querySelector('.published-delete-button').addEventListener('click',()=>window.deletePublished(p.id));
-    list.appendChild(c);
-  });
-}
-window.loadPublished=async function(){
-  const list=document.getElementById('publishedList');
-  if(!list)return;
-  list.innerHTML='Loading...';
-  try{
-    publishedCache=await api(urls.published);
-    activePublishedFilter='all';
-    ensurePublishedFilterBar();
-    renderPublishedPosts();
-  }catch(e){list.innerHTML=`<p class="note">${publishedText(e.message)}</p>`}
-};
-
-/* Make a loaded published post explicitly editable and preserve its selected
-   category/subcategory when moving it to another section. */
-window.editPublished=async function(id){
-  try{
-    const p=await api(`/api/published/${id}`);
-    window.editingPostId=id;
-    editingPostId=id;
-    editingDraftId=null;
-    $("postTitle").value=p.title||'';
-    setPostCategory(p.category||'curations');
-    syncAccess();
-    $("postAccess").value=p.accessLevel||'public';
-    const editor=$("postEditor");
-    editor.contentEditable='true';
-    editor.removeAttribute('readonly');
-    editor.removeAttribute('disabled');
-    editor.innerHTML=p.content||'';
-    editor.focus({preventScroll:true});
-    const range=document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    const selection=getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    remember(editor);
-    $("publishButton").textContent='Update Published Post';
-    $("publishButton").onclick=updatePublished;
-    switchTab('write');
-    setTimeout(()=>{editor.contentEditable='true';editor.focus({preventScroll:true})},50);
-    showStatus('Published post loaded for editing. You can change its category and content before updating.');
-  }catch(e){showStatus(e.message,true)}
-};
-
-const style=document.createElement('style');
-style.textContent=`
-html{scrollbar-gutter:stable;overflow-x:hidden;overflow-anchor:none}
-body{overflow-x:hidden;overflow-anchor:none}
-.shell,.panel,.tabs,section{overflow-anchor:none}
-.editor{overscroll-behavior:contain;overflow-anchor:none}
-.toolbar{overflow-anchor:none}
-.editor-font-color,.list-number-color{width:34px!important;height:30px!important;padding:2px!important;border:1px solid var(--line);border-radius:4px;background:var(--paper);cursor:pointer;vertical-align:middle}
-.published-filter-bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px;background:#EFE7D8;border:1px solid var(--line);border-radius:7px;margin-top:15px}
-.published-filter{background:var(--paper);color:var(--brown);border:1px solid var(--line);padding:7px 11px}
-.published-filter.active{background:var(--brown);color:#fff}
-.published-card{align-items:flex-start}
-.published-card p{margin:.45rem 0 0;color:var(--muted)}
-.editor ol{--marker-size:inherit;--marker-color:inherit}
-.editor ol::marker{font-size:var(--marker-size);color:var(--marker-color)}
-`;
-document.head.appendChild(style);
-
-document.addEventListener('DOMContentLoaded',enhance);
-window.addEventListener('load',()=>{enhance();if(document.getElementById('publishedList'))ensurePublishedFilterBar()});
-setTimeout(enhance,500);
+function publishedCategoryName(category){return PUBLISHED_LABELS[category]||'Other'}
+function ensurePublishedFilterBar(){const list=document.getElementById('publishedList');if(!list)return null;let bar=document.getElementById('publishedFilterBar');if(!bar){bar=document.createElement('div');bar.id='publishedFilterBar';bar.className='published-filter-bar';list.parentNode.insertBefore(bar,list)}bar.innerHTML=`<input id="publishedSearch" class="published-search" type="search" placeholder="Search published posts by title or content..." value="${publishedText(publishedSearch)}"><div class="published-filter-buttons">${PUBLISHED_FILTERS.map(([key,label])=>`<button type="button" class="published-filter ${key===activePublishedFilter?'active':''}" data-filter="${key}">${publishedText(label)}</button>`).join('')}</div>`;const search=document.getElementById('publishedSearch');if(search){search.addEventListener('input',()=>{publishedSearch=search.value;renderPublishedPosts()})}bar.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{activePublishedFilter=btn.dataset.filter;renderPublishedPosts();ensurePublishedFilterBar()}));return bar}
+function renderPublishedPosts(){const list=document.getElementById('publishedList');if(!list)return;const q=publishedSearch.trim().toLowerCase();const filtered=publishedCache.filter(p=>{const categoryOk=activePublishedFilter==='all'||p.category===activePublishedFilter;const hay=[p.title,p.content,p.category,p.date].map(v=>String(v==null?'':v).toLowerCase()).join(' ');return categoryOk&&(!q||hay.includes(q))});list.innerHTML=filtered.length?'':'<p class="note">No published posts match your search.</p>';filtered.forEach(p=>{const c=document.createElement('div');c.className='card published-card';const preview=(p.content||'').replace(/<[^>]*>/g,'').slice(0,120);c.innerHTML=`<div><h3>${publishedText(p.title)}</h3><small>${publishedText(p.date||'')} · ${publishedText(publishedCategoryName(p.category))} · ${p.accessLevel==='members'?'Members Only':'Public'}</small><p>${publishedText(preview)}${preview.length>=120?'…':''}</p></div><div class="small-actions"><button type="button" class="published-edit-button">Edit</button><button type="button" class="gold published-unpublish-button">Unpublish</button><button type="button" class="danger published-delete-button">Delete</button></div>`;c.querySelector('.published-edit-button').addEventListener('click',()=>window.editPublished(p.id));c.querySelector('.published-unpublish-button').addEventListener('click',()=>window.unpublish(p.id));c.querySelector('.published-delete-button').addEventListener('click',()=>window.deletePublished(p.id));list.appendChild(c)})}
+window.loadPublished=async function(){const list=document.getElementById('publishedList');if(!list)return;list.innerHTML='Loading...';try{publishedCache=await api(urls.published);activePublishedFilter='all';publishedSearch='';ensurePublishedFilterBar();renderPublishedPosts()}catch(e){list.innerHTML=`<p class="note">${publishedText(e.message)}</p>`}};
+window.editPublished=async function(id){try{const p=await api(`/api/published/${id}`);window.editingPostId=id;editingPostId=id;editingDraftId=null;$("postTitle").value=p.title||'';setPostCategory(p.category||'curations');syncAccess();$("postAccess").value=p.accessLevel||'public';const editor=$("postEditor");editor.contentEditable='true';editor.removeAttribute('readonly');editor.removeAttribute('disabled');editor.innerHTML=p.content||'';editor.focus({preventScroll:true});const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);remember(editor);$("publishButton").textContent='Update Published Post';$("publishButton").onclick=updatePublished;switchTab('write');setTimeout(()=>{editor.contentEditable='true';editor.focus({preventScroll:true})},50);showStatus('Published post loaded for editing. You can change its category and content before updating.')}catch(e){showStatus(e.message,true)}};
+const style=document.createElement('style');style.textContent=`html{scrollbar-gutter:stable;overflow-x:hidden;overflow-anchor:none}body{overflow-x:hidden;overflow-anchor:none}.shell,.panel,.tabs,section{overflow-anchor:none}.editor{overscroll-behavior:contain;overflow-anchor:none}.toolbar{overflow-anchor:none}.editor-font-color,.list-number-color{width:34px!important;height:30px!important;padding:2px!important;border:1px solid var(--line);border-radius:4px;background:var(--paper);cursor:pointer;vertical-align:middle}.published-filter-bar{display:grid;gap:10px;padding:12px;background:#EFE7D8;border:1px solid var(--line);border-radius:7px;margin-top:15px}.published-search{width:100%;font-family:inherit;font-size:1rem}.published-filter-buttons{display:flex;flex-wrap:wrap;gap:8px}.published-filter{background:var(--paper);color:var(--brown);border:1px solid var(--line);padding:7px 11px}.published-filter.active{background:var(--brown);color:#fff}.published-card{align-items:flex-start}.published-card p{margin:.45rem 0 0;color:var(--muted)}.editor ol{--marker-size:inherit;--marker-color:inherit}.editor ol::marker{font-size:var(--marker-size);color:var(--marker-color)}`;document.head.appendChild(style);
+document.addEventListener('DOMContentLoaded',enhance);window.addEventListener('load',()=>{enhance();if(document.getElementById('publishedList'))ensurePublishedFilterBar()});setTimeout(enhance,500);
 })();
