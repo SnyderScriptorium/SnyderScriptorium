@@ -24,13 +24,90 @@
     </div>
   </div>
   {% endif %}
+
   <div id="membership-subscribe" class="content-section" style="margin-top:28px;text-align:left;">
     <h2>What Membership Includes</h2>
     <p>Your subscription opens the private K. W. Snyder Writing library, including my shorter literary work and my novels as I make them available.</p>
     <p>The library is organized into <strong>Writing, Short Stories, Poems, Vignettes, and Novels</strong>. Novels have their own book pages and chapter-by-chapter reading experience.</p>
     <p>There is <strong>no fixed posting schedule</strong>. Writing does not always arrive on a predictable timetable, but I will be working toward sharing <strong>new writing at least once a month</strong>.</p>
     <p>This is a place for readers who want to follow my writing beyond the public blog and spend some time in the private room behind the writing desk.</p>
+
+    {% if session.get('member_logged_in') %}
+    <div class="member-auth-card" style="margin-top:28px;text-align:center;">
+      <h2>Membership Subscription</h2>
+      <p class="member-auth-note">Continue securely through PayPal Sandbox to start your membership.</p>
+      <div id="paypal-button-container" style="max-width:420px;margin:20px auto 0;"></div>
+      <p id="paypal-status" class="member-auth-note" style="margin-top:15px;" aria-live="polite"></p>
+    </div>
+    {% else %}
+    <div class="member-auth-card" style="margin-top:28px;text-align:center;">
+      <p class="member-auth-note">Please sign in or create your member account before starting a subscription.</p>
+    </div>
+    {% endif %}
+
     <p style="margin-top:22px"><a href="{{ url_for('static', filename='membership_terms.html') }}">Read the Membership Terms &amp; Conditions</a></p>
   </div>
 </section>
+{% endblock %}
+{% block scripts %}
+{% if session.get('member_logged_in') and config.PAYPAL_CLIENT_ID %}
+<script src="https://www.paypal.com/sdk/js?client-id={{ config.PAYPAL_CLIENT_ID|urlencode }}&components=buttons&vault=true&intent=subscription"></script>
+<script>
+(function () {
+  const container = document.getElementById('paypal-button-container');
+  const status = document.getElementById('paypal-status');
+  if (!container || !window.paypal) return;
+
+  function setStatus(message, error) {
+    if (!status) return;
+    status.textContent = message;
+    status.style.fontWeight = error ? '600' : '400';
+  }
+
+  paypal.Buttons({
+    style: {
+      shape: 'pill',
+      layout: 'vertical',
+      color: 'blue',
+      label: 'subscribe',
+      height: 48
+    },
+    createSubscription: function (data, actions) {
+      return actions.subscription.create({
+        plan_id: '{{ config.PAYPAL_PLAN_ID }}'
+      });
+    },
+    onApprove: async function (data) {
+      setStatus('PayPal approved the subscription. Verifying it with the Scriptorium…');
+      try {
+        const response = await fetch('{{ url_for("paypal_member.attach_subscription") }}', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({subscriptionID: data.subscriptionID})
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || 'The Scriptorium could not verify the PayPal subscription.');
+        }
+        if (result.active) {
+          setStatus('Subscription verified. Opening your private writing room…');
+          window.location.href = '{{ url_for("kwsnyderwriting") }}';
+        } else {
+          setStatus('Your PayPal subscription was recorded and is awaiting activation. Please refresh shortly.');
+        }
+      } catch (error) {
+        setStatus(error.message || 'We could not finish verifying the subscription. Please try again.', true);
+      }
+    },
+    onCancel: function () {
+      setStatus('Subscription checkout was cancelled. Your account has not been changed.');
+    },
+    onError: function () {
+      setStatus('PayPal could not complete the subscription checkout. Please try again.', true);
+    }
+  }).render('#paypal-button-container');
+})();
+</script>
+{% endif %}
 {% endblock %}
