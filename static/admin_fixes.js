@@ -15,18 +15,12 @@
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Tab') return;
     const editor = event.target && event.target.closest
-      ? event.target.closest('[contenteditable="true"]')
-      : null;
+      ? event.target.closest('[contenteditable="true"]') : null;
     if (!editor) return;
     event.preventDefault();
     event.stopPropagation();
     editor.focus();
     document.execCommand(event.shiftKey ? 'outdent' : 'indent', false, null);
-  }, true);
-
-  document.addEventListener('mousedown', function (event) {
-    const control = event.target.closest && event.target.closest('.toolbar button, .toolbar select, .toolbar input');
-    if (control && control.tagName === 'BUTTON') event.preventDefault();
   }, true);
 
   const style = document.createElement('style');
@@ -49,46 +43,35 @@
   `;
   document.head.appendChild(style);
 
-  function editableEditors() {
-    return Array.from(document.querySelectorAll('.editor[contenteditable="true"]'));
-  }
-
   function selectionIn(editor) {
     const sel = window.getSelection();
     return !!(sel && sel.rangeCount && editor.contains(sel.anchorNode));
   }
 
-  function focusEditor(editor) {
+  function execIn(editor, command, value) {
     if (!editor) return;
     editor.focus();
-  }
-
-  function execIn(editor, command, value) {
-    focusEditor(editor);
     document.execCommand('styleWithCSS', false, true);
     document.execCommand(command, false, value == null ? null : value);
   }
 
   function applyExactFontSize(editor, pt) {
-    if (!editor) return;
-    focusEditor(editor);
+    if (!editor || !selectionIn(editor)) return;
+    editor.focus();
     const sel = window.getSelection();
-    if (!sel || !sel.rangeCount || !selectionIn(editor)) return;
     const range = sel.getRangeAt(0);
-    if (range.collapsed) {
-      const span = document.createElement('span');
-      span.style.fontSize = `${pt}pt`;
-      span.appendChild(document.createTextNode('\u200b'));
-      range.insertNode(span);
-      const newRange = document.createRange();
-      newRange.setStart(span.firstChild, 1);
-      newRange.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(newRange);
-      return;
-    }
     const span = document.createElement('span');
     span.style.fontSize = `${pt}pt`;
+    if (range.collapsed) {
+      span.appendChild(document.createTextNode('\u200b'));
+      range.insertNode(span);
+      const caret = document.createRange();
+      caret.setStart(span.firstChild, 1);
+      caret.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(caret);
+      return;
+    }
     try {
       range.surroundContents(span);
     } catch (_) {
@@ -97,9 +80,9 @@
       range.insertNode(span);
     }
     sel.removeAllRanges();
-    const newRange = document.createRange();
-    newRange.selectNodeContents(span);
-    sel.addRange(newRange);
+    const selected = document.createRange();
+    selected.selectNodeContents(span);
+    sel.addRange(selected);
   }
 
   function addOption(select, value, label) {
@@ -112,8 +95,7 @@
   function installToolbar(toolbar) {
     if (!toolbar || toolbar.dataset.enhanced === '1') return;
     toolbar.dataset.enhanced = '1';
-    const editor = toolbar.nextElementSibling && toolbar.nextElementSibling.matches('.editor')
-      ? toolbar.nextElementSibling : null;
+    const editor = toolbar.nextElementSibling && toolbar.nextElementSibling.matches('.editor') ? toolbar.nextElementSibling : null;
     if (!editor) return;
 
     const selects = toolbar.querySelectorAll('select');
@@ -123,7 +105,8 @@
     if (sizeSelect) {
       sizeSelect.innerHTML = '';
       addOption(sizeSelect, '', 'Size');
-      for (let pt = 8; pt <= 64; pt += 2) addOption(sizeSelect, String(pt), `${pt}pt`);
+      // A practical Word-style progression, extended to 64pt.
+      [8,9,10,11,12,14,16,18,20,22,24,26,28,32,36,40,44,48,54,60,64].forEach(pt => addOption(sizeSelect, String(pt), `${pt}pt`));
       sizeSelect.value = '';
       sizeSelect.onchange = function () {
         if (this.value) applyExactFontSize(editor, Number(this.value));
@@ -146,8 +129,7 @@
     color.title = 'Font color';
     color.setAttribute('aria-label', 'Font color');
     color.addEventListener('change', function () { execIn(editor, 'foreColor', this.value); });
-    if (firstDivider) toolbar.insertBefore(color, firstDivider);
-    else toolbar.appendChild(color);
+    if (firstDivider) toolbar.insertBefore(color, firstDivider); else toolbar.appendChild(color);
 
     const format = document.createElement('select');
     format.title = 'Paragraph / heading style';
@@ -157,10 +139,8 @@
       if (this.value) execIn(editor, 'formatBlock', this.value);
       this.value = 'P';
     });
-    if (fontSelect) toolbar.insertBefore(format, fontSelect);
-    else toolbar.prepend(format);
+    if (fontSelect) toolbar.insertBefore(format, fontSelect); else toolbar.prepend(format);
 
-    // Keep list buttons from accidentally changing focus before the selection is used.
     toolbar.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
     });
@@ -170,18 +150,6 @@
     document.querySelectorAll('.toolbar').forEach(installToolbar);
   }
 
-  function publishedCategoryLabel(category) {
-    return {
-      curations: 'Book Curations',
-      reviews: 'Book Reviews',
-      curiosity: 'Curiosity Cabinet',
-      kw_short_stories: 'K. W. Snyder Writing — Short Stories',
-      kw_poems: 'K. W. Snyder Writing — Poems',
-      kw_vignettes: 'K. W. Snyder Writing — Vignettes',
-      kwsnyderwriting: 'K. W. Snyder Writing — Essays'
-    }[category] || 'Other';
-  }
-
   function organizePublishedPosts() {
     const list = document.getElementById('publishedList');
     const section = document.getElementById('published');
@@ -189,16 +157,10 @@
     const cards = Array.from(list.children).filter(el => el.classList.contains('card'));
     if (!cards.length) return;
 
+    const labels = ['Book Curations','Book Reviews','Curiosity Cabinet','K. W. Snyder Writing — Essays','K. W. Snyder Writing — Short Stories','K. W. Snyder Writing — Poems','K. W. Snyder Writing — Vignettes'];
     cards.forEach(card => {
-      const small = card.querySelector('small');
-      const text = small ? small.textContent : '';
-      let category = 'Other';
-      Object.values({
-        curations: 'Book Curations', reviews: 'Book Reviews', curiosity: 'Curiosity Cabinet',
-        kw_short_stories: 'K. W. Snyder Writing — Short Stories', kw_poems: 'K. W. Snyder Writing — Poems',
-        kw_vignettes: 'K. W. Snyder Writing — Vignettes', kwsnyderwriting: 'K. W. Snyder Writing — Essays'
-      }).forEach(label => { if (text.includes(label)) category = label; });
-      card.dataset.category = category;
+      const text = card.querySelector('small')?.textContent || '';
+      card.dataset.category = labels.find(label => text.includes(label)) || 'Other';
     });
 
     let bar = section.querySelector('.published-filter-bar');
@@ -209,11 +171,11 @@
     }
     bar.innerHTML = '';
     const counts = {};
-    cards.forEach(c => { counts[c.dataset.category] = (counts[c.dataset.category] || 0) + 1; });
-    const categories = ['All Posts','Book Curations','Book Reviews','Curiosity Cabinet','K. W. Snyder Writing — Essays','K. W. Snyder Writing — Short Stories','K. W. Snyder Writing — Poems','K. W. Snyder Writing — Vignettes'];
+    cards.forEach(card => { counts[card.dataset.category] = (counts[card.dataset.category] || 0) + 1; });
+    const categories = ['All Posts', ...labels];
     const show = category => {
-      cards.forEach(card => { card.style.display = (category === 'All Posts' || card.dataset.category === category) ? '' : 'none'; });
-      bar.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.category === category));
+      cards.forEach(card => { card.style.display = category === 'All Posts' || card.dataset.category === category ? '' : 'none'; });
+      bar.querySelectorAll('button').forEach(button => button.classList.toggle('active', button.dataset.category === category));
     };
     categories.forEach(category => {
       const button = document.createElement('button');
@@ -254,8 +216,7 @@
   });
 
   window.addEventListener('load', function () {
-    if (typeof window.saveChapter !== 'function') return;
-    if (window.saveChapter.__resetWrapped) return;
+    if (typeof window.saveChapter !== 'function' || window.saveChapter.__resetWrapped) return;
     const originalSaveChapter = window.saveChapter;
     const wrappedSave = async function () {
       const result = await originalSaveChapter.apply(this, arguments);
