@@ -1,14 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Create Member Account — K. W. Snyder Writing{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='member_auth.css') }}">
+{% endblock %}
 {% block content %}
-<section class="content-section" style="max-width:560px;margin:0 auto;">
+<section class="content-section member-auth-section">
   <h1>Create Member Account</h1>
-  <p class="private-label">Account creation is separate from subscription activation.</p>
-  {% if error %}<p class="private-label">{{ error }}</p>{% endif %}
-  <form method="POST">
-    <label>Email</label><input type="email" name="email" required>
-    <label>Password</label><input type="password" name="password" minlength="8" required>
-    <div class="actions"><button type="submit">Create Account</button><a class="blog-block" style="display:inline-block;padding:10px 15px;" href="{{ url_for('kwsnyderwriting_membership') }}">Back</a></div>
-  </form>
+  <p class="member-auth-note">Create your reader account first. Subscription activation is handled separately through PayPal.</p>
+  {% if error %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
+  <div class="member-auth-card">
+    <form class="member-auth-form" method="POST" action="{{ url_for('member_signup') }}" autocomplete="on">
+      <label for="member-email">Email</label>
+      <input id="member-email" type="email" name="email" autocomplete="email" required>
+      <label for="member-password">Password</label>
+      <input id="member-password" type="password" name="password" minlength="8" autocomplete="new-password" required>
+      <div class="member-auth-actions">
+        <button class="member-auth-button" type="submit">Create Account</button>
+        <a class="member-auth-link" href="{{ url_for('kwsnyderwriting_membership') }}">Back</a>
+      </div>
+    </form>
+  </div>
 </section>
 {% endblock %}
