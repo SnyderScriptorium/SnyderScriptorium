@@ -2,3 +2,4 @@ Flask==3.0.2
 gunicorn==21.2.0
 stripe==12.5.0
 psycopg[binary]==3.2.10
+requests==2.32.4
