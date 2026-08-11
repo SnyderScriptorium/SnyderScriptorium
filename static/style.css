@@ -88,6 +88,42 @@ body {
 .content-section { margin-top: 24px; }
 .content-section h2 { color: #5C4033; font-weight: 500; }
 
+.page-section { width: 100%; }
+.page-header { text-align: center; margin-bottom: 30px; }
+.page-header h1 { color: #24333B; font-weight: 500; margin: 0 0 10px; }
+.page-header p { max-width: 720px; margin: 0 auto; }
+
+.store-page .page-header h1 { color: #24333B; }
+.store-coming-soon {
+    max-width: 720px;
+    margin: 30px auto 10px;
+    padding: 46px 40px;
+    text-align: center;
+    background: #FFFDF8;
+    border: 1px solid #C9B78F;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.06);
+}
+.store-icon {
+    color: #8A6A4A;
+    font-size: 2rem;
+    line-height: 1;
+    margin-bottom: 12px;
+}
+.store-coming-soon h2 {
+    margin: 0 0 12px;
+    color: #5C4033;
+    font-weight: 500;
+    font-size: 2rem;
+}
+.store-coming-soon p { max-width: 620px; margin: 0 auto 12px; }
+.store-coming-soon .store-note {
+    margin-top: 18px;
+    color: #6F6257;
+    font-style: italic;
+    font-size: .95rem;
+}
+
 .hearth-intro { text-align: center; }
 .hearth-intro h2 { color: #5C4033; font-weight: 400; }
 .home-image-container { margin: 28px 0; text-align: center; }
@@ -126,4 +162,5 @@ body {
     .site-navigation ul { justify-content: center; margin-top: 4px; gap: 10px 18px; }
     .site-navigation a { font-size: 1.18rem; }
     .site-main { width: min(100% - 20px, 950px); padding: 22px 18px; margin-top: 30px; }
+    .store-coming-soon { padding: 34px 22px; }
 }
