@@ -4,3 +4,5 @@ def post_worker_init(worker):
     register_paypal_member(app)
     from member_auth_guard import register_member_auth_guard
     register_member_auth_guard(app)
+    from admin_auth_guard import register_admin_auth_guard
+    register_admin_auth_guard(app)
