@@ -23,7 +23,7 @@ app.config.update(
 )
 
 # Changing this value invalidates any older admin session immediately.
-ADMIN_AUTH_VERSION = "2026-08-10-2"
+ADMIN_AUTH_VERSION = "2026-08-10-3"
 
 
 def get_db():
@@ -264,8 +264,11 @@ def member_login():
         member = conn.execute("SELECT * FROM members WHERE email = ?", (email,)).fetchone()
         conn.close()
         if member and check_password_hash(member["password_hash"], password):
+            session.clear()
+            session.permanent = False
             session["member_logged_in"] = True
             session["member_id"] = member["id"]
+            session["member_reauth_ok"] = True
             if member["subscription_status"] == "active":
                 return redirect(url_for("kwsnyderwriting"))
             return redirect(url_for("kwsnyderwriting_membership"))
@@ -294,8 +297,7 @@ def member_signup():
 
 @app.route("/kwsnyderwriting/logout")
 def member_logout():
-    session.pop("member_logged_in", None)
-    session.pop("member_id", None)
+    session.clear()
     return redirect(url_for("kwsnyderwriting_membership"))
 
 
@@ -305,8 +307,19 @@ def membership_terms():
 
 
 @app.route("/kwsnyderwriting")
-@member_required
-def kwsnyderwriting():
+def kwsnyderwriting_entry():
+    # Every visit to the K. W. Snyder Writing entry point requires a fresh login.
+    # This deliberately prevents an old browser session from silently granting access.
+    if session.get("member_reauth_ok") is not True:
+        session.clear()
+        return redirect(url_for("member_login"))
+    session.pop("member_reauth_ok", None)
+    if not member_has_access():
+        return redirect(url_for("kwsnyderwriting_membership"))
+    return kwsnyderwriting_content()
+
+
+def kwsnyderwriting_content():
     conn = get_db()
     posts = conn.execute("""
         SELECT * FROM published_posts
@@ -393,7 +406,6 @@ def view_chapter(book_id, chapter_id):
     return render_template("blog_templates/chapter.html", book=book, chapter=chapter, previous=prev_chapter, next=next_chapter)
 
 
-
 @app.route("/kwsnyderwriting/novel/<int:book_id>/chapter/<int:chapter_id>/feedback", methods=["POST"])
 @member_required
 def submit_reader_feedback(book_id, chapter_id):
@@ -450,7 +462,10 @@ def merch_shop():
 
 @app.route("/admin")
 def admin_dashboard():
-    # Never expose the control panel to an unauthenticated request.
+    if session.pop("admin_reauth_ok", False) is not True:
+        session.pop("admin_logged_in", None)
+        session.pop("admin_auth_version", None)
+        return render_template("admin.html", logged_in=False)
     if not require_admin():
         session.pop("admin_logged_in", None)
         session.pop("admin_auth_version", None)
@@ -461,28 +476,17 @@ def admin_dashboard():
 @app.route("/admin/login", methods=["POST"])
 def admin_login():
     password = request.form.get("password", "")
-    configured_password = os.environ.get("ADMIN_PASSWORD", "")
-    configured_password = configured_password.strip()
-
+    configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
     if not configured_password:
-        return render_template(
-            "admin.html",
-            logged_in=False,
-            login_error="Admin password is not configured on the server."
-        )
-
+        return render_template("admin.html", logged_in=False, login_error="Admin password is not configured on the server.")
     if password == configured_password:
         session.clear()
         session.permanent = False
         session["admin_logged_in"] = True
         session["admin_auth_version"] = ADMIN_AUTH_VERSION
+        session["admin_reauth_ok"] = True
         return redirect(url_for("admin_dashboard"))
-
-    return render_template(
-        "admin.html",
-        logged_in=False,
-        login_error="The admin password was not recognized."
-    )
+    return render_template("admin.html", logged_in=False, login_error="The admin password was not recognized.")
 
 
 @app.route("/admin/logout")
@@ -538,7 +542,6 @@ def update_inbox_message(message_id):
 @admin_required
 def get_analytics():
     from datetime import timedelta, timezone
-
     period = request.args.get("period", "30")
     now = datetime.now(timezone.utc)
     if period == "all":
@@ -549,34 +552,20 @@ def get_analytics():
         except (TypeError, ValueError):
             days = 30
         start = now - timedelta(days=days)
-
     conn = get_db()
     if start is None:
         total = conn.execute("SELECT COUNT(*) AS count FROM page_views").fetchone()["count"]
         daily = conn.execute("SELECT DATE(viewed_at) AS day, COUNT(*) AS views FROM page_views GROUP BY DATE(viewed_at) ORDER BY day").fetchall()
         categories = conn.execute("SELECT category, COUNT(*) AS views FROM page_views WHERE category IS NOT NULL GROUP BY category ORDER BY views DESC").fetchall()
-        posts = conn.execute("""SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views
-            FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id
-            WHERE pv.page_type IN ('post', 'member_post', 'chapter', 'novel')
-            GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC""").fetchall()
+        posts = conn.execute("""SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC""").fetchall()
     else:
         stamp = start.isoformat()
         total = conn.execute("SELECT COUNT(*) AS count FROM page_views WHERE viewed_at >= ?", (stamp,)).fetchone()["count"]
         daily = conn.execute("SELECT DATE(viewed_at) AS day, COUNT(*) AS views FROM page_views WHERE viewed_at >= ? GROUP BY DATE(viewed_at) ORDER BY day", (stamp,)).fetchall()
         categories = conn.execute("SELECT category, COUNT(*) AS views FROM page_views WHERE category IS NOT NULL AND viewed_at >= ? GROUP BY category ORDER BY views DESC", (stamp,)).fetchall()
-        posts = conn.execute("""SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views
-            FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id
-            WHERE pv.viewed_at >= ? AND pv.page_type IN ('post', 'member_post', 'chapter', 'novel')
-            GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC""", (stamp,)).fetchall()
+        posts = conn.execute("""SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.viewed_at >= ? AND pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC""", (stamp,)).fetchall()
     conn.close()
-
-    return jsonify({
-        "period": period,
-        "total_views": total,
-        "daily": [dict(row) for row in daily],
-        "categories": [dict(row) for row in categories],
-        "posts": [dict(row) for row in posts],
-    })
+    return jsonify({"period": period, "total_views": total, "daily": [dict(row) for row in daily], "categories": [dict(row) for row in categories], "posts": [dict(row) for row in posts]})
 
 
 @app.route("/api/drafts", methods=["GET"])
@@ -624,7 +613,7 @@ def update_draft(draft_id):
     if not row:
         conn.close()
         return jsonify({"error": "Draft not found"}), 404
-    conn.execute("UPDATE drafts SET title = ?, category = ?, content = ? WHERE id = ?", (str(data.get("title", "Untitled Draft")).strip() or "Untitled Draft", str(data.get("category", "curations")), str(data.get("content", "")), draft_id))
+    conn.execute("UPDATE drafts SET title = ?, category = ?, content = ?, date_created = ? WHERE id = ?", (str(data.get("title", "Untitled Draft")).strip() or "Untitled Draft", str(data.get("category", "curations")).strip(), str(data.get("content", "")), str(data.get("date", "")).strip() or now_string(), draft_id))
     conn.commit()
     conn.close()
     return jsonify({"success": True})
@@ -644,43 +633,38 @@ def delete_draft(draft_id):
 
 @app.route("/api/published", methods=["GET"])
 @admin_required
-def get_published_posts():
+def get_published():
     conn = get_db()
-    rows = conn.execute("SELECT id, title, category, category_name AS categoryName, content, date_published AS date, access_level AS accessLevel FROM published_posts ORDER BY id DESC").fetchall()
+    rows = conn.execute("SELECT id, title, category, category_name, content, date_published AS date, access_level FROM published_posts ORDER BY id DESC").fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
 
 @app.route("/api/published", methods=["POST"])
 @admin_required
-def create_published_post():
+def create_published():
     data = request.get_json() or {}
-    title = str(data.get("title", "")).strip()
-    category = str(data.get("category", "")).strip()
+    title = str(data.get("title", "Untitled Post")).strip() or "Untitled Post"
+    category = str(data.get("category", "curations")).strip()
     content = str(data.get("content", ""))
-    access = str(data.get("accessLevel", "public"))
-    if not title or not content.strip():
-        return jsonify({"error": "A title and content are required."}), 400
-    if category == "kwsnyderwriting" or category.startswith("kw_"):
-        access = "members"
-    if access not in {"public", "members"}:
-        access = "public"
+    date_published = str(data.get("date", "")).strip() or now_string()
+    access = "members" if category in {"kwsnyderwriting", "kw_short_stories", "kw_poems", "kw_vignettes"} else "public"
     conn = get_db()
-    cur = conn.execute("INSERT INTO published_posts(title, category, category_name, content, date_published, access_level) VALUES (?, ?, ?, ?, ?, ?)", (title, category, category_label(category), content, str(data.get("date", "")).strip() or now_string(), access))
+    cur = conn.execute("INSERT INTO published_posts(title, category, category_name, content, date_published, access_level) VALUES (?, ?, ?, ?, ?, ?)", (title, category, category_label(category), content, date_published, access))
     conn.commit()
     post_id = cur.lastrowid
     conn.close()
-    return jsonify({"success": True, "id": post_id, "access_level": access}), 201
+    return jsonify({"success": True, "id": post_id}), 201
 
 
 @app.route("/api/published/<int:post_id>", methods=["GET"])
 @admin_required
 def get_published_post(post_id):
     conn = get_db()
-    row = conn.execute("SELECT id, title, category, category_name AS categoryName, content, date_published AS date, access_level AS accessLevel FROM published_posts WHERE id = ?", (post_id,)).fetchone()
+    row = conn.execute("SELECT id, title, category, category_name, content, date_published AS date, access_level FROM published_posts WHERE id = ?", (post_id,)).fetchone()
     conn.close()
     if not row:
-        return jsonify({"error": "Post not found"}), 404
+        return jsonify({"error": "Published post not found"}), 404
     return jsonify(dict(row))
 
 
@@ -688,16 +672,10 @@ def get_published_post(post_id):
 @admin_required
 def update_published_post(post_id):
     data = request.get_json() or {}
-    title = str(data.get("title", "")).strip()
-    category = str(data.get("category", "")).strip()
+    title = str(data.get("title", "Untitled Post")).strip() or "Untitled Post"
+    category = str(data.get("category", "curations")).strip()
     content = str(data.get("content", ""))
-    access = str(data.get("accessLevel", "public"))
-    if not title or not content.strip():
-        return jsonify({"error": "A title and content are required."}), 400
-    if category == "kwsnyderwriting" or category.startswith("kw_"):
-        access = "members"
-    if access not in {"public", "members"}:
-        access = "public"
+    access = "members" if category in {"kwsnyderwriting", "kw_short_stories", "kw_poems", "kw_vignettes"} else "public"
     conn = get_db()
     row = conn.execute("SELECT id FROM published_posts WHERE id = ?", (post_id,)).fetchone()
     if not row:
@@ -741,13 +719,7 @@ def unpublish_post(post_id):
 def get_manuscripts():
     conn = get_db()
     books = conn.execute("""
-        SELECT b.id, b.title, b.description,
-               COUNT(c.id) AS chapter_count,
-               SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count
-        FROM manuscript_books b
-        LEFT JOIN manuscript_chapters c ON c.book_id = b.id
-        GROUP BY b.id
-        ORDER BY b.id DESC
+        SELECT b.id, b.title, b.description, COUNT(c.id) AS chapter_count, SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id GROUP BY b.id ORDER BY b.id DESC
     """).fetchall()
     conn.close()
     return jsonify({"books": [dict(row) for row in books]})
@@ -777,6 +749,7 @@ def get_manuscript(book_id):
     chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number", (book_id,)).fetchall()
     conn.close()
     if not book:
+        conn.close()
         return jsonify({"error": "Book not found"}), 404
     return jsonify({"book": dict(book), "chapters": [dict(row) for row in chapters]})
 
