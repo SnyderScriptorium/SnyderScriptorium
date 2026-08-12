@@ -3,7 +3,7 @@ def post_worker_init(worker):
 
     # Always initialize the database for the actual Render/Gunicorn process.
     # Render starts `gunicorn app:app`, so run.py is not imported automatically.
-    from database import init_db
+    from database import init_db, get_db, using_postgres
     init_db()
 
     # Recover/create the Sandbox membership plan if the configured plan ID is
@@ -30,28 +30,39 @@ def post_worker_init(worker):
             methods=["GET"],
         )
 
-    # Ensure the analytics table exists even on an older Postgres database
-    # that predates the analytics migration.
-    from database import get_db
-    conn = get_db()
-    try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS page_views (
-                id BIGSERIAL PRIMARY KEY,
-                path TEXT NOT NULL,
-                page_type TEXT NOT NULL DEFAULT 'page',
-                content_id BIGINT,
-                category TEXT,
-                viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS page_type TEXT NOT NULL DEFAULT 'page'")
-        conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS content_id BIGINT")
-        conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS category TEXT")
-        conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP")
-        conn.commit()
-    finally:
-        conn.close()
+    # Ensure analytics is usable on older Postgres databases as well as fresh
+    # ones. SQLite is already handled completely by database.init_db().
+    if using_postgres():
+        conn = get_db()
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS page_views (
+                    id BIGSERIAL PRIMARY KEY,
+                    path TEXT NOT NULL,
+                    page_type TEXT NOT NULL DEFAULT 'page',
+                    content_id BIGINT,
+                    category TEXT,
+                    viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS page_type TEXT NOT NULL DEFAULT 'page'")
+            conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS content_id BIGINT")
+            conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS category TEXT")
+            conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP")
+            conn.commit()
+        finally:
+            conn.close()
+
+    # Never allow a cached Admin dashboard to appear as though the user is
+    # still authenticated. Every fresh /admin request must pass the login gate.
+    from flask import request
+    @app.after_request
+    def no_cache_admin(response):
+        if request.path.startswith("/admin"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
     # Keep the original endpoint name available to existing templates and
     # redirects while the protected entry route uses the fresh-login handler.
