@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Create Member Account — K. W. Snyder Writing{% endblock %}
+{% block title %}Create Your K. W. Snyder Writing Account{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='member_auth.css') }}">
 {% endblock %}
 {% block content %}
 <section class="content-section member-auth-section">
-  <h1>Create Member Account</h1>
-  <p class="member-auth-note">Create your reader account first. Subscription activation is handled separately through PayPal.</p>
+  <h1>Create Your K. W. Snyder Writing Account</h1>
+  <p class="member-auth-note">This account is specifically for K. W. Snyder Writing. It is the account that will be connected to your membership subscription and your private writing-library access.</p>
   {% if error %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
   <div class="member-auth-card">
     <form class="member-auth-form" method="POST" action="{{ url_for('member_signup') }}" autocomplete="on">
@@ -16,7 +16,7 @@
       <input id="member-password" type="password" name="password" minlength="8" autocomplete="new-password" required>
       <div class="member-auth-actions">
         <button class="member-auth-button" type="submit">Create Account</button>
-        <a class="member-auth-link" href="{{ url_for('kwsnyderwriting_membership') }}">Back</a>
+        <a class="member-auth-link" href="{{ url_for('member_login') }}">Already Have an Account? Sign In</a>
       </div>
     </form>
   </div>
