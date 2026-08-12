@@ -65,63 +65,31 @@
   const container = document.getElementById('paypal-button-container');
   const status = document.getElementById('paypal-status');
   const planId = {{ config.PAYPAL_PLAN_ID|tojson }};
-  function setStatus(message, error) {
-    if (!status) return;
-    status.textContent = message;
-    status.style.fontWeight = error ? '600' : '400';
-  }
+  function setStatus(message, error) { if (status) { status.textContent = message; status.style.fontWeight = error ? '600' : '400'; } }
   if (!container) return;
-  if (!window.paypal || !window.paypal.Buttons) {
-    setStatus('PayPal checkout could not load. Please refresh the page and try again.', true);
-    return;
-  }
-  if (!planId) {
-    setStatus('The membership plan is not configured yet. Please contact the site administrator.', true);
-    return;
-  }
+  if (!window.paypal || !window.paypal.Buttons) { setStatus('PayPal checkout could not load. Please refresh the page and try again.', true); return; }
+  if (!planId) { setStatus('The membership plan is not configured yet. Please contact the site administrator.', true); return; }
   const buttons = paypal.Buttons({
-    style: { shape: 'pill', layout: 'vertical', color: 'blue', label: 'subscribe', height: 48 },
+    style: { shape: 'pill', layout: 'vertical', color: 'blue', label: 'paypal', height: 48 },
     onInit: function () { setStatus('PayPal checkout is ready.'); },
-    createSubscription: function (data, actions) {
-      setStatus('Opening secure PayPal checkout…');
-      return actions.subscription.create({ plan_id: planId });
-    },
+    createSubscription: function (data, actions) { setStatus('Opening secure PayPal checkout…'); return actions.subscription.create({ plan_id: planId }); },
     onApprove: async function (data) {
       setStatus('PayPal approved the subscription. Verifying it with the Scriptorium…');
       try {
-        const response = await fetch('{{ url_for("paypal_member.attach_subscription") }}', {
-          method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin',
-          body: JSON.stringify({subscriptionID: data.subscriptionID})
-        });
+        const response = await fetch('{{ url_for("paypal_member.attach_subscription") }}', { method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({subscriptionID: data.subscriptionID}) });
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error(result.error || 'The Scriptorium could not verify the PayPal subscription.');
-        if (result.active) {
-          setStatus('Subscription verified. Opening your private writing room…');
-          window.location.href = '{{ url_for("kwsnyderwriting") }}';
-        } else {
-          setStatus('Your subscription was recorded and is awaiting activation. Please refresh shortly.');
-        }
-      } catch (error) {
-        setStatus(error.message || 'We could not finish verifying the subscription. Please try again.', true);
-      }
+        if (result.active) { setStatus('Subscription verified. Opening your private writing room…'); window.location.href = '{{ url_for("kwsnyderwriting") }}'; }
+        else setStatus('Your subscription was recorded and is awaiting activation. Please refresh shortly.');
+      } catch (error) { setStatus(error.message || 'We could not finish verifying the subscription. Please try again.', true); }
     },
     onCancel: function () { setStatus('Subscription checkout was cancelled. Your account has not been changed.'); },
-    onError: function (error) {
-      console.error('PayPal subscription error:', error);
-      const detail = error && (error.message || error.toString()) ? ' ' + (error.message || error.toString()) : '';
-      setStatus('PayPal could not start the subscription checkout.' + detail, true);
-    }
+    onError: function (error) { console.error('PayPal subscription error:', error); setStatus('PayPal could not start the subscription checkout. ' + (error && (error.message || error.toString()) || ''), true); }
   });
   try {
     const rendered = buttons.render('#paypal-button-container');
-    if (rendered && typeof rendered.catch === 'function') rendered.catch(function (error) {
-      console.error('PayPal button render error:', error);
-      setStatus('PayPal could not render the subscription button. Check that the Sandbox Client ID and membership plan belong to the same PayPal app.', true);
-    });
-  } catch (error) {
-    console.error('PayPal button setup error:', error);
-    setStatus('PayPal could not initialize the subscription button. Check the Sandbox Client ID and plan configuration.', true);
-  }
+    if (rendered && typeof rendered.catch === 'function') rendered.catch(function (error) { console.error('PayPal button render error:', error); setStatus('PayPal could not render the subscription button. Check that the Sandbox Client ID and membership plan belong to the same PayPal app.', true); });
+  } catch (error) { console.error('PayPal button setup error:', error); setStatus('PayPal could not initialize the subscription button. Check the Sandbox Client ID and plan configuration.', true); }
 })();
 </script>
 {% elif session.get('member_logged_in') %}
