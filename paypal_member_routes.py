@@ -51,7 +51,7 @@ def _save_subscription(member_id, subscription_id, status, started=None, ends=No
 @paypal_member.post("/api/paypal/attach-subscription")
 def attach_subscription():
     if not session.get("member_logged_in") or not session.get("member_id"):
-        return jsonify({"ok": False, "error": "Please sign in to your Scriptorium member account first."}), 401
+        return jsonify({"ok": False, "error": "Please sign in to your K. W. Snyder Writing account first."}), 401
 
     payload = request.get_json(silent=True) or {}
     subscription_id = str(payload.get("subscriptionID") or "").strip()
@@ -64,7 +64,7 @@ def attach_subscription():
         return jsonify({"ok": False, "error": f"PayPal could not verify the subscription yet: {exc}"}), 502
 
     if subscription.get("plan_id") != PLAN_ID:
-        return jsonify({"ok": False, "error": "The PayPal subscription does not match the Scriptorium membership plan."}), 400
+        return jsonify({"ok": False, "error": "The PayPal subscription does not match the K. W. Snyder Writing membership plan."}), 400
 
     paypal_status = str(subscription.get("status") or "").upper()
     if paypal_status not in {"APPROVAL_PENDING", "APPROVED", "ACTIVE", "SUSPENDED", "CANCELLED", "EXPIRED"}:
@@ -103,7 +103,6 @@ def paypal_webhook():
         or ""
     ).strip()
 
-    # Receipt is successful even for event types this integration does not use.
     if not subscription_id:
         return jsonify({"ok": True, "handled": False}), 200
 
@@ -135,7 +134,6 @@ def paypal_webhook():
     if status is None:
         return jsonify({"ok": True, "handled": False}), 200
 
-    # Confirm the subscription belongs to this exact Scriptorium plan.
     try:
         subscription = get_subscription(subscription_id)
     except Exception:
@@ -153,8 +151,6 @@ def paypal_webhook():
         conn.close()
 
     if not row:
-        # The webhook may arrive before the browser finishes attach-subscription.
-        # Do not grant access based on an unassociated PayPal subscription.
         return jsonify({"ok": True, "handled": False, "reason": "subscription_not_attached"}), 200
 
     started = subscription.get("start_time") or subscription.get("create_time")
