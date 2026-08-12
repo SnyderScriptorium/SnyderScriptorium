@@ -205,6 +205,39 @@
     else toolbar.appendChild(wrap);
   }
 
+  function handleTab(editor, event) {
+    if (event.key !== 'Tab' || !editor.contains(event.target)) return;
+    event.preventDefault();
+    editor.focus();
+    restore(editor);
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+
+    // Treat Tab like a writing-program tab inside the editor instead of moving focus
+    // to the next control. CSS tab-size:4 makes the inserted tab visually consistent.
+    if (event.shiftKey) {
+      const range = selection.getRangeAt(0);
+      if (range.collapsed && range.startContainer.nodeType === Node.TEXT_NODE) {
+        const node = range.startContainer;
+        const before = node.textContent.slice(0, range.startOffset);
+        const match = before.match(/\t$/);
+        if (match) {
+          node.deleteData(range.startOffset - 1, 1);
+          const nr = document.createRange();
+          nr.setStart(node, Math.max(0, range.startOffset - 1));
+          nr.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(nr);
+        }
+      }
+      remember(editor);
+      return;
+    }
+
+    document.execCommand('insertText', false, '\t');
+    remember(editor);
+  }
+
   function enhance(toolbar) {
     const editor = editorFor(toolbar);
     if (!editor) return;
@@ -221,6 +254,10 @@
       selects[1].onchange = function () { if (this.value) applySize(editor, Number(this.value)); this.selectedIndex = 0; };
     }
     addColor(toolbar, editor, selects[1]);
+    if (!editor.dataset.tabIndentReady) {
+      editor.addEventListener('keydown', event => handleTab(editor, event));
+      editor.dataset.tabIndentReady = 'true';
+    }
     toolbar.querySelectorAll('button').forEach(button => {
       button.addEventListener('mousedown', () => remember(editor), true);
     });
