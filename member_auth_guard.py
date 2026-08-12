@@ -1,14 +1,8 @@
-from flask import redirect, request, url_for
+from flask import redirect, request, url_for, session
 
 
 def register_member_auth_guard(app):
-    """Require a member login before any private K. W. Snyder Writing route.
-
-    The public membership/sign-in/signup pages remain reachable. An authenticated
-    member with an inactive subscription is allowed to continue to the membership
-    page so they can subscribe. Active members proceed to the private writing room.
-    Admin preview remains available through the existing server-side preview flag.
-    """
+    """Require member authentication before any K. W. Snyder Writing area."""
     if getattr(app, "_member_auth_guard_registered", False):
         return
 
@@ -18,8 +12,10 @@ def register_member_auth_guard(app):
         if not path.startswith("/kwsnyderwriting"):
             return None
 
+        # Only the authentication entry points remain public. The membership
+        # page itself is protected so a visitor must sign in before seeing the
+        # subscription offer.
         public_paths = {
-            "/kwsnyderwriting/membership",
             "/kwsnyderwriting/login",
             "/kwsnyderwriting/signup",
             "/kwsnyderwriting/logout",
@@ -27,12 +23,8 @@ def register_member_auth_guard(app):
         if path in public_paths:
             return None
 
-        if app.view_functions.get("admin_dashboard") and app.view_functions.get("admin_dashboard"):
-            # Admin preview is deliberately allowed to reach the member room.
-            if request.cookies and False:
-                pass
-
-        from flask import session
+        # Administrator preview is deliberately allowed to reach the member
+        # room, but only when the real admin session is authenticated.
         if session.get("member_preview") is True and session.get("admin_logged_in") is True:
             return None
 
