@@ -22,7 +22,6 @@ app.config.update(
     SESSION_PERMANENT=False,
 )
 
-# Changing this value invalidates any older admin session immediately.
 ADMIN_AUTH_VERSION = "2026-08-10-3"
 
 
@@ -48,10 +47,7 @@ def init_db():
 
 
 def require_admin():
-    return bool(
-        session.get("admin_logged_in") is True
-        and session.get("admin_auth_version") == ADMIN_AUTH_VERSION
-    )
+    return bool(session.get("admin_logged_in") is True and session.get("admin_auth_version") == ADMIN_AUTH_VERSION)
 
 
 def require_member():
@@ -93,16 +89,12 @@ def member_required(view):
 
 
 def record_page_view(path, page_type="page", content_id=None, category=None):
-    """Persist a visitor view without allowing analytics failures to break the site."""
     if path.startswith("/static/") or path.startswith("/api/") or path.startswith("/admin"):
         return
     conn = None
     try:
         conn = get_db()
-        conn.execute(
-            "INSERT INTO page_views(path, page_type, content_id, category) VALUES (?, ?, ?, ?)",
-            (path, page_type, content_id, category),
-        )
+        conn.execute("INSERT INTO page_views(path, page_type, content_id, category) VALUES (?, ?, ?, ?)", (path, page_type, content_id, category))
         conn.commit()
     except Exception:
         pass
@@ -115,15 +107,7 @@ def record_page_view(path, page_type="page", content_id=None, category=None):
 
 
 def category_label(category):
-    return {
-        "curations": "Book Curations",
-        "reviews": "Book Reviews",
-        "curiosity": "Curiosity Cabinet",
-        "kwsnyderwriting": "K. W. Snyder Writing",
-        "kw_short_stories": "Short Stories",
-        "kw_poems": "Poems",
-        "kw_vignettes": "Vignettes",
-    }.get(category, "Journal")
+    return {"curations": "Book Curations", "reviews": "Book Reviews", "curiosity": "Curiosity Cabinet", "kwsnyderwriting": "K. W. Snyder Writing", "kw_short_stories": "Short Stories", "kw_poems": "Poems", "kw_vignettes": "Vignettes"}.get(category, "Journal")
 
 
 def is_kw_domain():
@@ -150,11 +134,9 @@ def analytics_request_tracker():
     path = request.path
     if path.startswith("/static/") or path.startswith("/api/") or path.startswith("/admin"):
         return None
-
     page_type = "page"
     category = None
     content_id = None
-
     if path == "/blog":
         page_type, category = "section", "blog"
     elif path.startswith("/blog/bookcurations"):
@@ -191,7 +173,6 @@ def analytics_request_tracker():
             page_type, content_id, category = "chapter", int(match.group(2)), "kwsnyderwriting"
     else:
         category = "site"
-
     record_page_view(path, page_type, content_id, category)
     return None
 
@@ -216,11 +197,7 @@ def the_blog():
 
 def public_category(category, template):
     conn = get_db()
-    posts = conn.execute("""
-        SELECT * FROM published_posts
-        WHERE category = ? AND access_level = 'public'
-        ORDER BY id DESC
-    """, (category,)).fetchall()
+    posts = conn.execute("SELECT * FROM published_posts WHERE category = ? AND access_level = 'public' ORDER BY id DESC", (category,)).fetchall()
     conn.close()
     return render_template(template, posts=posts, category_name=category_label(category))
 
@@ -252,6 +229,11 @@ def view_post(post_id):
 
 @app.route("/kwsnyderwriting/membership")
 def kwsnyderwriting_membership():
+    # A direct visit to the membership page is a fresh authentication entry.
+    # Only the immediate redirect after a successful login may pass this once.
+    if session.pop("member_reauth_ok", False) is not True:
+        session.clear()
+        return redirect(url_for("member_login"))
     return render_template("blog_templates/kwsnyderwriting_membership.html")
 
 
@@ -298,7 +280,7 @@ def member_signup():
 @app.route("/kwsnyderwriting/logout")
 def member_logout():
     session.clear()
-    return redirect(url_for("kwsnyderwriting_membership"))
+    return redirect(url_for("member_login"))
 
 
 @app.route("/membership-terms")
@@ -308,8 +290,6 @@ def membership_terms():
 
 @app.route("/kwsnyderwriting")
 def kwsnyderwriting_entry():
-    # Every visit to the K. W. Snyder Writing entry point requires a fresh login.
-    # This deliberately prevents an old browser session from silently granting access.
     if session.get("member_reauth_ok") is not True:
         session.clear()
         return redirect(url_for("member_login"))
@@ -321,19 +301,8 @@ def kwsnyderwriting_entry():
 
 def kwsnyderwriting_content():
     conn = get_db()
-    posts = conn.execute("""
-        SELECT * FROM published_posts
-        WHERE category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes')
-          AND access_level = 'members'
-        ORDER BY id DESC
-    """).fetchall()
-    books = conn.execute("""
-        SELECT b.*, COUNT(c.id) AS chapter_count
-        FROM manuscript_books b
-        LEFT JOIN manuscript_chapters c ON c.book_id = b.id AND c.published = 1
-        GROUP BY b.id
-        ORDER BY b.id DESC
-    """).fetchall()
+    posts = conn.execute("SELECT * FROM published_posts WHERE category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes') AND access_level = 'members' ORDER BY id DESC").fetchall()
+    books = conn.execute("SELECT b.*, COUNT(c.id) AS chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id AND c.published = 1 GROUP BY b.id ORDER BY b.id DESC").fetchall()
     conn.close()
     return render_template("blog_templates/kwsnyderwriting.html", posts=posts, books=books, member_logged_in=True, member_preview=session.get("member_preview") is True)
 
@@ -352,11 +321,7 @@ def view_member_post(post_id):
 @app.route("/kwsnyderwriting/<section>")
 @member_required
 def kwsnyderwriting_section(section):
-    section_map = {
-        "short-stories": ("kw_short_stories", "Short Stories"),
-        "poems": ("kw_poems", "Poems"),
-        "vignettes": ("kw_vignettes", "Vignettes"),
-    }
+    section_map = {"short-stories": ("kw_short_stories", "Short Stories"), "poems": ("kw_poems", "Poems"), "vignettes": ("kw_vignettes", "Vignettes")}
     if section not in section_map:
         abort(404)
     category, title = section_map[section]
@@ -414,7 +379,6 @@ def submit_reader_feedback(book_id, chapter_id):
         return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_error="Please enter your feedback before submitting."))
     if len(feedback) > 20000:
         return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_error="Please keep feedback under 20,000 characters."))
-
     member_id = session.get("member_id")
     conn = get_db()
     chapter = conn.execute("SELECT id, book_id, chapter_number, title FROM manuscript_chapters WHERE id = ? AND book_id = ? AND published = 1", (chapter_id, book_id)).fetchone()
@@ -423,12 +387,8 @@ def submit_reader_feedback(book_id, chapter_id):
     if not chapter or not book or not member:
         conn.close()
         abort(404)
-
     subject = f"Reader Feedback — {book['title']} — Chapter {chapter['chapter_number']}: {chapter['title']}"
-    conn.execute(
-        "INSERT INTO inbox_messages(message_type, name, email, subject, message, post_id, book_id, chapter_id, member_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("reader_feedback", "Subscriber Reader", member["email"], subject, feedback, None, book_id, chapter_id, member_id),
-    )
+    conn.execute("INSERT INTO inbox_messages(message_type, name, email, subject, message, post_id, book_id, chapter_id, member_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", ("reader_feedback", "Subscriber Reader", member["email"], subject, feedback, None, book_id, chapter_id, member_id))
     conn.commit()
     conn.close()
     return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_sent="1"))
@@ -495,7 +455,6 @@ def admin_logout():
     return redirect(url_for("admin_dashboard"))
 
 
-
 @app.route("/admin/inbox")
 @admin_required
 def admin_inbox():
@@ -507,10 +466,7 @@ def admin_inbox():
 def get_inbox():
     status = request.args.get("status", "").strip()
     conn = get_db()
-    if status:
-        rows = conn.execute("SELECT * FROM inbox_messages WHERE status = ? ORDER BY id DESC", (status,)).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM inbox_messages ORDER BY id DESC").fetchall()
+    rows = conn.execute("SELECT * FROM inbox_messages WHERE status = ? ORDER BY id DESC", (status,)).fetchall() if status else conn.execute("SELECT * FROM inbox_messages ORDER BY id DESC").fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
@@ -557,13 +513,13 @@ def get_analytics():
         total = conn.execute("SELECT COUNT(*) AS count FROM page_views").fetchone()["count"]
         daily = conn.execute("SELECT DATE(viewed_at) AS day, COUNT(*) AS views FROM page_views GROUP BY DATE(viewed_at) ORDER BY day").fetchall()
         categories = conn.execute("SELECT category, COUNT(*) AS views FROM page_views WHERE category IS NOT NULL GROUP BY category ORDER BY views DESC").fetchall()
-        posts = conn.execute("""SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC""").fetchall()
+        posts = conn.execute("SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC").fetchall()
     else:
         stamp = start.isoformat()
         total = conn.execute("SELECT COUNT(*) AS count FROM page_views WHERE viewed_at >= ?", (stamp,)).fetchone()["count"]
         daily = conn.execute("SELECT DATE(viewed_at) AS day, COUNT(*) AS views FROM page_views WHERE viewed_at >= ? GROUP BY DATE(viewed_at) ORDER BY day", (stamp,)).fetchall()
         categories = conn.execute("SELECT category, COUNT(*) AS views FROM page_views WHERE category IS NOT NULL AND viewed_at >= ? GROUP BY category ORDER BY views DESC", (stamp,)).fetchall()
-        posts = conn.execute("""SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.viewed_at >= ? AND pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC""", (stamp,)).fetchall()
+        posts = conn.execute("SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.viewed_at >= ? AND pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC", (stamp,)).fetchall()
     conn.close()
     return jsonify({"period": period, "total_views": total, "daily": [dict(row) for row in daily], "categories": [dict(row) for row in categories], "posts": [dict(row) for row in posts]})
 
@@ -718,9 +674,7 @@ def unpublish_post(post_id):
 @admin_required
 def get_manuscripts():
     conn = get_db()
-    books = conn.execute("""
-        SELECT b.id, b.title, b.description, COUNT(c.id) AS chapter_count, SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id GROUP BY b.id ORDER BY b.id DESC
-    """).fetchall()
+    books = conn.execute("SELECT b.id, b.title, b.description, COUNT(c.id) AS chapter_count, SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id GROUP BY b.id ORDER BY b.id DESC").fetchall()
     conn.close()
     return jsonify({"books": [dict(row) for row in books]})
 
@@ -749,7 +703,6 @@ def get_manuscript(book_id):
     chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number", (book_id,)).fetchall()
     conn.close()
     if not book:
-        conn.close()
         return jsonify({"error": "Book not found"}), 404
     return jsonify({"book": dict(book), "chapters": [dict(row) for row in chapters]})
 
@@ -804,7 +757,7 @@ def create_chapter(book_id):
     return jsonify({"success": True, "id": chapter_id}), 201
 
 
-@app.route("/api/manuscripts/<int:book_id>/chapters/<int:chapter_id>", methods=["GET"])
+@app.route("/api/manuscripts/<int:book_id>/chapters/<int:chapter_id>")
 @admin_required
 def get_chapter(book_id, chapter_id):
     conn = get_db()
