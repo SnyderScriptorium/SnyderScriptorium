@@ -1,4 +1,4 @@
-from flask import redirect, request, url_for, session
+from flask import redirect, request, session
 
 
 def register_admin_auth_guard(app):
@@ -12,21 +12,26 @@ def register_admin_auth_guard(app):
         if not path.startswith("/admin"):
             return None
 
-        # /admin is the existing login/control-panel entry point. Let the
-        # existing route render its login screen when the session is absent.
         if path == "/admin":
             return None
 
-        # The login POST and logout route must remain reachable without an
-        # authenticated session.
         if path in {"/admin/login", "/admin/logout"}:
             return None
 
-        if session.get("admin_logged_in") is True and session.get("admin_auth_version") == getattr(app, "ADMIN_AUTH_VERSION", None):
+        # The main app owns the canonical auth version. The guard is
+        # registered after the app module has loaded, so importing the
+        # constant here avoids maintaining a second copy that can drift.
+        try:
+            from app import ADMIN_AUTH_VERSION
+        except Exception:
+            ADMIN_AUTH_VERSION = None
+
+        if ADMIN_AUTH_VERSION and session.get("admin_logged_in") is True and session.get("admin_auth_version") == ADMIN_AUTH_VERSION:
             return None
 
         session.pop("admin_logged_in", None)
         session.pop("admin_auth_version", None)
+        session.pop("admin_reauth_ok", None)
         return redirect("/admin")
 
     app._admin_auth_guard_registered = True
