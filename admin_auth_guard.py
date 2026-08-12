@@ -12,8 +12,13 @@ def register_admin_auth_guard(app):
         if not path.startswith("/admin"):
             return None
 
+        # /admin is the existing login/control-panel entry point. Let the
+        # existing route render its login screen when the session is absent.
+        if path == "/admin":
+            return None
+
         # The login POST and logout route must remain reachable without an
-        # authenticated session. /admin itself renders the login form.
+        # authenticated session.
         if path in {"/admin/login", "/admin/logout"}:
             return None
 
@@ -22,6 +27,6 @@ def register_admin_auth_guard(app):
 
         session.pop("admin_logged_in", None)
         session.pop("admin_auth_version", None)
-        return redirect(url_for("admin_dashboard"))
+        return redirect("/admin")
 
     app._admin_auth_guard_registered = True
