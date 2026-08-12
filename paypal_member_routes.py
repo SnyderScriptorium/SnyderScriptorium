@@ -10,11 +10,16 @@ from paypal_subscriptions import get_subscription, paypal_request, verify_webhoo
 paypal_member = Blueprint("paypal_member", __name__)
 logger = logging.getLogger(__name__)
 
-DEFAULT_PLAN_ID = "P-9KV03116ML843823PNJ5TDHA"
-
 
 def configured_plan_id():
-    return os.environ.get("PAYPAL_PLAN_ID", DEFAULT_PLAN_ID).strip() or DEFAULT_PLAN_ID
+    # The old hard-coded plan ID was stale and produced a PayPal 404.
+    # Use the Sandbox founding plan configured in Render, with the other
+    # configured plans available as fallbacks for future launches.
+    for name in ("PAYPAL_PLAN_FOUNDING_3", "PAYPAL_PLAN_STANDARD_4", "PAYPAL_PLAN_STANDARD_5", "PAYPAL_PLAN_ID"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _iso_or_now(value=None):
@@ -62,6 +67,8 @@ def attach_subscription():
         return jsonify({"ok": False, "error": f"PayPal could not verify the subscription yet: {exc}"}), 502
 
     plan_id = configured_plan_id()
+    if not plan_id:
+        return jsonify({"ok": False, "error": "The PayPal membership plan is not configured on the server."}), 503
     if subscription.get("plan_id") != plan_id:
         return jsonify({"ok": False, "error": "The PayPal subscription does not match the K. W. Snyder Writing membership plan."}), 400
 
@@ -137,14 +144,15 @@ def register_paypal_member(app):
     app.config["PAYPAL_CLIENT_ID"] = client_id
     app.config["PAYPAL_PLAN_ID"] = configured_plan_id()
 
-    # Safe startup diagnostic: never log credentials. This verifies that the
-    # Sandbox client credentials can actually see the configured plan, which
-    # must belong to the same client-id used by the JavaScript SDK.
     if client_id and os.environ.get("PAYPAL_CLIENT_SECRET", "").strip():
-        try:
-            plan = paypal_request("GET", f"/v1/billing/plans/{configured_plan_id()}")
-            logger.info("PayPal membership plan verified: status=%s product_id=%s plan_id=%s", plan.get("status"), plan.get("product_id"), configured_plan_id())
-        except Exception as exc:
-            logger.error("PayPal membership plan verification failed for configured plan: %s", exc)
+        plan_id = configured_plan_id()
+        if not plan_id:
+            logger.error("PayPal membership plan is not configured. Set PAYPAL_PLAN_FOUNDING_3 in Render for the Sandbox launch.")
+        else:
+            try:
+                plan = paypal_request("GET", f"/v1/billing/plans/{plan_id}")
+                logger.info("PayPal membership plan verified: status=%s product_id=%s plan_id=%s", plan.get("status"), plan.get("product_id"), plan_id)
+            except Exception as exc:
+                logger.error("PayPal membership plan verification failed for configured plan: %s", exc)
     else:
         logger.warning("PayPal credentials are incomplete: PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are required.")
