@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Member Sign In — K. W. Snyder Writing{% endblock %}
+{% block title %}K. W. Snyder Writing — Sign In{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='member_auth.css') }}">
 {% endblock %}
 {% block content %}
 <section class="content-section member-auth-section">
-  <h1>Member Sign In</h1>
-  <p class="member-auth-note">Enter your K. W. Snyder Writing member account details.</p>
+  <h1>K. W. Snyder Writing</h1>
+  <p class="member-auth-note">Sign in to your K. W. Snyder Writing account.</p>
   {% if error %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
   <div class="member-auth-card">
     <form class="member-auth-form" method="POST" action="{{ url_for('member_login') }}" autocomplete="on">
@@ -16,7 +16,7 @@
       <input id="member-password" type="password" name="password" autocomplete="current-password" required>
       <div class="member-auth-actions">
         <button class="member-auth-button" type="submit">Sign In</button>
-        <a class="member-auth-link" href="{{ url_for('kwsnyderwriting_membership') }}">Back</a>
+        <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Your K. W. Snyder Writing Account</a>
       </div>
     </form>
   </div>
