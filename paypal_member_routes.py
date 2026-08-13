@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request, session
 
 from database import get_db
 from paypal_subscriptions import get_subscription, paypal_request, verify_webhook
@@ -11,10 +11,24 @@ paypal_member = Blueprint("paypal_member", __name__)
 logger = logging.getLogger(__name__)
 
 
-def configured_plan_id():
-    # The old hard-coded plan ID was stale and produced a PayPal 404.
-    # Use the Sandbox founding plan configured in Render, with the other
-    # configured plans available as fallbacks for future launches.
+def configured_plan_id(app=None):
+    """Return the current runtime PayPal membership plan ID.
+
+    The PayPal bootstrap can replace a stale Sandbox plan ID at startup. The
+    runtime Flask config is therefore authoritative whenever it contains a
+    plan ID; environment variables are only the fallback for direct startup.
+    """
+    if app is None:
+        try:
+            app = current_app._get_current_object()
+        except RuntimeError:
+            app = None
+
+    if app is not None:
+        runtime_plan = str(app.config.get("PAYPAL_PLAN_ID") or "").strip()
+        if runtime_plan:
+            return runtime_plan
+
     for name in ("PAYPAL_PLAN_FOUNDING_3", "PAYPAL_PLAN_STANDARD_4", "PAYPAL_PLAN_STANDARD_5", "PAYPAL_PLAN_ID"):
         value = os.environ.get(name, "").strip()
         if value:
@@ -142,17 +156,23 @@ def register_paypal_member(app):
         app.register_blueprint(paypal_member)
     client_id = os.environ.get("PAYPAL_CLIENT_ID", "").strip()
     app.config["PAYPAL_CLIENT_ID"] = client_id
-    app.config["PAYPAL_PLAN_ID"] = configured_plan_id()
+
+    # Preserve the plan ID selected by the bootstrap if it already established
+    # a valid/replacement plan in app.config. Only fall back to environment
+    # variables when no runtime plan has been selected yet.
+    plan_id = configured_plan_id(app)
+    if plan_id:
+        app.config["PAYPAL_PLAN_ID"] = plan_id
 
     if client_id and os.environ.get("PAYPAL_CLIENT_SECRET", "").strip():
-        plan_id = configured_plan_id()
         if not plan_id:
-            logger.error("PayPal membership plan is not configured. Set PAYPAL_PLAN_FOUNDING_3 in Render for the Sandbox launch.")
+            logger.error("PayPal membership plan is not configured on the server.")
         else:
             try:
                 plan = paypal_request("GET", f"/v1/billing/plans/{plan_id}")
                 logger.info("PayPal membership plan verified: status=%s product_id=%s plan_id=%s", plan.get("status"), plan.get("product_id"), plan_id)
             except Exception as exc:
-                logger.error("PayPal membership plan verification failed for configured plan: %s", exc)
+                # Do not replace/overwrite a plan selected by the bootstrap.
+                logger.warning("PayPal membership plan verification deferred for %s: %s", plan_id, exc)
     else:
         logger.warning("PayPal credentials are incomplete: PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are required.")
