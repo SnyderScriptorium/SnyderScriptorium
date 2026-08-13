@@ -22,6 +22,32 @@ def post_worker_init(worker):
     if "create_published_post" not in app.view_functions and "create_published" in app.view_functions:
         app.add_url_rule("/api/published", endpoint="create_published_post", view_func=app.view_functions["create_published"], methods=["POST"])
 
+    # Never redirect failed Admin API authorization back through /admin.
+    # The previous redirect created an AJAX -> /admin -> session-clear -> AJAX
+    # loop that could lock the dashboard and prevent tab interaction.
+    from flask import jsonify, request
+
+    @app.before_request
+    def admin_api_requires_auth_json():
+        path = request.path
+        admin_api_prefixes = (
+            "/api/drafts",
+            "/api/published",
+            "/api/manuscripts",
+            "/api/about",
+            "/api/inbox",
+            "/api/analytics",
+        )
+        if not path.startswith(admin_api_prefixes):
+            return None
+        try:
+            from app import require_admin
+            if require_admin():
+                return None
+        except Exception:
+            pass
+        return jsonify({"error": "Admin authentication required."}), 401
+
     if using_postgres():
         conn = get_db()
         try:
@@ -42,8 +68,6 @@ def post_worker_init(worker):
             conn.commit()
         finally:
             conn.close()
-
-    from flask import request
 
     @app.after_request
     def no_cache_admin(response):
