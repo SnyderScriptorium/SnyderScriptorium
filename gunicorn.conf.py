@@ -20,13 +20,15 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
-    # The Admin template still references this older endpoint name. Keep the
-    # URL endpoint compatible without weakening its @admin_required guard.
-    if "get_published_posts" not in app.view_functions and "get_published" in app.view_functions:
+    # The Admin template references get_published_posts, while the actual
+    # protected Flask view is named get_published_post (singular). Register a
+    # compatibility endpoint so url_for() can build the Admin API URL without
+    # changing the authorization on the underlying view.
+    if "get_published_posts" not in app.view_functions and "get_published_post" in app.view_functions:
         app.add_url_rule(
             "/api/published",
             endpoint="get_published_posts",
-            view_func=app.view_functions["get_published"],
+            view_func=app.view_functions["get_published_post"],
             methods=["GET"],
         )
 
