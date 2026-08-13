@@ -98,6 +98,59 @@ def attach_subscription():
     return jsonify({"ok": True, "subscriptionID": subscription_id, "paypalStatus": paypal_status, "memberStatus": status, "active": status == "active"})
 
 
+@paypal_member.post("/api/paypal/cancel-subscription")
+def cancel_subscription():
+    """Cancel only the PayPal subscription belonging to the signed-in member."""
+    member_id = session.get("member_id")
+    if not session.get("member_logged_in") or not member_id:
+        return jsonify({"ok": False, "error": "Please sign in to your K. W. Snyder Writing account first."}), 401
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, subscription_id, status FROM subscriptions WHERE member_id = ? AND provider = 'paypal' ORDER BY id DESC LIMIT 1",
+            (member_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row or not row["subscription_id"]:
+        return jsonify({"ok": False, "error": "No PayPal subscription is attached to this account."}), 404
+
+    subscription_id = str(row["subscription_id"]).strip()
+    try:
+        current = get_subscription(subscription_id)
+    except Exception as exc:
+        logger.exception("Could not retrieve PayPal subscription before cancellation")
+        return jsonify({"ok": False, "error": f"PayPal could not verify your subscription: {exc}"}), 502
+
+    if current.get("plan_id") != configured_plan_id():
+        return jsonify({"ok": False, "error": "This subscription does not match the K. W. Snyder Writing membership plan."}), 400
+
+    paypal_status = str(current.get("status") or "").upper()
+    if paypal_status in {"CANCELLED", "EXPIRED"}:
+        _save_subscription(member_id, subscription_id, "cancelled" if paypal_status == "CANCELLED" else "expired", current.get("start_time"), (current.get("billing_info") or {}).get("next_billing_time"))
+        return jsonify({"ok": True, "cancelled": True, "alreadyCancelled": True})
+
+    if paypal_status not in {"ACTIVE", "APPROVAL_PENDING", "APPROVED", "SUSPENDED"}:
+        return jsonify({"ok": False, "error": "PayPal returned an unexpected subscription status."}), 400
+
+    try:
+        paypal_request(
+            "POST",
+            f"/v1/billing/subscriptions/{subscription_id}/cancel",
+            {"reason": "Cancelled by member from K. W. Snyder Writing account"},
+        )
+    except Exception as exc:
+        logger.exception("PayPal subscription cancellation failed")
+        return jsonify({"ok": False, "error": f"PayPal could not cancel the subscription: {exc}"}), 502
+
+    started = current.get("start_time") or current.get("create_time")
+    ends = (current.get("billing_info") or {}).get("next_billing_time")
+    _save_subscription(member_id, subscription_id, "cancelled", started, ends)
+    return jsonify({"ok": True, "cancelled": True})
+
+
 @paypal_member.post("/api/paypal/webhook")
 def paypal_webhook():
     event = request.get_json(silent=True) or {}
@@ -172,7 +225,6 @@ def register_paypal_member(app):
                 plan = paypal_request("GET", f"/v1/billing/plans/{plan_id}")
                 logger.info("PayPal membership plan verified: status=%s product_id=%s plan_id=%s", plan.get("status"), plan.get("product_id"), plan_id)
             except Exception as exc:
-                # Do not replace/overwrite a plan selected by the bootstrap.
                 logger.warning("PayPal membership plan verification deferred for %s: %s", plan_id, exc)
     else:
         logger.warning("PayPal credentials are incomplete: PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET are required.")
