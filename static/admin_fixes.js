@@ -29,7 +29,13 @@ function selectedBlock(editor){
   let n=s.anchorNode;if(n&&n.nodeType===3)n=n.parentElement;
   return n&&n.closest?n.closest('p,h1,h2,h3,h4,h5,h6,blockquote,pre,div,li')||editor:editor;
 }
-function indent(editor,outdent){const block=selectedBlock(editor);if(!block||block===editor)return;const current=parseFloat(block.style.marginLeft)||0;const next=Math.max(0,current+(outdent?-2:2));block.style.marginLeft=next?next+'em':''}
+function indent(editor,outdent){
+  const block=selectedBlock(editor);
+  if(!block||block===editor)return;
+  const current=parseFloat(block.style.textIndent)||0;
+  const next=Math.max(0,current+(outdent?-32:32));
+  block.style.textIndent=next?next+'px':'';
+}
 function cmd(editor,command,value){focusEditor(editor);restore(editor);document.execCommand('styleWithCSS',false,true);keepScroll(editor,()=>document.execCommand(command,false,value==null?null:value));remember(editor)}
 function size(editor,pt){
   focusEditor(editor);restore(editor);
@@ -95,9 +101,9 @@ function applyEditorBehavior(editor){
   editor.addEventListener('keydown',event=>{
     if(event.key!=='Tab')return;
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     focusEditor(editor);remember(editor);indent(editor,event.shiftKey);remember(editor);
-  });
+  },true);
   editor.addEventListener('paste',event=>{
     event.preventDefault();
     event.stopPropagation();
