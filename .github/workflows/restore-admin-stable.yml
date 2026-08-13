@@ -1,0 +1,37 @@
+name: Restore known-good Admin dashboard
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  restore-admin:
+    if: github.sha != '3b2e7ad6cf1ac5b5b0c2a3fb1e6e7d1e4ab1b1c1'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore Admin files from known-good commit
+        run: |
+          set -e
+          git show 453e2ea64388ee3672bb10608ea9196674c68151:templates/admin.html > templates/admin.html
+          git show 453e2ea64388ee3672bb10608ea9196674c68151:gunicorn.conf.py > gunicorn.conf.py
+
+      - name: Commit restoration
+        run: |
+          if git diff --quiet -- templates/admin.html gunicorn.conf.py; then
+            echo "Admin files already restored."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add templates/admin.html gunicorn.conf.py
+          git commit -m "Restore Admin dashboard to last known-good version"
+          git push
