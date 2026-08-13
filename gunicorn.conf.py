@@ -16,36 +16,27 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
-    # Compatibility aliases for older admin-template endpoint names.
+    # Admin template uses get_published_posts for the published-post list.
+    # The actual list view is get_published; get_published_post is the
+    # single-post endpoint. Keep the alias protected by the original guard.
     if "get_published_posts" not in app.view_functions and "get_published" in app.view_functions:
-        app.add_url_rule("/api/published", endpoint="get_published_posts", view_func=app.view_functions["get_published"], methods=["GET"])
-    if "create_published_post" not in app.view_functions and "create_published" in app.view_functions:
-        app.add_url_rule("/api/published", endpoint="create_published_post", view_func=app.view_functions["create_published"], methods=["POST"])
-
-    # Admin API failures must not redirect through /admin. Return JSON instead,
-    # so an expired/invalid admin session cannot create an AJAX redirect loop.
-    from flask import jsonify, request
-
-    @app.before_request
-    def admin_api_requires_auth_json():
-        path = request.path
-        admin_api_prefixes = (
-            "/api/drafts",
+        app.add_url_rule(
             "/api/published",
-            "/api/manuscripts",
-            "/api/about",
-            "/api/inbox",
-            "/api/analytics",
+            endpoint="get_published_posts",
+            view_func=app.view_functions["get_published"],
+            methods=["GET"],
         )
-        if not path.startswith(admin_api_prefixes):
-            return None
-        try:
-            from app import require_admin
-            if require_admin():
-                return None
-        except Exception:
-            pass
-        return jsonify({"error": "Admin authentication required."}), 401
+
+    # The admin template also uses create_published_post when publishing.
+    # The actual POST handler is named create_published. Keep this alias
+    # protected by the original @admin_required wrapper.
+    if "create_published_post" not in app.view_functions and "create_published" in app.view_functions:
+        app.add_url_rule(
+            "/api/published",
+            endpoint="create_published_post",
+            view_func=app.view_functions["create_published"],
+            methods=["POST"],
+        )
 
     if using_postgres():
         conn = get_db()
@@ -68,15 +59,13 @@ def post_worker_init(worker):
         finally:
             conn.close()
 
+    from flask import request
     @app.after_request
     def no_cache_admin(response):
         if request.path.startswith("/admin"):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
-        elif request.path == "/api/published" and request.method == "GET":
-            response.headers["Cache-Control"] = "private, max-age=5, must-revalidate"
-            response.headers["Vary"] = "Cookie"
         return response
 
     if "kwsnyderwriting" not in app.view_functions and "kwsnyderwriting_entry" in app.view_functions:
