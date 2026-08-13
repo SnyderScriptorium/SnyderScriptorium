@@ -22,9 +22,8 @@ def post_worker_init(worker):
     if "create_published_post" not in app.view_functions and "create_published" in app.view_functions:
         app.add_url_rule("/api/published", endpoint="create_published_post", view_func=app.view_functions["create_published"], methods=["POST"])
 
-    # Never redirect failed Admin API authorization back through /admin.
-    # The previous redirect created an AJAX -> /admin -> session-clear -> AJAX
-    # loop that could lock the dashboard and prevent tab interaction.
+    # Admin API failures must not redirect through /admin. Return JSON instead,
+    # so an expired/invalid admin session cannot create an AJAX redirect loop.
     from flask import jsonify, request
 
     @app.before_request
@@ -75,55 +74,6 @@ def post_worker_init(worker):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
-
-            if request.path == "/admin" and response.mimetype == "text/html":
-                guard = r'''<script>
-(function(){
-  if(window.__snyderAdminGuard)return;
-  window.__snyderAdminGuard=true;
-  const originalFetch=window.fetch.bind(window);
-  let publishedCache=null,publishedCachedAt=0,publishedInFlight=null;
-  const TTL=5000;
-  function isPublishedGet(input,init){
-    const method=((init&&init.method)||((input&&input.method)||'GET')).toUpperCase();
-    if(method!=='GET')return false;
-    const raw=typeof input==='string'?input:(input&&input.url)||'';
-    try{return new URL(raw,location.href).pathname==='/api/published';}catch(_){return false;}
-  }
-  function responseFrom(data){return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});}
-  window.fetch=function(input,init){
-    if(!isPublishedGet(input,init))return originalFetch(input,init);
-    const now=Date.now();
-    if(publishedCache!==null&&now-publishedCachedAt<TTL)return Promise.resolve(responseFrom(publishedCache));
-    if(publishedInFlight)return publishedInFlight.then(responseFrom);
-    publishedInFlight=originalFetch(input,init).then(function(r){return r.clone().json().then(function(data){publishedCache=data;publishedCachedAt=Date.now();return data;});}).finally(function(){publishedInFlight=null;});
-    return publishedInFlight.then(responseFrom);
-  };
-  function installTabNavigation(){
-    const names=['write','drafts','published','manuscripts','about','kwpreview','stats','inbox'];
-    const tabs=document.querySelector('.tabs');
-    if(!tabs||tabs.dataset.snyderTabsFixed)return;
-    tabs.dataset.snyderTabsFixed='1';
-    tabs.style.position='relative';tabs.style.zIndex='10000';tabs.style.pointerEvents='auto';
-    tabs.querySelectorAll('button').forEach(function(button){
-      button.style.position='relative';button.style.zIndex='10001';button.style.pointerEvents='auto';
-      button.addEventListener('click',function(event){
-        const match=(button.id||'').match(/^tab-(.+)$/);if(!match)return;
-        const name=match[1];if(!names.includes(name))return;
-        event.preventDefault();event.stopPropagation();
-        try{window.switchTab(name);}catch(error){
-          console.error('Dashboard tab navigation failed:',error);
-          names.forEach(function(n){const section=document.getElementById(n);if(section)section.classList.toggle('hidden',n!==name);});
-        }
-      },true);
-    });
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installTabNavigation,{once:true});else installTabNavigation();
-})();
-</script>'''
-                body = response.get_data(as_text=True)
-                if "__snyderAdminGuard" not in body and "</body>" in body:
-                    response.set_data(body.replace("</body>", guard + "</body>"))
         elif request.path == "/api/published" and request.method == "GET":
             response.headers["Cache-Control"] = "private, max-age=5, must-revalidate"
             response.headers["Vary"] = "Cookie"
