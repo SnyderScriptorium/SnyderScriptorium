@@ -16,9 +16,7 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
-    # Admin template uses get_published_posts for the published-post list.
-    # The actual list view is get_published; get_published_post is the
-    # single-post endpoint. Keep the alias protected by the original guard.
+    # Compatibility aliases for older admin-template endpoint names.
     if "get_published_posts" not in app.view_functions and "get_published" in app.view_functions:
         app.add_url_rule(
             "/api/published",
@@ -27,9 +25,6 @@ def post_worker_init(worker):
             methods=["GET"],
         )
 
-    # The admin template also uses create_published_post when publishing.
-    # The actual POST handler is named create_published. Keep this alias
-    # protected by the original @admin_required wrapper.
     if "create_published_post" not in app.view_functions and "create_published" in app.view_functions:
         app.add_url_rule(
             "/api/published",
@@ -60,12 +55,56 @@ def post_worker_init(worker):
             conn.close()
 
     from flask import request
+
     @app.after_request
     def no_cache_admin(response):
         if request.path.startswith("/admin"):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
+
+            # The admin page was repeatedly requesting the very large
+            # /api/published payload. Install a tiny client-side GET cache so
+            # accidental duplicate refreshes do not hammer Render/Postgres.
+            if request.path == "/admin" and response.mimetype == "text/html":
+                guard = r'''<script>
+(function(){
+  if(window.__snyderPublishedFetchGuard)return;
+  window.__snyderPublishedFetchGuard=true;
+  const originalFetch=window.fetch.bind(window);
+  let cached=null;
+  let cachedAt=0;
+  let inFlight=null;
+  const TTL=5000;
+  function isPublishedGet(input,init){
+    const method=((init&&init.method)||((input&&input.method)||'GET')).toUpperCase();
+    if(method!=='GET')return false;
+    const raw=typeof input==='string'?input:(input&&input.url)||'';
+    try{return new URL(raw,location.href).pathname==='/api/published';}catch(_){return false;}
+  }
+  function responseFrom(data){
+    return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
+  }
+  window.fetch=function(input,init){
+    if(!isPublishedGet(input,init))return originalFetch(input,init);
+    const now=Date.now();
+    if(cached!==null && now-cachedAt<TTL)return Promise.resolve(responseFrom(cached));
+    if(inFlight)return inFlight.then(responseFrom);
+    inFlight=originalFetch(input,init).then(function(r){
+      return r.clone().json().then(function(data){cached=data;cachedAt=Date.now();return data;});
+    }).finally(function(){inFlight=null;});
+    return inFlight.then(responseFrom);
+  };
+})();
+</script>'''
+                body = response.get_data(as_text=True)
+                if "__snyderPublishedFetchGuard" not in body and "</body>" in body:
+                    response.set_data(body.replace("</body>", guard + "</body>"))
+        elif request.path == "/api/published" and request.method == "GET":
+            # Safe for the admin's own short-lived browser cache. Never make
+            # this a shared/public cache because the endpoint is admin-only.
+            response.headers["Cache-Control"] = "private, max-age=5, must-revalidate"
+            response.headers["Vary"] = "Cookie"
         return response
 
     if "kwsnyderwriting" not in app.view_functions and "kwsnyderwriting_entry" in app.view_functions:
