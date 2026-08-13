@@ -1,13 +1,9 @@
 def post_worker_init(worker):
     app = worker.wsgi
 
-    # Always initialize the database for the actual Render/Gunicorn process.
-    # Render starts `gunicorn app:app`, so run.py is not imported automatically.
     from database import init_db, get_db, using_postgres
     init_db()
 
-    # Recover/create the Sandbox membership plan if the configured plan ID is
-    # stale. The valid plan ID is then injected into the running app config.
     from paypal_plan_bootstrap import ensure_paypal_plan
     ensure_paypal_plan(app)
 
@@ -20,20 +16,17 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
-    # The Admin template references get_published_posts, while the actual
-    # protected Flask view is named get_published_post (singular). Register a
-    # compatibility endpoint so url_for() can build the Admin API URL without
-    # changing the authorization on the underlying view.
-    if "get_published_posts" not in app.view_functions and "get_published_post" in app.view_functions:
+    # Admin template uses get_published_posts for the published-post list.
+    # The actual list view is get_published; get_published_post is the
+    # single-post endpoint. Keep the alias protected by the original guard.
+    if "get_published_posts" not in app.view_functions and "get_published" in app.view_functions:
         app.add_url_rule(
             "/api/published",
             endpoint="get_published_posts",
-            view_func=app.view_functions["get_published_post"],
+            view_func=app.view_functions["get_published"],
             methods=["GET"],
         )
 
-    # Ensure analytics is usable on older Postgres databases as well as fresh
-    # ones. SQLite is already handled completely by database.init_db().
     if using_postgres():
         conn = get_db()
         try:
@@ -55,8 +48,6 @@ def post_worker_init(worker):
         finally:
             conn.close()
 
-    # Never allow a cached Admin dashboard to appear as though the user is
-    # still authenticated. Every fresh /admin request must pass the login gate.
     from flask import request
     @app.after_request
     def no_cache_admin(response):
@@ -66,7 +57,5 @@ def post_worker_init(worker):
             response.headers["Expires"] = "0"
         return response
 
-    # Keep the original endpoint name available to existing templates and
-    # redirects while the protected entry route uses the fresh-login handler.
     if "kwsnyderwriting" not in app.view_functions and "kwsnyderwriting_entry" in app.view_functions:
         app.add_url_rule("/kwsnyderwriting", endpoint="kwsnyderwriting", view_func=app.view_functions["kwsnyderwriting_entry"])
