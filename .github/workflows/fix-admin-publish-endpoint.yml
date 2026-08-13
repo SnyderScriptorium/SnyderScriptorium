@@ -1,0 +1,35 @@
+name: Fix stale admin publish endpoint
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Replace only the stale endpoint name
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('templates/admin.html')
+          s = p.read_text(encoding='utf-8')
+          old = "{{ url_for('create_published_post') }}"
+          new = "{{ url_for('create_published') }}"
+          if old not in s:
+              raise SystemExit('Expected stale endpoint was not found; refusing to modify the file.')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit the one-line fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add templates/admin.html
+          git commit -m "Fix admin publish endpoint reference"
+          git push
