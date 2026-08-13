@@ -1,4 +1,4 @@
-name: Load editor toolbar
+name: Load admin editor enhancements
 on:
   push:
     branches: [main]
@@ -10,19 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Ensure editor toolbar script is loaded
+      - name: Ensure targeted admin editor script is loaded and redundant toolbar loader is removed
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('templates/admin.html')
           text = p.read_text(encoding='utf-8')
-          marker = '<script src="{{ url_for(\'static\', filename=\'editor_toolbar.js\') }}"></script>'
-          if marker not in text:
-              text = text.replace('</body>', marker + '\n</body>')
-              p.write_text(text, encoding='utf-8')
-              print('Inserted editor toolbar script.')
-          else:
-              print('Editor toolbar script already loaded.')
+          legacy = '<script src="{{ url_for(\'static\', filename=\'editor_toolbar.js\') }}"></script>'
+          targeted = '<script src="{{ url_for(\'static\', filename=\'admin_targeted_fixes.js\') }}"></script>'
+          text = text.replace(legacy + '\n', '')
+          if targeted not in text:
+              marker = '<script>\nconst urls='
+              text = text.replace(marker, targeted + '\n' + marker, 1)
+          p.write_text(text, encoding='utf-8')
           PY
       - name: Commit change
         run: |
@@ -32,6 +32,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes to commit.'
           else
-            git commit -m 'Load visible editor formatting toolbar'
+            git commit -m 'Use single targeted admin editor enhancement layer'
             git push
           fi
