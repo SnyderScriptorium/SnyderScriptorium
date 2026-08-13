@@ -18,7 +18,6 @@ function loadEditorFonts(){
   link.href='https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:wght@400;500;600&family=Cormorant+Infant:wght@400;500;600&family=Crimson+Text:wght@400;600&family=EB+Garamond:wght@400;500;600&family=Great+Vibes&family=IM+Fell+English&family=Italianno&family=Lora:wght@400;500;600&family=Libre+Baskerville:wght@400;700&family=Playfair+Display:wght@400;500;600;700&family=UnifrakturMaguntia&display=swap';
   document.head.appendChild(link);
 }
-function ed(node){return node&&node.closest?node.closest(EDITOR):null}
 function inside(editor){const s=getSelection();return !!(editor&&s&&s.rangeCount&&editor.contains(s.anchorNode)&&editor.contains(s.focusNode))}
 function remember(editor){const s=getSelection();if(inside(editor))ranges.set(editor,s.getRangeAt(0).cloneRange())}
 function restore(editor){const r=ranges.get(editor),s=getSelection();if(!r||!editor.contains(r.commonAncestorContainer))return false;s.removeAllRanges();s.addRange(r);return true}
@@ -30,11 +29,18 @@ function selectedBlock(editor){
   return n&&n.closest?n.closest('p,h1,h2,h3,h4,h5,h6,blockquote,pre,div,li')||editor:editor;
 }
 function indent(editor,outdent){
-  const block=selectedBlock(editor);
+  focusEditor(editor);restore(editor);
+  let block=selectedBlock(editor);
+  if(block===editor){
+    document.execCommand('formatBlock',false,'p');
+    block=selectedBlock(editor);
+  }
   if(!block||block===editor)return;
   const current=parseFloat(block.style.textIndent)||0;
-  const next=Math.max(0,current+(outdent?-32:32));
-  block.style.textIndent=next?next+'px':'';
+  const next=Math.max(0,current+(outdent?-2:2));
+  if(next===0)block.style.removeProperty('text-indent');
+  else block.style.textIndent=next+'em';
+  remember(editor);
 }
 function cmd(editor,command,value){focusEditor(editor);restore(editor);document.execCommand('styleWithCSS',false,true);keepScroll(editor,()=>document.execCommand(command,false,value==null?null:value));remember(editor)}
 function size(editor,pt){
@@ -54,7 +60,8 @@ function size(editor,pt){
 function opt(select,value,text){const o=document.createElement('option');o.value=value;o.textContent=text;select.appendChild(o)}
 const RECENT_COLORS_KEY='snyderEditorRecentColors';
 function recentColors(){try{const a=JSON.parse(localStorage.getItem(RECENT_COLORS_KEY)||'[]');return Array.isArray(a)?a.filter(x=>/^#[0-9a-f]{6}$/i.test(x)).slice(0,12):[]}catch(_){return[]}}
-function saveRecentColor(color){color=String(color||'').toLowerCase();if(!/^#[0-9a-f]{6}$/.test(color))return;const a=[color,...recentColors().filter(x=>x!==color)].slice(0,12);try{localStorage.setItem(RECENT_COLORS_KEY,JSON.stringify(a))}catch(_){}}
+function saveRecentColor(color){color=String(color||'').toLowerCase();if(!/^#[0-9a-f]{6}$/.test(color))return;const a=[color,...recentColors().filter(x=>x!==color)].slice(0,12);try{localStorage.setItem(RECENT_COLORS_KEY,JSON.stringify(a))}catch(_){}
+}
 function makeColorPicker(editor,initial){
   const wrap=document.createElement('span');wrap.className='editor-color-picker';wrap.title='Font color — choose any color or reuse a recent color';
   const input=document.createElement('input');input.type='color';input.value=initial||'#24333B';input.className='editor-font-color';input.setAttribute('aria-label','Choose font color');
@@ -102,7 +109,7 @@ function applyEditorBehavior(editor){
     if(event.key!=='Tab')return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    focusEditor(editor);remember(editor);indent(editor,event.shiftKey);remember(editor);
+    indent(editor,event.shiftKey);
   },true);
   editor.addEventListener('paste',event=>{
     event.preventDefault();
