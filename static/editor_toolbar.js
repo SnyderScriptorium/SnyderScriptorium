@@ -213,28 +213,24 @@
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount) return;
 
-    // Treat Tab like a writing-program tab inside the editor instead of moving focus
-    // to the next control. CSS tab-size:4 makes the inserted tab visually consistent.
+    // Keep Tab inside the writing editor and make it behave like a normal
+    // first-line paragraph indent rather than moving focus to another control.
+    const range = selection.getRangeAt(0);
+    const paragraph = (range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement)?.closest('p,div,li,blockquote,h1,h2,h3,h4,h5,h6');
+
     if (event.shiftKey) {
-      const range = selection.getRangeAt(0);
-      if (range.collapsed && range.startContainer.nodeType === Node.TEXT_NODE) {
-        const node = range.startContainer;
-        const before = node.textContent.slice(0, range.startOffset);
-        const match = before.match(/\t$/);
-        if (match) {
-          node.deleteData(range.startOffset - 1, 1);
-          const nr = document.createRange();
-          nr.setStart(node, Math.max(0, range.startOffset - 1));
-          nr.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(nr);
-        }
-      }
+      const block = paragraph || editor;
+      const current = parseFloat(block.style.textIndent || '0');
+      block.style.textIndent = Math.max(0, current - 32) + 'px';
       remember(editor);
       return;
     }
 
-    document.execCommand('insertText', false, '\t');
+    const block = paragraph || editor;
+    const current = parseFloat(block.style.textIndent || '0');
+    block.style.textIndent = (current + 32) + 'px';
     remember(editor);
   }
 
