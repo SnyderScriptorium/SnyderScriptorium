@@ -1,6 +1,8 @@
 name: Fix stale admin publish endpoint
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,12 +24,17 @@ jobs:
           old = "{{ url_for('create_published_post') }}"
           new = "{{ url_for('create_published') }}"
           if old not in s:
-              raise SystemExit('Expected stale endpoint was not found; refusing to modify the file.')
+              print('Expected stale endpoint not found; nothing to change.')
+              raise SystemExit(0)
           s = s.replace(old, new, 1)
           p.write_text(s, encoding='utf-8')
           PY
-      - name: Commit the one-line fix
+      - name: Commit the one-line fix if needed
         run: |
+          if git diff --quiet -- templates/admin.html; then
+            echo "No change needed."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add templates/admin.html
