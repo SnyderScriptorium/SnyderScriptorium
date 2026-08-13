@@ -19,12 +19,12 @@
 
     <nav class="site-navigation" aria-label="Main navigation">
         <ul>
-            <li><a href="{{ main_site_url('/') }}">The Hearth</a></li>
-            <li><a href="{{ main_site_url('/about') }}">About</a></li>
-            <li><a href="{{ main_site_url('/blog') }}">The Blog</a></li>
-            <li><a href="{{ kw_site_url('/kwsnyderwriting/membership') }}">K. W. Snyder Writing</a></li>
-            <li><a href="{{ main_site_url('/store') }}">The Scriptorium</a></li>
-            <li><a href="{{ main_site_url('/merch') }}">Merch Shop</a></li>
+            <li><a href="{{ url_for('the_hearth') }}">The Hearth</a></li>
+            <li><a href="{{ url_for('about') }}">About</a></li>
+            <li><a href="{{ url_for('the_blog') }}">The Blog</a></li>
+            <li><a href="{{ url_for('kwsnyderwriting_membership') }}">K. W. Snyder Writing</a></li>
+            <li><a href="{{ url_for('the_scriptorium') }}">The Scriptorium</a></li>
+            <li><a href="{{ url_for('merch_shop') }}">Merch Shop</a></li>
         </ul>
     </nav>
 </header>
@@ -35,8 +35,8 @@
 
 <footer class="site-footer">
     <p>&copy; 2026 The Snyder Scriptorium. All rights reserved.</p>
-    <p><a href="{{ main_site_url('/contact') }}">Contact</a></p>
-    <p><a href="{{ main_site_url('/admin') }}">Admin</a></p>
+    <p><a href="{{ url_for('contact') }}">Contact</a></p>
+    <p><a href="{{ url_for('admin_dashboard') }}">Admin</a></p>
 </footer>
 
 {% block scripts %}{% endblock %}
