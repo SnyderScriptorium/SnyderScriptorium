@@ -58,20 +58,11 @@
     DEFAULT_COLORS.forEach(color=>palette.appendChild(swatch(color,'Palette color',()=>applyColor(color))));renderRecent(recent,getRecentColors(),applyColor);
     button.addEventListener('mousedown',()=>remember(editor));button.addEventListener('click',e=>{e.stopPropagation();menu.style.display=menu.style.display==='none'?'block':'none';});input.addEventListener('mousedown',()=>remember(editor));input.addEventListener('input',()=>applyColor(input.value));document.addEventListener('click',e=>{if(!wrap.contains(e.target))menu.style.display='none';});wrap.append(button,menu);if(sizeSelect)sizeSelect.insertAdjacentElement('afterend',wrap);else toolbar.appendChild(wrap);
   }
-  function getCurrentBlock(editor,selection){
-    if(!selection||!selection.rangeCount)return null;let node=selection.anchorNode;if(!node)return null;if(node.nodeType===Node.TEXT_NODE)node=node.parentElement;if(!node||!editor.contains(node))return null;const block=node.closest('p,li,blockquote,h1,h2,h3,h4,h5,h6,div');return block&&editor.contains(block)?block:null;
-  }
-  function indentParagraph(editor,decrease){
-    editor.focus();restore(editor);const selection=window.getSelection();const block=getCurrentBlock(editor,selection);if(!block||block===editor)return;
-    const current=parseFloat(block.style.textIndent)||0;const fontSize=parseFloat(getComputedStyle(block).fontSize)||16;const step=fontSize*2;const next=Math.max(0,current+(decrease?-step:step));
-    if(next===0)block.style.removeProperty('text-indent');else block.style.textIndent=next+'px';remember(editor);
-  }
-  function handleTab(editor,event){if(event.key!=='Tab'||!editor.contains(event.target))return;event.preventDefault();indentParagraph(editor,event.shiftKey);}
   function enhance(toolbar){
     const editor=editorFor(toolbar);if(!editor)return;const selects=toolbar.querySelectorAll('select');
     if(selects[0]){fill(selects[0],FONTS,'Font');selects[0].onmousedown=()=>remember(editor);selects[0].onchange=function(){if(this.value)command(editor,'fontName',this.value);this.selectedIndex=0;};}
     if(selects[1]){fill(selects[1],SIZES.map(String),'Size');[...selects[1].options].forEach((o,i)=>{if(i)o.textContent=o.value+' pt';});selects[1].onmousedown=()=>remember(editor);selects[1].onchange=function(){if(this.value)applySize(editor,Number(this.value));this.selectedIndex=0;};}
-    addColor(toolbar,editor,selects[1]);if(!editor.dataset.tabIndentReady){editor.addEventListener('keydown',event=>handleTab(editor,event));editor.dataset.tabIndentReady='true';}toolbar.querySelectorAll('button').forEach(button=>button.addEventListener('mousedown',()=>remember(editor),true));
+    addColor(toolbar,editor,selects[1]);toolbar.querySelectorAll('button').forEach(button=>button.addEventListener('mousedown',()=>remember(editor),true));
   }
   function run(){document.querySelectorAll('.toolbar').forEach(enhance);document.querySelectorAll('.editor').forEach(e=>e.contentEditable='true');}
   document.addEventListener('selectionchange',()=>{document.querySelectorAll('.editor').forEach(e=>remember(e));});document.addEventListener('DOMContentLoaded',run);run();setTimeout(run,100);setTimeout(run,500);setTimeout(run,1500);
