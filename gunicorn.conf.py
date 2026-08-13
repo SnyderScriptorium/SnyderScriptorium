@@ -27,6 +27,17 @@ def post_worker_init(worker):
             methods=["GET"],
         )
 
+    # The admin template also uses create_published_post when publishing.
+    # The actual POST handler is named create_published. Keep this alias
+    # protected by the original @admin_required wrapper.
+    if "create_published_post" not in app.view_functions and "create_published" in app.view_functions:
+        app.add_url_rule(
+            "/api/published",
+            endpoint="create_published_post",
+            view_func=app.view_functions["create_published"],
+            methods=["POST"],
+        )
+
     if using_postgres():
         conn = get_db()
         try:
