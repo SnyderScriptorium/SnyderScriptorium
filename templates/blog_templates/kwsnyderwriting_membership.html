@@ -35,7 +35,7 @@
     {% if session.get('member_logged_in') %}
     <div class="member-auth-card" style="margin-top:28px;text-align:center;">
       <h2>Membership Subscription</h2>
-      <p class="member-auth-note">Continue securely through PayPal Sandbox to start your membership.</p>
+      <p class="member-auth-note">Continue securely through PayPal to start your membership.</p>
       <div id="paypal-button-container" style="max-width:420px;margin:20px auto 0;"></div>
       <p id="paypal-status" class="member-auth-note" style="margin-top:15px;" aria-live="polite"></p>
     </div>
@@ -88,8 +88,8 @@
   });
   try {
     const rendered = buttons.render('#paypal-button-container');
-    if (rendered && typeof rendered.catch === 'function') rendered.catch(function (error) { console.error('PayPal button render error:', error); setStatus('PayPal could not render the subscription button. Check that the Sandbox Client ID and membership plan belong to the same PayPal app.', true); });
-  } catch (error) { console.error('PayPal button setup error:', error); setStatus('PayPal could not initialize the subscription button. Check the Sandbox Client ID and plan configuration.', true); }
+    if (rendered && typeof rendered.catch === 'function') rendered.catch(function (error) { console.error('PayPal button render error:', error); setStatus('PayPal could not render the subscription button. Check that your PayPal Live credentials and membership plan are configured correctly.', true); });
+  } catch (error) { console.error('PayPal button setup error:', error); setStatus('PayPal could not initialize the subscription button. Check the PayPal Live configuration and membership plan.', true); }
 })();
 </script>
 {% elif session.get('member_logged_in') %}
