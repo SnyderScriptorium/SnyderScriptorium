@@ -10,6 +10,16 @@
       <a href="{{ url_for('admin_exit_member_preview') }}">Exit Preview</a>
     {% endif %}
   </div>
+
+  {% if not member_preview %}
+  <div class="content-section" style="margin-bottom:25px;text-align:center;">
+    <h2>My Membership</h2>
+    <p class="private-label">Your K. W. Snyder Writing membership is active through PayPal.</p>
+    <button id="cancel-membership-button" type="button" class="light" style="margin-top:10px;">Cancel Membership</button>
+    <p id="membership-management-status" class="private-label" style="margin-top:10px;" aria-live="polite"></p>
+  </div>
+  {% endif %}
+
   <div id="kw-library-menu" class="blog-feed">
     <a class="blog-block" href="#kw-writing-list" data-kw-view="writing"><h2>Writing</h2><p>Standalone writing posts from the writing desk.</p></a>
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='short-stories') }}"><h2>Short Stories</h2><p>Standalone stories from the writing desk.</p></a>
@@ -29,4 +39,5 @@
   <p style="margin-top:30px"><a href="{{ url_for('member_logout') }}">Sign Out</a></p>
 </section>
 {% endblock %}
-{% block scripts %}<script>(function(){const menu=document.getElementById('kw-library-menu'),views=document.querySelectorAll('.kw-library-view');function showView(id){menu.hidden=true;views.forEach(v=>v.hidden=v.id!==id);window.scrollTo({top:0,behavior:'smooth'});}function showMenu(){views.forEach(v=>v.hidden=true);menu.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}document.querySelectorAll('[data-kw-view]').forEach(l=>l.addEventListener('click',function(e){e.preventDefault();const t=this.dataset.kwView==='writing'?'kw-writing-list':'kw-novels-list';history.pushState({kwView:t},'', '#'+t);showView(t);}));document.querySelectorAll('[data-kw-back]').forEach(l=>l.addEventListener('click',function(e){e.preventDefault();history.pushState({},'', '#kw-library-menu');showMenu();}));window.addEventListener('popstate',function(){const h=window.location.hash;if(h==='#kw-writing-list')showView('kw-writing-list');else if(h==='#kw-novels-list')showView('kw-novels-list');else showMenu();});if(location.hash==='#kw-writing-list')showView('kw-writing-list');else if(location.hash==='#kw-novels-list')showView('kw-novels-list');})();</script>{% endblock %}
+{% block scripts %}<script>(function(){const menu=document.getElementById('kw-library-menu'),views=document.querySelectorAll('.kw-library-view');function showView(id){menu.hidden=true;views.forEach(v=>v.hidden=v.id!==id);window.scrollTo({top:0,behavior:'smooth'});}function showMenu(){views.forEach(v=>v.hidden=true);menu.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}document.querySelectorAll('[data-kw-view]').forEach(l=>l.addEventListener('click',function(e){e.preventDefault();const t=this.dataset.kwView==='writing'?'kw-writing-list':'kw-novels-list';history.pushState({kwView:t},'', '#'+t);showView(t);}));document.querySelectorAll('[data-kw-back]').forEach(l=>l.addEventListener('click',function(e){e.preventDefault();history.pushState({},'', '#kw-library-menu');showMenu();}));window.addEventListener('popstate',function(){const h=window.location.hash;if(h==='#kw-writing-list')showView('kw-writing-list');else if(h==='#kw-novels-list')showView('kw-novels-list');else showMenu();});if(location.hash==='#kw-writing-list')showView('kw-writing-list');else if(location.hash==='#kw-novels-list')showView('kw-novels-list');
+const cancelButton=document.getElementById('cancel-membership-button');const status=document.getElementById('membership-management-status');if(cancelButton){cancelButton.addEventListener('click',async function(){if(!window.confirm('Cancel your K. W. Snyder Writing membership? This cancels the PayPal subscription and removes access to the private library.'))return;cancelButton.disabled=true;status.textContent='Cancelling your PayPal membership…';try{const r=await fetch('{{ url_for("paypal_member.cancel_subscription") }}',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin'});const data=await r.json().catch(()=>({}));if(!r.ok||!data.ok)throw new Error(data.error||'The membership could not be cancelled.');status.textContent='Your membership has been cancelled. Redirecting…';window.location.href='{{ url_for("kwsnyderwriting_membership") }}';}catch(e){cancelButton.disabled=false;status.textContent=e.message||'The membership could not be cancelled.';}});}})();</script>{% endblock %}
