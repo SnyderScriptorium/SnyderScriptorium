@@ -6,39 +6,44 @@ The Hearth — Snyder Scriptorium
 
 {% block content %}
 <style>
-    /* Home/Hearth: force the entire presentation to a true centered column. */
-    .site-main > .hearth-page {
-        width: 100%;
-        max-width: 860px;
+    /* The Hearth is centered independently of every inherited layout rule. */
+    .site-main.hearth-main {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: flex-start !important;
+        text-align: center !important;
+    }
+    .site-main.hearth-main .hearth-page {
+        flex: 0 1 860px !important;
+        width: 100% !important;
+        max-width: 860px !important;
         margin: 0 auto !important;
+        padding: 0 !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: center !important;
-        justify-content: flex-start !important;
         text-align: center !important;
     }
-    .site-main > .hearth-page > * {
-        width: 100%;
-        max-width: 860px;
+    .site-main.hearth-main .hearth-page > * {
+        width: 100% !important;
+        max-width: 860px !important;
         margin-left: auto !important;
         margin-right: auto !important;
         text-align: center !important;
     }
-    .site-main > .hearth-page .hearth-intro,
-    .site-main > .hearth-page .content-section {
-        display: block !important;
-    }
-    .site-main > .hearth-page p {
-        max-width: 720px;
+    .site-main.hearth-main .hearth-page p {
+        width: min(100%, 720px) !important;
         margin-left: auto !important;
         margin-right: auto !important;
+        text-align: center !important;
     }
-    .site-main > .hearth-page .home-image-container {
+    .site-main.hearth-main .home-image-container {
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
+        margin: 28px auto !important;
     }
-    .site-main > .hearth-page .full-width-image {
+    .site-main.hearth-main .full-width-image {
         display: block !important;
         width: min(100%, 850px) !important;
         height: auto !important;
