@@ -4,21 +4,15 @@
 <section class="blog-page">
   <div class="page-heading"><h1>Curiosity Cabinet</h1></div>
   <p class="content-section">A changing collection of science, history, home life, endangered species, biology, and whatever else catches my curiosity.</p>
-  <form method="get" class="content-section" style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">
-    <div style="min-width:220px;flex:1;"><label for="topic">Browse by Topic</label><select id="topic" name="topic" style="width:100%;padding:9px;border:1px solid var(--line,#C9B78F);border-radius:5px;background:var(--paper,#FFFDF8);"><option value="">All Topics</option>{% for label in filter_labels %}<option value="{{ label }}" {% if label == selected_label %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-    <div style="min-width:220px;flex:1;"><label for="q">Search the Cabinet</label><input id="q" name="q" type="search" value="{{ search_query }}" placeholder="Search by title or text"></div>
-    <button type="submit">Find Entries</button>
-    {% if selected_label or search_query %}<a href="{{ url_for('curiosity_cabinet') }}" style="padding:9px 0;">Clear</a>{% endif %}
-  </form>
   <div class="blog-feed">
     {% for post in posts %}
     <a class="blog-block" href="{{ url_for('view_post', post_id=post['id']) }}">
       <h2>{{ post['title'] }}</h2>
-      <p class="private-label">{{ post['date_published'] }} · {{ post['category_name'] }}</p>
+      <p class="private-label">{{ post['date_published'] }} · Curiosity Cabinet</p>
       <p>{{ post['content']|striptags|truncate(180, True, '…') }}</p>
     </a>
     {% else %}
-    <p class="private-label">No Curiosity Cabinet entries match your selection yet.</p>
+    <p class="private-label">No Curiosity Cabinet entries have been published yet.</p>
     {% endfor %}
   </div>
 </section>
