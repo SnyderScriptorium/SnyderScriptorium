@@ -3,12 +3,11 @@
 {% block content %}
 <section class="blog-page">
   <div class="page-heading"><h1>Book Reviews</h1></div>
-  <p class="content-section">Deep dives, critiques, and honest thoughts on the books crossing my desk.</p>
   <div class="blog-feed">
     {% for post in posts %}
     <a class="blog-block" href="{{ url_for('view_post', post_id=post['id']) }}">
       <h2>{{ post['title'] }}</h2>
-      <p class="private-label">{{ post['date_published'] }} · Book Reviews</p>
+      <p class="private-label">{{ post['date_published'] }}</p>
       <p>{{ post['content']|striptags|truncate(180, True, '…') }}</p>
     </a>
     {% else %}
