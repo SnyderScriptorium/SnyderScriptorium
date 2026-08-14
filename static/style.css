@@ -124,6 +124,9 @@ body {
     font-size: .95rem;
 }
 
+.hearth-page { text-align: center; }
+.hearth-page .content-section { text-align: center; }
+.hearth-page .content-section p { max-width: 720px; margin-left: auto; margin-right: auto; }
 .hearth-intro { text-align: center; }
 .hearth-intro h2 { color: #5C4033; font-weight: 400; }
 .home-image-container { margin: 28px 0; text-align: center; }
