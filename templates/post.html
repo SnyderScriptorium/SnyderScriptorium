@@ -10,7 +10,20 @@
     {% endif %}
   </p>
   <h1>{{ post['title'] }}</h1>
-  <p class="private-label">{{ post['category_name'] }} · {{ post['date_published'] }}</p>
+  <p class="private-label">
+    {% if post['category'] == 'kwsnyderwriting' %}
+      K. W. Snyder Writing
+    {% elif post['category'] == 'kw_short_stories' %}
+      K. W. Snyder Writing — Short Stories
+    {% elif post['category'] == 'kw_poems' %}
+      K. W. Snyder Writing — Poems
+    {% elif post['category'] == 'kw_vignettes' %}
+      K. W. Snyder Writing — Vignettes
+    {% else %}
+      {{ post['category_name'] }}
+    {% endif %}
+    · {{ post['date_published'] }}
+  </p>
   <div class="preview" style="margin-top:25px;line-height:1.85;">
     {{ post['content']|safe }}
   </div>
