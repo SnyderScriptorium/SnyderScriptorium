@@ -16,9 +16,12 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
+    from analytics_dashboard import register_analytics_dashboard
+    register_analytics_dashboard(app)
+    from subscriber_dashboard import register_subscriber_dashboard
+    register_subscriber_dashboard(app)
+
     # Admin template uses get_published_posts for the published-post list.
-    # The actual list view is get_published; get_published_post is the
-    # single-post endpoint. Keep the alias protected by the original guard.
     if "get_published_posts" not in app.view_functions and "get_published" in app.view_functions:
         app.add_url_rule(
             "/api/published",
@@ -28,8 +31,6 @@ def post_worker_init(worker):
         )
 
     # The admin template also uses create_published_post when publishing.
-    # The actual POST handler is named create_published. Keep this alias
-    # protected by the original @admin_required wrapper.
     if "create_published_post" not in app.view_functions and "create_published" in app.view_functions:
         app.add_url_rule(
             "/api/published",
@@ -48,13 +49,15 @@ def post_worker_init(worker):
                     page_type TEXT NOT NULL DEFAULT 'page',
                     content_id BIGINT,
                     category TEXT,
-                    viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    visitor_key TEXT
                 )
             """)
             conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS page_type TEXT NOT NULL DEFAULT 'page'")
             conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS content_id BIGINT")
             conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS category TEXT")
             conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP")
+            conn.execute("ALTER TABLE page_views ADD COLUMN IF NOT EXISTS visitor_key TEXT")
             conn.commit()
         finally:
             conn.close()
