@@ -55,6 +55,9 @@ def post_worker_init(worker):
             response.headers["Cache-Control"]="no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"]="no-cache"
             response.headers["Expires"]="0"
+        elif request.path in {"/static/admin_targeted_fixes.js", "/static/admin_fixes.js", "/static/style.css"}:
+            # Force the browser to pick up the current admin/analytics code after a deploy.
+            response.headers["Cache-Control"]="no-cache, must-revalidate, max-age=0"
         return response
 
     if "kwsnyderwriting" not in app.view_functions and "kwsnyderwriting_entry" in app.view_functions:
