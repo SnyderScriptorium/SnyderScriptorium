@@ -3,6 +3,18 @@ def post_worker_init(worker):
 
     from database import init_db, get_db, using_postgres
     init_db()
+
+    # Normalize the legacy Journal bucket everywhere it can still exist.
+    # K. W. Snyder Writing is the canonical private category.
+    conn = get_db()
+    try:
+        conn.execute("UPDATE published_posts SET category = 'kwsnyderwriting', category_name = 'K. W. Snyder Writing', access_level = 'members' WHERE LOWER(COALESCE(category, '')) = 'journal' OR LOWER(COALESCE(category_name, '')) = 'journal'")
+        conn.execute("UPDATE drafts SET category = 'kwsnyderwriting' WHERE LOWER(COALESCE(category, '')) = 'journal'")
+        conn.execute("UPDATE page_views SET category = 'kwsnyderwriting' WHERE LOWER(COALESCE(category, '')) = 'journal'")
+        conn.commit()
+    finally:
+        conn.close()
+
     from paypal_plan_bootstrap import ensure_paypal_plan
     ensure_paypal_plan(app)
     from paypal_member_routes import register_paypal_member
