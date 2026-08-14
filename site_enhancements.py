@@ -89,10 +89,8 @@ def _period_start(period):
     now = datetime.now(timezone.utc)
     if period in {'day', 'today'}:
         return now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if period in {'7d', '7'}:
-        return now - timedelta(days=7)
-    if period in {'month', '30'}:
-        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if period in {'7d', '7'}: return now - timedelta(days=7)
+    if period in {'month', '30'}: return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     if period in {'3m', '90'}:
         month = now.month - 3; year = now.year
         while month <= 0: month += 12; year -= 1
@@ -101,43 +99,25 @@ def _period_start(period):
         month = now.month - 6; year = now.year
         while month <= 0: month += 12; year -= 1
         return now.replace(year=year, month=month, day=1, hour=0, minute=0, second=0, microsecond=0)
-    if period in {'1y', '365'}:
-        return now - timedelta(days=365)
+    if period in {'1y', '365'}: return now - timedelta(days=365)
     return None
 
 
-def _day_expr(column):
-    return f"substr(CAST({column} AS TEXT), 1, 10)"
+def _day_expr(column): return f"substr(CAST({column} AS TEXT), 1, 10)"
 
 
 def _analytics_report(period='month'):
-    start = _period_start(period)
-    conn = get_db()
+    start = _period_start(period); conn = get_db()
     try:
         where = ''; params = []
-        if start:
-            where = ' WHERE viewed_at >= ?'; params.append(start.isoformat())
+        if start: where = ' WHERE viewed_at >= ?'; params.append(start.isoformat())
         total_views = conn.execute(f'SELECT COUNT(*) FROM page_views{where}', params).fetchone()[0]
         unique_sql = f"SELECT COUNT(DISTINCT visitor_key) FROM page_views{where} AND visitor_key IS NOT NULL" if where else "SELECT COUNT(DISTINCT visitor_key) FROM page_views WHERE visitor_key IS NOT NULL"
         unique_visitors = conn.execute(unique_sql, params).fetchone()[0]
         daily_rows = conn.execute(f"SELECT {_day_expr('viewed_at')} AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS visitors FROM page_views{where} GROUP BY day ORDER BY day", params).fetchall()
-        content_rows = conn.execute(f"""
-            SELECT pv.page_type AS content_type, pv.content_id,
-                   COALESCE(pp.title, mb.title, mc.title, NULLIF(pv.path, ''), 'Site Page') AS title,
-                   COALESCE(pv.category, 'site') AS category, pv.path, COUNT(*) AS views,
-                   COUNT(DISTINCT pv.visitor_key) AS unique_visitors
-            FROM page_views pv
-            LEFT JOIN published_posts pp ON pp.id = pv.content_id AND pv.page_type IN ('post','member_post')
-            LEFT JOIN manuscript_books mb ON mb.id = pv.content_id AND pv.page_type = 'novel'
-            LEFT JOIN manuscript_chapters mc ON mc.id = pv.content_id AND pv.page_type = 'chapter'
-            {where.replace('viewed_at', 'pv.viewed_at')}
-            GROUP BY pv.page_type, pv.content_id, COALESCE(pp.title, mb.title, mc.title, NULLIF(pv.path, ''), 'Site Page'), COALESCE(pv.category, 'site'), pv.path
-            ORDER BY views DESC, title ASC
-        """, params).fetchall()
+        content_rows = conn.execute(f"""SELECT pv.page_type AS content_type, pv.content_id, COALESCE(pp.title, mb.title, mc.title, NULLIF(pv.path, ''), 'Site Page') AS title, COALESCE(pv.category, 'site') AS category, pv.path, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS unique_visitors FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id AND pv.page_type IN ('post','member_post') LEFT JOIN manuscript_books mb ON mb.id = pv.content_id AND pv.page_type = 'novel' LEFT JOIN manuscript_chapters mc ON mc.id = pv.content_id AND pv.page_type = 'chapter' {where.replace('viewed_at', 'pv.viewed_at')} GROUP BY pv.page_type, pv.content_id, COALESCE(pp.title, mb.title, mc.title, NULLIF(pv.path, ''), 'Site Page'), COALESCE(pv.category, 'site'), pv.path ORDER BY views DESC, title ASC""", params).fetchall()
         category_rows = conn.execute(f"SELECT COALESCE(category, 'site') AS category, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS unique_visitors FROM page_views{where} GROUP BY COALESCE(category, 'site') ORDER BY views DESC", params).fetchall()
-        member_rows = conn.execute("SELECT subscription_status, COUNT(*) AS count FROM members GROUP BY subscription_status").fetchall()
-        member_counts = {str(row['subscription_status'] or 'inactive'): int(row['count']) for row in member_rows}
-        total_members = sum(member_counts.values())
+        member_rows = conn.execute("SELECT subscription_status, COUNT(*) AS count FROM members GROUP BY subscription_status").fetchall(); member_counts = {str(row['subscription_status'] or 'inactive'): int(row['count']) for row in member_rows}; total_members = sum(member_counts.values())
         sub_where = ''; sub_params = []
         if start: sub_where = ' WHERE date_started IS NOT NULL AND date_started >= ?'; sub_params.append(start.isoformat())
         new_rows = conn.execute(f"SELECT {_day_expr('date_started')} AS day, COUNT(*) AS count FROM subscriptions{sub_where} GROUP BY day ORDER BY day", sub_params).fetchall()
@@ -145,17 +125,14 @@ def _analytics_report(period='month'):
         if start: cancel_where += ' AND date_ends >= ?'; cancel_params.append(start.isoformat())
         cancel_rows = conn.execute(f"SELECT {_day_expr('date_ends')} AS day, COUNT(*) AS count FROM subscriptions{cancel_where} GROUP BY day ORDER BY day", cancel_params).fetchall()
         return {'period': period, 'total_views': int(total_views), 'unique_visitors': int(unique_visitors), 'all_time_views': int(conn.execute('SELECT COUNT(*) FROM page_views').fetchone()[0]), 'daily': [{'day': row['day'], 'views': int(row['views']), 'visitors': int(row['visitors'])} for row in daily_rows], 'categories': [{'category': _label_for(row['category']), 'raw_category': row['category'], 'views': int(row['views']), 'unique_visitors': int(row['unique_visitors'])} for row in category_rows], 'posts': [{'content_type': row['content_type'], 'content_id': row['content_id'], 'title': row['title'], 'category': _label_for(row['category']), 'path': row['path'], 'views': int(row['views']), 'unique_visitors': int(row['unique_visitors'])} for row in content_rows], 'members': {'total': total_members, 'active': member_counts.get('active', 0), 'past_due': member_counts.get('past_due', 0), 'paused': member_counts.get('paused', 0), 'cancelled': member_counts.get('cancelled', 0), 'expired': member_counts.get('expired', 0), 'inactive': member_counts.get('inactive', 0)}, 'subscriber_daily': [{'day': row['day'], 'new': int(row['count']), 'cancelled': 0} for row in new_rows] + [{'day': row['day'], 'new': 0, 'cancelled': int(row['count'])} for row in cancel_rows]}
-    finally:
-        conn.close()
+    finally: conn.close()
 
 
 def _public_category(category, template, title, filter_name):
-    conn = get_db(); labels = conn.execute("SELECT DISTINCT category_name FROM published_posts WHERE category = ? AND access_level = 'public' AND category_name IS NOT NULL AND TRIM(category_name) <> '' ORDER BY LOWER(category_name)", (category,)).fetchall()
-    selected = str(request.args.get(filter_name, '')).strip(); search = str(request.args.get('q', '')).strip(); sql = "SELECT * FROM published_posts WHERE category = ? AND access_level = 'public'"; params = [category]
+    conn = get_db(); labels = conn.execute("SELECT DISTINCT category_name FROM published_posts WHERE category = ? AND access_level = 'public' AND category_name IS NOT NULL AND TRIM(category_name) <> '' ORDER BY LOWER(category_name)", (category,)).fetchall(); selected = str(request.args.get(filter_name, '')).strip(); search = str(request.args.get('q', '')).strip(); sql = "SELECT * FROM published_posts WHERE category = ? AND access_level = 'public'"; params = [category]
     if selected: sql += " AND category_name = ?"; params.append(selected)
     if search: sql += " AND (LOWER(title) LIKE LOWER(?) OR LOWER(content) LIKE LOWER(?))"; like = f"%{search}%"; params.extend([like, like])
-    posts = conn.execute(sql + " ORDER BY id DESC", params).fetchall(); conn.close()
-    return render_template(template, posts=posts, category_name=title, filter_labels=[row['category_name'] for row in labels], selected_label=selected, search_query=search)
+    posts = conn.execute(sql + " ORDER BY id DESC", params).fetchall(); conn.close(); return render_template(template, posts=posts, category_name=title, filter_labels=[row['category_name'] for row in labels], selected_label=selected, search_query=search)
 
 
 def _create_published_post():
@@ -164,8 +141,7 @@ def _create_published_post():
     if not title or not content.strip(): return jsonify({'error':'A title and content are required.'}),400
     if category == 'kwsnyderwriting' or category.startswith('kw_'): access='members'
     if access not in {'public','members'}: access='public'
-    conn=get_db(); cur=conn.execute("INSERT INTO published_posts(title, category, category_name, content, date_published, access_level) VALUES (?, ?, ?, ?, ?, ?)",(title,category,_label_for(category,data.get('categoryName')),content,str(data.get('date','')).strip() or datetime.now().strftime('%m/%d/%Y %I:%M %p'),access)); conn.commit(); post_id=cur.lastrowid; conn.close()
-    return jsonify({'success':True,'id':post_id,'access_level':access}),201
+    conn=get_db(); cur=conn.execute("INSERT INTO published_posts(title, category, category_name, content, date_published, access_level) VALUES (?, ?, ?, ?, ?, ?)",(title,category,_label_for(category,data.get('categoryName')),content,str(data.get('date','')).strip() or datetime.now().strftime('%m/%d/%Y %I:%M %p'),access)); conn.commit(); post_id=cur.lastrowid; conn.close(); return jsonify({'success':True,'id':post_id,'access_level':access}),201
 
 
 def _update_published_post(post_id):
