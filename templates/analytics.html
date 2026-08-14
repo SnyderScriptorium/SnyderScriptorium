@@ -34,7 +34,7 @@
     <thead><tr><th>Post / Page</th><th>Category</th><th>Type</th><th style="text-align:right">Views</th></tr></thead>
     <tbody>
     {% for item in content_views %}
-      <tr><td>{{ item.title }}</td><td class="category">{{ item.category or 'Site page' }}</td><td>{{ item.content_type }}</td><td class="views">{{ item.views }}</td></tr>
+      <tr><td>{{ item.title }}</td><td class="category">{% if item.category|lower == 'journal' %}{{ 'K. W. Snyder Writing' if item.content_type in ['post','member_post'] else 'Homepage' }}{% else %}{{ item.category or 'Site page' }}{% endif %}</td><td>{{ item.content_type }}</td><td class="views">{{ item.views }}</td></tr>
     {% else %}
       <tr><td colspan="4" class="note">No pageviews recorded yet.</td></tr>
     {% endfor %}
