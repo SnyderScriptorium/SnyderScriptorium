@@ -124,13 +124,33 @@ body {
     font-size: .95rem;
 }
 
-.hearth-page { text-align: center; }
-.hearth-page .content-section { text-align: center; }
-.hearth-page .content-section p { max-width: 720px; margin-left: auto; margin-right: auto; }
-.hearth-intro { text-align: center; }
+/* Home / Hearth page: deliberately center the entire page presentation. */
+.hearth-page {
+    width: 100%;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+}
+.hearth-page > *,
+.hearth-page .hearth-intro,
+.hearth-page .content-section,
+.hearth-page .home-image-container {
+    width: 100%;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+}
+.hearth-page .content-section p,
+.hearth-page .hearth-intro p {
+    max-width: 720px;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+}
+.hearth-intro { text-align: center !important; }
 .hearth-intro h2 { color: #5C4033; font-weight: 400; }
-.home-image-container { margin: 28px 0; text-align: center; }
-.full-width-image { width: 100%; max-width: 850px; height: auto; border-radius: 6px; display: block; margin: 0 auto; }
+.home-image-container { margin: 28px auto !important; text-align: center !important; }
+.full-width-image { width: 100%; max-width: 850px; height: auto; border-radius: 6px; display: block; margin: 0 auto !important; }
 
 .blog-feed { display: grid; gap: 16px; margin-top: 25px; }
 .blog-block {
