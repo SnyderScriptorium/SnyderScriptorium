@@ -2,7 +2,7 @@
 {% block title %}Analytics — Snyder Scriptorium{% endblock %}
 {% block content %}
 <style>
-.analytics-wrap{max-width:1000px;margin:0 auto}.analytics-head{display:flex;justify-content:space-between;align-items:end;gap:15px;flex-wrap:wrap}.analytics-head h1{color:#5C4033;font-weight:400;margin:0}.periods{display:flex;gap:7px;flex-wrap:wrap;margin:22px 0}.periods a{padding:8px 13px;border:1px solid #C9B78F;border-radius:5px;background:#FFFDF8;color:#5C4033;text-decoration:none}.periods a.active{background:#5C4033;color:#fff}.view-total{background:#F7F1E6;border:1px solid #C9B78F;border-radius:8px;padding:22px;margin-bottom:20px}.view-total .number{font-size:2.2rem;color:#24333B}.view-total .label{color:#6F6257}.analytics-table{width:100%;border-collapse:collapse;background:#FFFDF8;border:1px solid #C9B78F}.analytics-table th,.analytics-table td{padding:11px 13px;border-bottom:1px solid #E4D8C2;text-align:left}.analytics-table th{color:#5C4033;background:#EFE7D8;font-weight:500}.analytics-table td.views{text-align:right;font-weight:600}.analytics-table .category{color:#6F6257;font-size:.9rem}.chart-row{display:flex;align-items:end;gap:5px;height:170px;padding:20px 10px 0;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;margin-bottom:20px}.bar{flex:1;min-width:3px;background:#75695D;border-radius:3px 3px 0 0;position:relative}.bar span{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:.72rem;background:#24333B;color:#fff;padding:3px 5px;border-radius:3px;white-space:nowrap}.bar:hover span{display:block}.chart-note{text-align:center;color:#6F6257;font-size:.85rem;margin:5px 0 20px}.back{display:inline-block;margin-top:20px;color:#5C4033}
+.analytics-wrap{max-width:1000px;margin:0 auto}.analytics-head{display:flex;justify-content:space-between;align-items:end;gap:15px;flex-wrap:wrap}.analytics-head h1{color:#5C4033;font-weight:400;margin:0}.periods{display:flex;gap:7px;flex-wrap:wrap;margin:22px 0}.periods a{padding:8px 13px;border:1px solid #C9B78F;border-radius:5px;background:#FFFDF8;color:#5C4033;text-decoration:none}.periods a.active{background:#5C4033;color:#fff}.summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin-bottom:20px}.view-total{background:#F7F1E6;border:1px solid #C9B78F;border-radius:8px;padding:22px}.view-total .number{font-size:2.2rem;color:#24333B}.view-total .label{color:#6F6257}.today-total{border:2px solid #8A6A4A}.analytics-table{width:100%;border-collapse:collapse;background:#FFFDF8;border:1px solid #C9B78F}.analytics-table th,.analytics-table td{padding:11px 13px;border-bottom:1px solid #E4D8C2;text-align:left}.analytics-table th{color:#5C4033;background:#EFE7D8;font-weight:500}.analytics-table td.views{text-align:right;font-weight:600}.analytics-table .category{color:#6F6257;font-size:.9rem}.chart-row{display:flex;align-items:end;gap:5px;height:170px;padding:20px 10px 0;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;margin-bottom:20px}.bar{flex:1;min-width:3px;background:#75695D;border-radius:3px 3px 0 0;position:relative}.bar span{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:.72rem;background:#24333B;color:#fff;padding:3px 5px;border-radius:3px;white-space:nowrap}.bar:hover span{display:block}.chart-note{text-align:center;color:#6F6257;font-size:.85rem;margin:5px 0 20px}.back{display:inline-block;margin-top:20px;color:#5C4033}@media(max-width:650px){.summary-grid{grid-template-columns:1fr}}
 </style>
 <section class="analytics-wrap">
   <div class="analytics-head">
@@ -16,7 +16,18 @@
     {% endfor %}
   </nav>
 
-  <div class="view-total"><div class="number">{{ total_views }}</div><div class="label">Views for this period</div></div>
+  <div class="summary-grid">
+    <div class="view-total {% if period == 'day' %}today-total{% endif %}">
+      <div class="number">{{ total_views }}</div>
+      <div class="label">{% if period == 'day' %}Total Views Today{% else %}Views for this period{% endif %}</div>
+    </div>
+    {% if period == 'day' %}
+    <div class="view-total">
+      <div class="number">{{ unique_visitors|default(0) }}</div>
+      <div class="label">Unique Visitors Today</div>
+    </div>
+    {% endif %}
+  </div>
 
   <h2 class="section-title">Views by day</h2>
   {% if daily_views %}
