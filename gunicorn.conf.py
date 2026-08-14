@@ -29,6 +29,8 @@ def post_worker_init(worker):
     register_analytics_v3(app)
     from subscriber_dashboard import register_subscriber_dashboard
     register_subscriber_dashboard(app)
+    from category_route_fix import register_category_route_fix
+    register_category_route_fix(app)
 
     if "get_published_posts" not in app.view_functions and "get_published" in app.view_functions:
         app.add_url_rule("/api/published", endpoint="get_published_posts", view_func=app.view_functions["get_published"], methods=["GET"])
