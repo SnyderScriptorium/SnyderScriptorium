@@ -7,13 +7,13 @@ The Hearth — Snyder Scriptorium
 {% block content %}
 <style>
     /* The Hearth is centered independently of every inherited layout rule. */
-    .site-main.hearth-main {
+    body:has(.hearth-page) .site-main {
         display: flex !important;
         justify-content: center !important;
         align-items: flex-start !important;
         text-align: center !important;
     }
-    .site-main.hearth-main .hearth-page {
+    body:has(.hearth-page) .hearth-page {
         flex: 0 1 860px !important;
         width: 100% !important;
         max-width: 860px !important;
@@ -24,26 +24,26 @@ The Hearth — Snyder Scriptorium
         align-items: center !important;
         text-align: center !important;
     }
-    .site-main.hearth-main .hearth-page > * {
+    body:has(.hearth-page) .hearth-page > * {
         width: 100% !important;
         max-width: 860px !important;
         margin-left: auto !important;
         margin-right: auto !important;
         text-align: center !important;
     }
-    .site-main.hearth-main .hearth-page p {
+    body:has(.hearth-page) .hearth-page p {
         width: min(100%, 720px) !important;
         margin-left: auto !important;
         margin-right: auto !important;
         text-align: center !important;
     }
-    .site-main.hearth-main .home-image-container {
+    body:has(.hearth-page) .home-image-container {
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
         margin: 28px auto !important;
     }
-    .site-main.hearth-main .full-width-image {
+    body:has(.hearth-page) .full-width-image {
         display: block !important;
         width: min(100%, 850px) !important;
         height: auto !important;
