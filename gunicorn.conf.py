@@ -14,12 +14,9 @@ def post_worker_init(worker):
             return render_template("admin_login.html", logged_in=False)
         return None
 
-    # Disable the legacy tracker defined in app.py. Analytics now has exactly
-    # one active request tracker: canonical_analytics_tracker.py.
     legacy = app.before_request_funcs.get(None, [])
     app.before_request_funcs[None] = [fn for fn in legacy if getattr(fn, '__name__', '') != 'analytics_request_tracker']
 
-    # Normalize the legacy Journal bucket everywhere it can still exist.
     conn = get_db()
     try:
         conn.execute("UPDATE published_posts SET category = 'kwsnyderwriting', category_name = 'K. W. Snyder Writing', access_level = 'members' WHERE LOWER(COALESCE(category, '')) = 'journal' OR LOWER(COALESCE(category_name, '')) = 'journal'")
@@ -54,7 +51,6 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
-    # Single analytics authority: one tracker + one report/dashboard.
     from canonical_analytics_tracker import register as register_canonical_analytics
     register_canonical_analytics(app)
     from analytics_dashboard_v3 import register as register_analytics_v3
@@ -88,6 +84,10 @@ def post_worker_init(worker):
     @app.after_request
     def no_cache_admin(response):
         from flask import request, session
+        # Failed login attempts must return the same isolated login screen rather
+        # than falling back to the dashboard template.
+        if request.path == "/admin/login" and session.get("admin_logged_in") is not True:
+            return render_template("admin_login.html", logged_in=False, login_error="The admin password was not recognized.")
         if request.path.startswith("/admin"):
             response.headers["Cache-Control"]="no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"]="no-cache"
