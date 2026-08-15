@@ -45,9 +45,7 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
-    # The login endpoint must remain completely independent of the dashboard.
-    # On failed authentication, return the isolated login-only page rather than
-    # rendering admin.html with its dashboard scripts and tab logic.
+    # Keep the login endpoint independent of dashboard scripts.
     from flask import request, session, redirect, url_for, render_template
     import os
     from app import ADMIN_AUTH_VERSION
@@ -57,7 +55,8 @@ def post_worker_init(worker):
         if not configured_password:
             return render_template("admin_login.html", login_error="Admin password is not configured on the server.")
         if password == configured_password:
-            session.clear()
+            # Do not clear the whole session here. Clearing it was unnecessary
+            # and could discard session state during the login redirect.
             session.permanent = False
             session["admin_logged_in"] = True
             session["admin_auth_version"] = ADMIN_AUTH_VERSION
@@ -118,6 +117,3 @@ def post_worker_init(worker):
         elif request.path in {"/static/admin_targeted_fixes.js", "/static/admin_fixes.js", "/static/style.css", "/static/about_editor.js"}:
             response.headers["Cache-Control"]="no-cache, must-revalidate, max-age=0"
         return response
-
-    if "kwsnyderwriting" not in app.view_functions and "kwsnyderwriting_entry" in app.view_functions:
-        app.add_url_rule("/kwsnyderwriting", endpoint="kwsnyderwriting", view_func=app.view_functions["kwsnyderwriting_entry"])
