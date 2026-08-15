@@ -9,13 +9,13 @@
     const category=document.getElementById('postCategory'),wrapper=document.getElementById('postKWSubcategoryWrap'),sub=document.getElementById('postKWSubcategory');if(!category||!wrapper||!sub)return;
     const oldValue=category.value;const oldKW=['kw_short_stories','kw_poems','kw_vignettes'].includes(oldValue)?oldValue:(oldValue==='kwsnyderwriting'?'kwsnyderwriting':null);
     category.innerHTML='';[['curations','Book Curations'],['reviews','Book Reviews'],['curiosity','Curiosity Cabinet'],['kwsnyderwriting','K. W. Snyder Writing']].forEach(([value,label])=>{const option=document.createElement('option');option.value=value;option.textContent=label;category.appendChild(option)});
-    category.value=oldKW?'kwsnyderwriting':(oldValue||'curations');if(oldKW&&oldKW!=='kwsnyderwriting')sub.value=oldKW;
+    category.value=oldKW?'kwsnyderwriting':(oldValue==='journal'?'kwsnyderwriting':(oldValue||'curations'));if(oldKW&&oldKW!=='kwsnyderwriting')sub.value=oldKW;
     function sync(){const isKW=category.value==='kwsnyderwriting';wrapper.classList.toggle('hidden',!isKW);const access=document.getElementById('postAccess');if(access){access.value=isKW?'members':'public';access.disabled=isKW}}
-    category.addEventListener('change',sync);sub.addEventListener('change',sync);sync();
+    category.addEventListener('change',sync);sub.addEventListener('change',sync);sync()
   }
   function removeDuplicateSizeSelectors(){document.querySelectorAll('.toolbar').forEach(toolbar=>{const sizes=Array.from(toolbar.querySelectorAll('select')).filter(select=>{const first=select.options&&select.options[0];return first&&String(first.textContent||'').trim().toLowerCase()==='size'});sizes.slice(1).forEach(select=>select.remove())})}
 
-  function categoryForCard(card){const text=String(card.textContent||'').toLowerCase();if(text.includes('book curations'))return'curations';if(text.includes('book reviews'))return'reviews';if(text.includes('curiosity cabinet'))return'curiosity';if(text.includes('k. w. snyder writing')||text.includes('k.w. snyder writing'))return'kwsnyderwriting';return'other'}
+  function categoryForCard(card){const text=String(card.textContent||'').toLowerCase();if(text.includes('book curations'))return'curations';if(text.includes('book reviews'))return'reviews';if(text.includes('curiosity cabinet'))return'curiosity';if(text.includes('k. w. snyder writing')||text.includes('k.w. snyder writing')||text.includes('short stories')||text.includes('poems')||text.includes('vignettes'))return'kwsnyderwriting';return'other'}
   function enforcePublishedDisplay(){const list=document.getElementById('publishedList');if(!list)return;Array.from(list.children).forEach(card=>{if(!card.classList||!card.classList.contains('card'))return;if(categoryForCard(card)==='kwsnyderwriting'){const small=card.querySelector('small');if(small){const bits=small.textContent.split(' · ');if(bits.length)bits[bits.length-1]='Members Only';small.textContent=bits.join(' · ')}}})}
 
   function addPublishedFilters(){
@@ -28,7 +28,6 @@
   }
 
   function addSubscriberDashboardLink(){const tabs=document.querySelector('.tabs');if(!tabs||document.getElementById('subscriberDashboardLink'))return;const button=document.createElement('button');button.id='subscriberDashboardLink';button.type='button';button.className='light';button.textContent='Subscriber Dashboard';button.addEventListener('click',()=>{location.href='/admin/subscribers'});const analyticsTab=document.getElementById('tab-stats');if(analyticsTab)analyticsTab.insertAdjacentElement('afterend',button);else tabs.appendChild(button)}
-
   function addTodayAnalyticsButton(){const stats=document.getElementById('stats');if(!stats||document.getElementById('analyticsTodayButton'))return;const actions=stats.querySelector('.actions');if(!actions)return;const b=document.createElement('button');b.id='analyticsTodayButton';b.type='button';b.className='light';b.textContent='1 Day — Today';b.onclick=()=>window.loadStats&&window.loadStats('day');actions.insertBefore(b,actions.firstChild);const three=stats.querySelector('.three');if(three&&!document.getElementById('statUniqueVisitors')){const card=document.createElement('div');card.className='card';card.innerHTML='<div><h3>Unique Visitors</h3><small>Selected period</small></div><strong id="statUniqueVisitors">0</strong>';three.appendChild(card)}}
   function normalizeAnalyticsLabel(category,path){const c=String(category||'').toLowerCase();if(path==='/')return'Home';if(c==='site')return'Home';if(c==='journal')return'K. W. Snyder Writing';return({curations:'Book Curations',reviews:'Book Reviews',curiosity:'Curiosity Cabinet',kwsnyderwriting:'K. W. Snyder Writing',kw_short_stories:'K. W. Snyder Writing — Short Stories',kw_poems:'K. W. Snyder Writing — Poems',kw_vignettes:'K. W. Snyder Writing — Vignettes'})[c]||category||'Home'}
   function escAnalytics(value){const d=document.createElement('div');d.textContent=value==null?'':String(value);return d.innerHTML}
@@ -40,6 +39,25 @@
       const heading=document.querySelector('#stats .preview h3');if(heading)heading.textContent=period==='day'?'Views by Hour — Today':'Views Over Time';const totalCard=statViews&&statViews.closest('.card');if(totalCard){const h3=totalCard.querySelector('h3'),small=totalCard.querySelector('small');if(h3)h3.textContent=period==='day'?'Total Views Today':'Total Views';if(small)small.textContent=period==='day'?'Today':'Selected period'}
     }catch(e){if(typeof window.showStatus==='function')window.showStatus(e.message,true);else console.error(e)}}
   }
-  function start(){setPostEditorCategoryMode();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
+
+  // K. W. Snyder Writing is a protected branch. Normalize the editor value
+  // before the original publish/save functions ever send it to Flask.
+  function installKWPublishGuard(){
+    const canonical=function(){
+      const c=document.getElementById('postCategory'),sub=document.getElementById('postKWSubcategory');
+      let value=(c&&c.value)||'';
+      if(value==='journal') value='kwsnyderwriting';
+      if(value==='kwsnyderwriting' && sub && sub.value) value=sub.value;
+      if(['kw_short_stories','kw_poems','kw_vignettes'].includes(value)) return value;
+      if(value==='kwsnyderwriting') return 'kwsnyderwriting';
+      return value;
+    };
+    window.effectivePostCategory=canonical;
+    const access=document.getElementById('postAccess');
+    const category=document.getElementById('postCategory');
+    if(category&&access){const sync=()=>{const value=canonical();const locked=value==='kwsnyderwriting'||value.startsWith('kw_');access.value=locked?'members':'public';access.disabled=locked;};category.addEventListener('change',sync);if(document.getElementById('postKWSubcategory'))document.getElementById('postKWSubcategory').addEventListener('change',sync);sync();}
+  }
+
+  function start(){setPostEditorCategoryMode();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
