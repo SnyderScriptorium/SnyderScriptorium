@@ -3,13 +3,18 @@ from zoneinfo import ZoneInfo
 import re
 from flask import jsonify, render_template, request, session
 from database import get_db
+from analytics_schema_compat import ensure_schema
+
+# Make the canonical analytics/subscriber schema available before either
+# dashboard handles its first request. This is deliberately part of the one
+# canonical analytics system rather than another tracker/report implementation.
+ensure_schema()
 
 EASTERN = ZoneInfo('America/New_York')
 LABELS = {'/':'Home','/about':'About','/blog':'Blog','/blog/bookcurations':'Book Curations','/blog/bookreviews':'Book Reviews','/blog/curiosity_cabinet':'Curiosity Cabinet','/kwsnyderwriting':'K. W. Snyder Writing','/kwsnyderwriting/membership':'K. W. Snyder Writing Membership'}
 CATEGORIES = {'curations':'Book Curations','reviews':'Book Reviews','curiosity':'Curiosity Cabinet','kwsnyderwriting':'K. W. Snyder Writing','kw_short_stories':'K. W. Snyder Writing — Short Stories','kw_poems':'K. W. Snyder Writing — Poems','kw_vignettes':'K. W. Snyder Writing — Vignettes','blog':'Blog','site':'Home','journal':'K. W. Snyder Writing','Journal':'K. W. Snyder Writing'}
 
 def admin_ok(): return session.get('admin_logged_in') is True and session.get('admin_auth_version') == '2026-08-10-3'
-
 def start_for(period):
     now=datetime.now(EASTERN)
     if period in {'day','1d','today'}: return now.replace(hour=0,minute=0,second=0,microsecond=0)
@@ -36,8 +41,7 @@ def label(path,typ,cat,title):
     if '/kwsnyderwriting/novel/' in path and '/chapter/' in path: return 'Book Chapter'
     if '/kwsnyderwriting/novel/' in path: return 'Novel'
     if path in LABELS: return LABELS[path]
-    if str(cat) in {'site','journal','Journal'}:
-        return 'K. W. Snyder Writing' if str(cat).lower()=='journal' else 'Site Page'
+    if str(cat) in {'site','journal','Journal'}: return 'K. W. Snyder Writing' if str(cat).lower()=='journal' else 'Site Page'
     return CATEGORIES.get(str(cat), path or 'Site Page')
 
 def source_label(value,referrer=''):
@@ -67,32 +71,15 @@ def report(period):
             local=dt.astimezone(EASTERN); key=local.strftime('%Y-%m-%dT%H:00') if period=='day' else local.strftime('%Y-%m-%d')
             buckets[key]=buckets.get(key,0)+1; visitor_buckets.setdefault(key,set()).add(str(rowval(row,1,'visitor_key') or ''))
         daily=[{'day':k,'views':buckets[k],'visitors':len(visitor_buckets.get(k,set())-{''})} for k in sorted(buckets)]
-
-        rows=conn.execute(f"""
-            SELECT pv.path AS path,pv.page_type AS page_type,pv.content_id AS content_id,pv.category AS category,
-                   COALESCE(pp.title,mb.title,mc.title) AS title,COUNT(*) AS views,
-                   COUNT(DISTINCT pv.visitor_key) AS unique_visitors
-            FROM page_views pv
-            LEFT JOIN published_posts pp ON pp.id=pv.content_id
-                AND (pv.page_type IN ('post','member_post') OR pv.path LIKE '/blog/post/%' OR pv.path LIKE '/kwsnyderwriting/post/%')
-            LEFT JOIN manuscript_books mb ON mb.id=pv.content_id
-                AND (pv.page_type='novel' OR pv.path LIKE '/kwsnyderwriting/novel/%') AND pv.path NOT LIKE '%/chapter/%'
-            LEFT JOIN manuscript_chapters mc ON mc.id=pv.content_id
-                AND (pv.page_type='chapter' OR pv.path LIKE '/kwsnyderwriting/novel/%/chapter/%')
-            {where}
-            GROUP BY pv.path,pv.page_type,pv.content_id,pv.category,pp.title,mb.title,mc.title
-            ORDER BY views DESC,pv.path
-        """,params).fetchall()
+        rows=conn.execute(f"""SELECT pv.path AS path,pv.page_type AS page_type,pv.content_id AS content_id,pv.category AS category,COALESCE(pp.title,mb.title,mc.title) AS title,COUNT(*) AS views,COUNT(DISTINCT pv.visitor_key) AS unique_visitors FROM page_views pv LEFT JOIN published_posts pp ON pp.id=pv.content_id AND (pv.page_type IN ('post','member_post') OR pv.path LIKE '/blog/post/%' OR pv.path LIKE '/kwsnyderwriting/post/%') LEFT JOIN manuscript_books mb ON mb.id=pv.content_id AND (pv.page_type='novel' OR pv.path LIKE '/kwsnyderwriting/novel/%') AND pv.path NOT LIKE '%/chapter/%' LEFT JOIN manuscript_chapters mc ON mc.id=pv.content_id AND (pv.page_type='chapter' OR pv.path LIKE '/kwsnyderwriting/novel/%/chapter/%') {where} GROUP BY pv.path,pv.page_type,pv.content_id,pv.category,pp.title,mb.title,mc.title ORDER BY views DESC,pv.path""",params).fetchall()
         content=[]
         for row in rows:
-            path=rowval(row,0,'path'); typ=rowval(row,1,'page_type'); cat=rowval(row,3,'category'); title=rowval(row,4,'title')
-            effective_type=typ
+            path=rowval(row,0,'path'); typ=rowval(row,1,'page_type'); cat=rowval(row,3,'category'); title=rowval(row,4,'title'); effective_type=typ
             if path.startswith('/blog/post/'): effective_type='post'
             elif path.startswith('/kwsnyderwriting/post/'): effective_type='member_post'
             elif '/kwsnyderwriting/novel/' in path and '/chapter/' in path: effective_type='chapter'
             elif '/kwsnyderwriting/novel/' in path: effective_type='novel'
             content.append({'title':label(path,effective_type,cat,title),'category':CATEGORIES.get(cat,'K. W. Snyder Writing' if str(cat).lower()=='journal' else (cat or LABELS.get(path,'Home'))),'content_type':effective_type,'views':int(rowval(row,5,'views') or 0),'unique_visitors':int(rowval(row,6,'unique_visitors') or 0),'path':path})
-
         source_rows=conn.execute(f"SELECT traffic_source AS source,referrer AS referrer,COUNT(*) AS views FROM page_views pv{where} GROUP BY traffic_source,referrer ORDER BY views DESC",params).fetchall(); source_views={}
         for row in source_rows:
             name=source_label(rowval(row,0,'source'),rowval(row,1,'referrer')); source_views[name]=source_views.get(name,0)+int(rowval(row,2,'views') or 0)
