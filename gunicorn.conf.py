@@ -11,9 +11,33 @@ def post_worker_init(worker):
         conn.execute("UPDATE published_posts SET category = 'kwsnyderwriting', category_name = 'K. W. Snyder Writing', access_level = 'members' WHERE LOWER(COALESCE(category, '')) = 'journal' OR LOWER(COALESCE(category_name, '')) = 'journal'")
         conn.execute("UPDATE drafts SET category = 'kwsnyderwriting' WHERE LOWER(COALESCE(category, '')) = 'journal'")
         conn.execute("UPDATE page_views SET category = 'kwsnyderwriting' WHERE LOWER(COALESCE(category, '')) = 'journal'")
-        # Fail closed: only the explicitly public blog categories may remain public.
-        # Anything unknown, malformed, or uncategorized becomes members-only.
+        # Fail closed: only explicitly public blog categories may remain public.
         conn.execute("UPDATE published_posts SET access_level = 'members' WHERE category NOT IN ('curations', 'reviews', 'curiosity')")
+
+        if using_postgres():
+            conn.execute("""CREATE OR REPLACE FUNCTION force_safe_access() RETURNS trigger AS $$
+                BEGIN
+                    IF NEW.category NOT IN ('curations','reviews','curiosity') THEN
+                        NEW.access_level := 'members';
+                    END IF;
+                    RETURN NEW;
+                END;
+            $$ LANGUAGE plpgsql""")
+            conn.execute("DROP TRIGGER IF EXISTS trg_force_safe_access ON published_posts")
+            conn.execute("""CREATE TRIGGER trg_force_safe_access
+                BEFORE INSERT OR UPDATE OF category, access_level ON published_posts
+                FOR EACH ROW EXECUTE FUNCTION force_safe_access()""")
+        else:
+            conn.execute("DROP TRIGGER IF EXISTS trg_force_safe_access_insert")
+            conn.execute("DROP TRIGGER IF EXISTS trg_force_safe_access_update")
+            conn.execute("""CREATE TRIGGER trg_force_safe_access_insert
+                AFTER INSERT ON published_posts
+                WHEN NEW.category NOT IN ('curations','reviews','curiosity') AND NEW.access_level != 'members'
+                BEGIN UPDATE published_posts SET access_level='members' WHERE id=NEW.id; END""")
+            conn.execute("""CREATE TRIGGER trg_force_safe_access_update
+                AFTER UPDATE OF category, access_level ON published_posts
+                WHEN NEW.category NOT IN ('curations','reviews','curiosity') AND NEW.access_level != 'members'
+                BEGIN UPDATE published_posts SET access_level='members' WHERE id=NEW.id; END""")
         conn.commit()
     finally:
         conn.close()
@@ -31,9 +55,8 @@ def post_worker_init(worker):
     from analytics_dashboard_v3 import register as register_analytics_v3
     register_analytics_v3(app)
 
-    # The v3 dashboard/report is the single analytics authority.  The legacy
-    # /api/analytics endpoint is pointed at the same handler so there are not
-    # two competing analytics implementations.
+    # The v3 dashboard/report is the single analytics authority. The legacy
+    # /api/analytics endpoint is pointed at that same handler.
     if "analytics_api_v3" in app.view_functions:
         app.view_functions["analytics_api"] = app.view_functions["analytics_api_v3"]
 
@@ -68,7 +91,6 @@ def post_worker_init(worker):
             response.headers["Pragma"]="no-cache"
             response.headers["Expires"]="0"
         elif request.path in {"/static/admin_targeted_fixes.js", "/static/admin_fixes.js", "/static/style.css"}:
-            # Force the browser to pick up the current admin/analytics code after a deploy.
             response.headers["Cache-Control"]="no-cache, must-revalidate, max-age=0"
         return response
 
