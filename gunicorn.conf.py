@@ -55,8 +55,6 @@ def post_worker_init(worker):
         if not configured_password:
             return render_template("admin_login.html", login_error="Admin password is not configured on the server.")
         if password == configured_password:
-            # Do not clear the whole session here. Clearing it was unnecessary
-            # and could discard session state during the login redirect.
             session.permanent = False
             session["admin_logged_in"] = True
             session["admin_auth_version"] = ADMIN_AUTH_VERSION
@@ -105,15 +103,17 @@ def post_worker_init(worker):
             response.headers["Cache-Control"]="no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"]="no-cache"
             response.headers["Expires"]="0"
-            # Never inject dashboard helpers into the isolated login page.
-            # They are only needed after authentication, when admin_logged_in is true.
             if 'text/html' in response.content_type and session.get("admin_logged_in") is True:
                 html=response.get_data(as_text=True)
                 marker='</body>'
-                script='<script src="/static/about_editor.js?v=20260814-4"></script>'
-                if script not in html:
-                    html=html.replace(marker,script+marker)
-                    response.set_data(html)
-        elif request.path in {"/static/admin_targeted_fixes.js", "/static/admin_fixes.js", "/static/style.css", "/static/about_editor.js"}:
+                scripts=[
+                    '<script src="/static/about_editor.js?v=20260814-4"></script>',
+                    '<script src="/static/admin_navigation.js?v=20260815-1"></script>'
+                ]
+                for script in scripts:
+                    if script not in html:
+                        html=html.replace(marker,script+marker)
+                response.set_data(html)
+        elif request.path in {"/static/admin_targeted_fixes.js", "/static/admin_fixes.js", "/static/style.css", "/static/about_editor.js", "/static/admin_navigation.js"}:
             response.headers["Cache-Control"]="no-cache, must-revalidate, max-age=0"
         return response
