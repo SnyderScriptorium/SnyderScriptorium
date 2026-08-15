@@ -1,14 +1,13 @@
 from app import app, DATABASE, init_db
-from analytics import init_analytics
 from member_auth_guard import register_member_auth_guard
 from admin_auth_guard import register_admin_auth_guard
 
 app.config["DATABASE"] = DATABASE
 init_db()
-init_analytics(app)
 
-# Register authentication guards directly during application import so they
-# are active regardless of whether Gunicorn loads an optional config hook.
+# Analytics is registered by gunicorn.conf.py through the single canonical
+# site_enhancements + analytics_dashboard_v3 stack. Do not initialize a
+# second analytics tracker here.
 register_member_auth_guard(app)
 register_admin_auth_guard(app)
 
