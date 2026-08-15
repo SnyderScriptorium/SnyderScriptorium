@@ -45,6 +45,27 @@ def post_worker_init(worker):
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
 
+    # The login endpoint must remain completely independent of the dashboard.
+    # On failed authentication, return the isolated login-only page rather than
+    # rendering admin.html with its dashboard scripts and tab logic.
+    from flask import request, session, redirect, url_for, render_template
+    import os
+    from app import ADMIN_AUTH_VERSION
+    def isolated_admin_login():
+        password = request.form.get("password", "")
+        configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
+        if not configured_password:
+            return render_template("admin_login.html", login_error="Admin password is not configured on the server.")
+        if password == configured_password:
+            session.clear()
+            session.permanent = False
+            session["admin_logged_in"] = True
+            session["admin_auth_version"] = ADMIN_AUTH_VERSION
+            session["admin_reauth_ok"] = True
+            return redirect(url_for("admin_dashboard"))
+        return render_template("admin_login.html", login_error="The admin password was not recognized.")
+    app.view_functions["admin_login"] = isolated_admin_login
+
     # Single analytics authority: one tracker + one report/dashboard.
     from canonical_analytics_tracker import register as register_canonical_analytics
     register_canonical_analytics(app)
@@ -78,14 +99,16 @@ def post_worker_init(worker):
         finally:
             conn.close()
 
-    from flask import request
     @app.after_request
     def no_cache_admin(response):
+        from flask import request
         if request.path.startswith("/admin"):
             response.headers["Cache-Control"]="no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"]="no-cache"
             response.headers["Expires"]="0"
-            if 'text/html' in response.content_type:
+            # Never inject dashboard helpers into the isolated login page.
+            # They are only needed after authentication, when admin_logged_in is true.
+            if 'text/html' in response.content_type and session.get("admin_logged_in") is True:
                 html=response.get_data(as_text=True)
                 marker='</body>'
                 script='<script src="/static/about_editor.js?v=20260814-4"></script>'
