@@ -1,5 +1,24 @@
 (function () {
   'use strict';
+
+  // Keep the unauthenticated admin login controls above every dashboard layer.
+  // The login form must remain keyboard/pointer accessible even while the
+  // dashboard is hidden. This is intentionally limited to the login controls.
+  function protectAdminLogin(){
+    const login=document.getElementById('login');
+    const password=document.getElementById('password');
+    if(!login||!password)return;
+    login.style.position='relative';
+    login.style.zIndex='10000';
+    login.style.pointerEvents='auto';
+    password.style.position='relative';
+    password.style.zIndex='10001';
+    password.style.pointerEvents='auto';
+    password.removeAttribute('readonly');
+    password.removeAttribute('disabled');
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',protectAdminLogin,{once:true});else protectAdminLogin();
+
   function currentEditorTarget(target){return target&&target.closest?target.closest('#postEditor, #chapterEditor'):null}
   function paragraphBlock(editor){const selection=window.getSelection();if(!selection||!selection.rangeCount||!editor.contains(selection.anchorNode))return null;let node=selection.anchorNode;if(node&&node.nodeType===Node.TEXT_NODE)node=node.parentElement;return node&&node.closest?(node.closest('p,h1,h2,h3,h4,h5,h6,blockquote,li,div')||editor):editor}
   function indentParagraph(editor,outdent){editor.focus({preventScroll:true});let block=paragraphBlock(editor);if(!block||block===editor){document.execCommand('formatBlock',false,'p');block=paragraphBlock(editor)}if(!block||block===editor)return;const current=parseFloat(block.style.textIndent)||0;const next=Math.max(0,current+(outdent?-2:2));if(next===0)block.style.removeProperty('text-indent');else block.style.textIndent=next+'em'}
@@ -18,9 +37,6 @@
     category.addEventListener('change',sync);sub.addEventListener('change',()=>{rememberedKWSubcategory=sub.value;sync()});sync()
   }
 
-  // Draft/unpublish fix: the editor is repopulated asynchronously by the
-  // existing admin code. Re-apply the K. W. subcategory AFTER that happens,
-  // so opening an unpublished post never removes the second-level selector.
   function preserveKWSubcategoryAfterDraftLoad(){
     const category=document.getElementById('postCategory'),wrapper=document.getElementById('postKWSubcategoryWrap'),sub=document.getElementById('postKWSubcategory');if(!category||!wrapper||!sub)return;
     const apply=()=>{
@@ -107,6 +123,6 @@
     }catch(_){/* dashboard remains usable if a repair request is unavailable */}
   }
 
-  function start(){setPostEditorCategoryMode();preserveKWSubcategoryAfterDraftLoad();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();repairLegacyJournalContent();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
+  function start(){protectAdminLogin();setPostEditorCategoryMode();preserveKWSubcategoryAfterDraftLoad();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();repairLegacyJournalContent();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
