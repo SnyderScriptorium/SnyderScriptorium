@@ -1,6 +1,6 @@
 import re
 import uuid
-from flask import request
+from flask import request, session
 from database import get_db
 
 PUBLIC_CATEGORIES = {
@@ -77,6 +77,12 @@ def register(app):
         if path.startswith(('/static/', '/api/', '/admin')):
             return None
 
+        # Admins should be able to browse/test the public site without
+        # polluting human visitor analytics. This does NOT affect public
+        # visitors or prevent search engines from crawling/indexing pages.
+        if session.get('admin_logged_in') is True:
+            return None
+
         # Do not block these clients. They still receive the normal page and
         # can index/crawl it; we simply exclude them from human analytics.
         user_agent = request.headers.get('User-Agent', '')
@@ -97,10 +103,6 @@ def register(app):
         conn = None
         try:
             conn = get_db()
-            # A normal browser refresh should not create another visitor.
-            # visitor_key is persistent for one year; each request remains a
-            # view, while unique visitors are calculated with DISTINCT keys.
-            # This tracker intentionally does not use IP addresses as identity.
             conn.execute(
                 'INSERT INTO page_views(path,page_type,content_id,category,visitor_key,referrer,traffic_source) VALUES (?,?,?,?,?,?,?)',
                 (path, page_type, content_id, category, visitor_key, referrer, _source(referrer)),
