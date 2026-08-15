@@ -5,14 +5,50 @@
   function indentParagraph(editor,outdent){editor.focus({preventScroll:true});let block=paragraphBlock(editor);if(!block||block===editor){document.execCommand('formatBlock',false,'p');block=paragraphBlock(editor)}if(!block||block===editor)return;const current=parseFloat(block.style.textIndent)||0;const next=Math.max(0,current+(outdent?-2:2));if(next===0)block.style.removeProperty('text-indent');else block.style.textIndent=next+'em'}
   document.addEventListener('keydown',function(event){if(event.key!=='Tab')return;const editor=currentEditorTarget(event.target);if(!editor)return;event.preventDefault();event.stopImmediatePropagation();indentParagraph(editor,event.shiftKey)},true);
 
+  const KW_SUBCATEGORIES=['kwsnyderwriting','kw_short_stories','kw_poems','kw_vignettes'];
+  let rememberedKWSubcategory='kwsnyderwriting';
   function setPostEditorCategoryMode(){
     const category=document.getElementById('postCategory'),wrapper=document.getElementById('postKWSubcategoryWrap'),sub=document.getElementById('postKWSubcategory');if(!category||!wrapper||!sub)return;
-    const oldValue=category.value;const oldKW=['kw_short_stories','kw_poems','kw_vignettes'].includes(oldValue)?oldValue:(oldValue==='kwsnyderwriting'?'kwsnyderwriting':null);
+    const oldValue=category.value;const oldKW=KW_SUBCATEGORIES.includes(oldValue)?oldValue:(oldValue==='journal'?'kwsnyderwriting':null);
     category.innerHTML='';[['curations','Book Curations'],['reviews','Book Reviews'],['curiosity','Curiosity Cabinet'],['kwsnyderwriting','K. W. Snyder Writing']].forEach(([value,label])=>{const option=document.createElement('option');option.value=value;option.textContent=label;category.appendChild(option)});
-    category.value=oldKW?'kwsnyderwriting':(oldValue==='journal'?'kwsnyderwriting':(oldValue||'curations'));if(oldKW&&oldKW!=='kwsnyderwriting')sub.value=oldKW;
-    function sync(){const isKW=category.value==='kwsnyderwriting';wrapper.classList.toggle('hidden',!isKW);const access=document.getElementById('postAccess');if(access){access.value=isKW?'members':'public';access.disabled=isKW}}
-    category.addEventListener('change',sync);sub.addEventListener('change',sync);sync()
+    category.value=oldKW?'kwsnyderwriting':(oldValue==='journal'?'kwsnyderwriting':(oldValue||'curations'));
+    if(oldKW&&oldKW!=='kwsnyderwriting')rememberedKWSubcategory=oldKW;
+    sub.value=KW_SUBCATEGORIES.includes(rememberedKWSubcategory)?rememberedKWSubcategory:'kwsnyderwriting';
+    function sync(){const isKW=category.value==='kwsnyderwriting';wrapper.classList.toggle('hidden',!isKW);if(isKW){if(!KW_SUBCATEGORIES.includes(sub.value))sub.value=rememberedKWSubcategory||'kwsnyderwriting';rememberedKWSubcategory=sub.value;}const access=document.getElementById('postAccess');if(access){access.value=isKW?'members':'public';access.disabled=isKW}}
+    category.addEventListener('change',sync);sub.addEventListener('change',()=>{rememberedKWSubcategory=sub.value;sync()});sync()
   }
+
+  // Draft/unpublish fix: the editor is repopulated asynchronously by the
+  // existing admin code. Re-apply the K. W. subcategory AFTER that happens,
+  // so opening an unpublished post never removes the second-level selector.
+  function preserveKWSubcategoryAfterDraftLoad(){
+    const category=document.getElementById('postCategory'),wrapper=document.getElementById('postKWSubcategoryWrap'),sub=document.getElementById('postKWSubcategory');if(!category||!wrapper||!sub)return;
+    const apply=()=>{
+      const value=String(category.value||'');
+      const isKW=KW_SUBCATEGORIES.includes(value)||value==='journal';
+      if(isKW){
+        const normalized=value==='journal'?'kwsnyderwriting':value;
+        category.value='kwsnyderwriting';
+        if(normalized!=='kwsnyderwriting')rememberedKWSubcategory=normalized;
+        if(!KW_SUBCATEGORIES.includes(rememberedKWSubcategory))rememberedKWSubcategory='kwsnyderwriting';
+        sub.value=rememberedKWSubcategory;
+        wrapper.classList.remove('hidden');
+        const access=document.getElementById('postAccess');if(access){access.value='members';access.disabled=true}
+      } else if(category.value){
+        wrapper.classList.add('hidden');
+        const access=document.getElementById('postAccess');if(access)access.disabled=false;
+      }
+    };
+    apply();
+    const observer=new MutationObserver(apply);
+    observer.observe(category,{attributes:true,childList:true,subtree:true});
+    observer.observe(sub,{attributes:true,childList:true,subtree:true});
+    let last='';
+    const poll=()=>{const sig=category.value+'|'+sub.value; if(sig!==last){last=sig;apply()}};
+    const timer=setInterval(poll,150);setTimeout(()=>clearInterval(timer),15000);
+    window.addEventListener('beforeunload',()=>clearInterval(timer),{once:true});
+  }
+
   function removeDuplicateSizeSelectors(){document.querySelectorAll('.toolbar').forEach(toolbar=>{const sizes=Array.from(toolbar.querySelectorAll('select')).filter(select=>{const first=select.options&&select.options[0];return first&&String(first.textContent||'').trim().toLowerCase()==='size'});sizes.slice(1).forEach(select=>select.remove())})}
 
   function categoryForCard(card){const text=String(card.textContent||'').toLowerCase();if(text.includes('book curations'))return'curations';if(text.includes('book reviews'))return'reviews';if(text.includes('curiosity cabinet'))return'curiosity';if(text.includes('k. w. snyder writing')||text.includes('k.w. snyder writing')||text.includes('short stories')||text.includes('poems')||text.includes('vignettes'))return'kwsnyderwriting';return'other'}
@@ -56,8 +92,6 @@
     if(category&&access){const sync=()=>{const value=canonical();const locked=value==='kwsnyderwriting'||value.startsWith('kw_');access.value=locked?'members':'public';access.disabled=locked;};category.addEventListener('change',sync);if(document.getElementById('postKWSubcategory'))document.getElementById('postKWSubcategory').addEventListener('change',sync);sync();}
   }
 
-  // Legacy posts that were incorrectly stored as Journal are repaired the
-  // first time the admin dashboard loads. There is no Journal branch anymore.
   async function repairLegacyJournalContent(){
     try{
       const posts=await fetch('/api/published',{credentials:'same-origin'}).then(r=>r.ok?r.json():[]);
@@ -73,6 +107,6 @@
     }catch(_){/* dashboard remains usable if a repair request is unavailable */}
   }
 
-  function start(){setPostEditorCategoryMode();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();repairLegacyJournalContent();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
+  function start(){setPostEditorCategoryMode();preserveKWSubcategoryAfterDraftLoad();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();repairLegacyJournalContent();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
