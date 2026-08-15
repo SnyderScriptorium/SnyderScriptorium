@@ -1,6 +1,17 @@
 (function () {
   'use strict';
 
+  // Load the single canonical dashboard tab controller before any other
+  // dashboard enhancement code can interfere with section navigation.
+  (function loadCanonicalAdminNavigation(){
+    if (document.querySelector('script[data-admin-navigation="canonical"]')) return;
+    const script = document.createElement('script');
+    script.src = '/static/admin_navigation.js?v=20260815-1';
+    script.async = false;
+    script.dataset.adminNavigation = 'canonical';
+    (document.head || document.documentElement).appendChild(script);
+  })();
+
   // Keep the unauthenticated login as the only interactive layer until login succeeds.
   // This prevents hidden dashboard elements/scripts from stealing focus or pointer events.
   function protectAdminLogin(){
@@ -23,7 +34,7 @@
       password.removeAttribute('readonly');
       password.removeAttribute('disabled');
       password.tabIndex=0;
-      login.querySelectorAll('input,button').forEach(el=>{el.style.pointerEvents='auto';el.style.userSelect='text';el.removeAttribute('disabled');});
+      login.querySelectorAll('input,button').forEach(el=>{el.style.pointerEvents='auto';el.style.userSelect='text';el.removeAttribute('disabled');el.removeAttribute('readonly');});
     }else if(dashboard){
       dashboard.style.removeProperty('display');
       dashboard.removeAttribute('inert');
