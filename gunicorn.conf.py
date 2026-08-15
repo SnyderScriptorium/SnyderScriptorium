@@ -58,8 +58,6 @@ def post_worker_init(worker):
 
     from subscriber_dashboard import register_subscriber_dashboard
     register_subscriber_dashboard(app)
-    from category_route_fix import register_category_route_fix
-    register_category_route_fix(app)
 
     if "get_published_posts" not in app.view_functions and "get_published" in app.view_functions:
         app.add_url_rule("/api/published", endpoint="get_published_posts", view_func=app.view_functions["get_published"], methods=["GET"])
@@ -83,7 +81,7 @@ def post_worker_init(worker):
 
     @app.after_request
     def no_cache_admin(response):
-        from flask import request
+        from flask import request, session
         if request.path.startswith("/admin"):
             response.headers["Cache-Control"]="no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"]="no-cache"
