@@ -1,23 +1,49 @@
 (function () {
   'use strict';
 
-  // Keep the unauthenticated admin login controls above every dashboard layer.
-  // The login form must remain keyboard/pointer accessible even while the
-  // dashboard is hidden. This is intentionally limited to the login controls.
+  // Keep the unauthenticated login as the only interactive layer until login succeeds.
+  // This prevents hidden dashboard elements/scripts from stealing focus or pointer events.
   function protectAdminLogin(){
     const login=document.getElementById('login');
     const password=document.getElementById('password');
+    const dashboard=document.getElementById('dashboard');
     if(!login||!password)return;
-    login.style.position='relative';
-    login.style.zIndex='10000';
-    login.style.pointerEvents='auto';
-    password.style.position='relative';
-    password.style.zIndex='10001';
-    password.style.pointerEvents='auto';
-    password.removeAttribute('readonly');
-    password.removeAttribute('disabled');
+    const loggedIn=login.classList.contains('hidden');
+    if(!loggedIn){
+      if(dashboard){dashboard.style.display='none';dashboard.setAttribute('inert','');dashboard.setAttribute('aria-hidden','true');}
+      login.style.position='relative';
+      login.style.zIndex='2147483647';
+      login.style.pointerEvents='auto';
+      login.style.userSelect='text';
+      password.style.position='relative';
+      password.style.zIndex='2147483647';
+      password.style.pointerEvents='auto';
+      password.style.userSelect='text';
+      password.style.touchAction='auto';
+      password.removeAttribute('readonly');
+      password.removeAttribute('disabled');
+      password.tabIndex=0;
+      login.querySelectorAll('input,button').forEach(el=>{el.style.pointerEvents='auto';el.style.userSelect='text';el.removeAttribute('disabled');});
+    }else if(dashboard){
+      dashboard.style.removeProperty('display');
+      dashboard.removeAttribute('inert');
+      dashboard.removeAttribute('aria-hidden');
+    }
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',protectAdminLogin,{once:true});else protectAdminLogin();
+  function wireLogin(){
+    protectAdminLogin();
+    const login=document.getElementById('login');
+    const password=document.getElementById('password');
+    if(!login||!password||login.dataset.loginProtected==='1')return;
+    login.dataset.loginProtected='1';
+    password.addEventListener('focus',()=>{protectAdminLogin();},true);
+    password.addEventListener('mousedown',()=>{protectAdminLogin();requestAnimationFrame(()=>password.focus());},true);
+    password.addEventListener('click',()=>{protectAdminLogin();password.focus();},true);
+    password.addEventListener('keydown',event=>{event.stopPropagation();},true);
+    password.addEventListener('input',()=>{password.removeAttribute('disabled');password.removeAttribute('readonly');},true);
+    new MutationObserver(protectAdminLogin).observe(login,{attributes:true,attributeFilter:['class'],childList:true,subtree:true});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wireLogin,{once:true});else wireLogin();
 
   function currentEditorTarget(target){return target&&target.closest?target.closest('#postEditor, #chapterEditor'):null}
   function paragraphBlock(editor){const selection=window.getSelection();if(!selection||!selection.rangeCount||!editor.contains(selection.anchorNode))return null;let node=selection.anchorNode;if(node&&node.nodeType===Node.TEXT_NODE)node=node.parentElement;return node&&node.closest?(node.closest('p,h1,h2,h3,h4,h5,h6,blockquote,li,div')||editor):editor}
@@ -123,6 +149,6 @@
     }catch(_){/* dashboard remains usable if a repair request is unavailable */}
   }
 
-  function start(){protectAdminLogin();setPostEditorCategoryMode();preserveKWSubcategoryAfterDraftLoad();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();repairLegacyJournalContent();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
+  function start(){wireLogin();setPostEditorCategoryMode();preserveKWSubcategoryAfterDraftLoad();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();repairLegacyJournalContent();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
