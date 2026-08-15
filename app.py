@@ -35,15 +35,6 @@ def now_string():
     return datetime.now().strftime("%m/%d/%Y %I:%M %p")
 
 
-def table_columns(conn, table):
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-
-
-def add_column_if_missing(conn, table, column, definition):
-    if column not in table_columns(conn, table):
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-
-
 def init_db():
     database_init_db()
 
@@ -250,8 +241,6 @@ def view_post(post_id):
 
 @app.route("/kwsnyderwriting/membership")
 def kwsnyderwriting_membership():
-    # A direct visit to the membership page is a fresh authentication entry.
-    # Only the immediate redirect after a successful login may pass this once.
     if session.pop("member_reauth_ok", False) is not True:
         session.clear()
         return redirect(url_for("member_login"))
@@ -443,10 +432,6 @@ def merch_shop():
 
 @app.route("/admin")
 def admin_dashboard():
-    if session.pop("admin_reauth_ok", False) is not True:
-        session.pop("admin_logged_in", None)
-        session.pop("admin_auth_version", None)
-        return render_template("admin.html", logged_in=False)
     if not require_admin():
         session.pop("admin_logged_in", None)
         session.pop("admin_auth_version", None)
@@ -465,7 +450,6 @@ def admin_login():
         session.permanent = False
         session["admin_logged_in"] = True
         session["admin_auth_version"] = ADMIN_AUTH_VERSION
-        session["admin_reauth_ok"] = True
         return redirect(url_for("admin_dashboard"))
     return render_template("admin.html", logged_in=False, login_error="The admin password was not recognized.")
 
