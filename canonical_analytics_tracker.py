@@ -9,6 +9,12 @@ PUBLIC_CATEGORIES = {
     'curiosity': 'Curiosity Cabinet',
 }
 
+# Known crawlers, bots, link-preview clients, and monitoring agents should be
+# allowed to visit the site normally, but must not inflate human-view analytics.
+BOT_RE = re.compile(
+    r'(?:bot|crawler|spider|slurp|google-extended|googleother|bingpreview|bingbot|yandex|baiduspider|duckduckbot|facebookexternalhit|facebot|twitterbot|linkedinbot|pinterestbot|embedly|quora link preview|whatsapp|telegrambot|applebot|semrush|ahrefs|mj12bot|dotbot|petalbot|bytespider|gptbot|claudebot|anthropic|perplexity|headlesschrome|lighthouse|pagespeed|uptimerobot|statuscake|pingdom|site24x7)', re.I
+)
+
 
 def _source(referrer):
     ref = str(referrer or '').lower()
@@ -70,8 +76,14 @@ def register(app):
         path = request.path
         if path.startswith(('/static/', '/api/', '/admin')):
             return None
+
+        # Do not block these clients. They still receive the normal page and
+        # can index/crawl it; we simply exclude them from human analytics.
+        user_agent = request.headers.get('User-Agent', '')
+        if not user_agent or BOT_RE.search(user_agent):
+            return None
+
         page_type, category, content_id = _classify(path)
-        # Never record member-only pages unless the normal member gate has granted access.
         if category == 'kwsnyderwriting':
             try:
                 from app import member_has_access
@@ -79,11 +91,16 @@ def register(app):
                     return None
             except Exception:
                 return None
+
         visitor_key = _visitor_key()
         referrer = request.referrer or ''
         conn = None
         try:
             conn = get_db()
+            # A normal browser refresh should not create another visitor.
+            # visitor_key is persistent for one year; each request remains a
+            # view, while unique visitors are calculated with DISTINCT keys.
+            # This tracker intentionally does not use IP addresses as identity.
             conn.execute(
                 'INSERT INTO page_views(path,page_type,content_id,category,visitor_key,referrer,traffic_source) VALUES (?,?,?,?,?,?,?)',
                 (path, page_type, content_id, category, visitor_key, referrer, _source(referrer)),
@@ -93,11 +110,16 @@ def register(app):
             pass
         finally:
             if conn:
-                try: conn.close()
-                except Exception: pass
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     @app.after_request
     def canonical_analytics_cookie(response):
         if not request.path.startswith(('/static/', '/api/', '/admin')) and not request.cookies.get('snyder_visitor_key'):
-            response.set_cookie('snyder_visitor_key', _visitor_key(), max_age=31536000, httponly=True, samesite='Lax', secure=True)
+            response.set_cookie(
+                'snyder_visitor_key', _visitor_key(), max_age=31536000,
+                httponly=True, samesite='Lax', secure=True
+            )
         return response
