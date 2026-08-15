@@ -1,8 +1,18 @@
 def post_worker_init(worker):
     app = worker.wsgi
 
+    from flask import request, session, render_template
     from database import init_db, get_db, using_postgres
     init_db()
+
+    # The unauthenticated Admin page is deliberately isolated from the dashboard.
+    # This is the single active Admin login screen; dashboard JavaScript never loads
+    # until authentication succeeds.
+    @app.before_request
+    def isolated_admin_login():
+        if request.path == "/admin" and request.method == "GET" and session.get("admin_logged_in") is not True:
+            return render_template("admin_login.html", logged_in=False)
+        return None
 
     # Disable the legacy tracker defined in app.py. Analytics now has exactly
     # one active request tracker: canonical_analytics_tracker.py.
@@ -40,10 +50,6 @@ def post_worker_init(worker):
     register_paypal_member(app)
     from member_auth_guard import register_member_auth_guard
     register_member_auth_guard(app)
-
-    # IMPORTANT: admin authentication is owned by app.py.
-    # Do not install a second before_request guard or replace the login view here.
-    # The dashboard and every /api admin endpoint already use @admin_required.
 
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
