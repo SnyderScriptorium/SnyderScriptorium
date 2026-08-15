@@ -40,8 +40,6 @@
     }catch(e){if(typeof window.showStatus==='function')window.showStatus(e.message,true);else console.error(e)}}
   }
 
-  // K. W. Snyder Writing is a protected branch. Normalize the editor value
-  // before the original publish/save functions ever send it to Flask.
   function installKWPublishGuard(){
     const canonical=function(){
       const c=document.getElementById('postCategory'),sub=document.getElementById('postKWSubcategory');
@@ -58,6 +56,23 @@
     if(category&&access){const sync=()=>{const value=canonical();const locked=value==='kwsnyderwriting'||value.startsWith('kw_');access.value=locked?'members':'public';access.disabled=locked;};category.addEventListener('change',sync);if(document.getElementById('postKWSubcategory'))document.getElementById('postKWSubcategory').addEventListener('change',sync);sync();}
   }
 
-  function start(){setPostEditorCategoryMode();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
+  // Legacy posts that were incorrectly stored as Journal are repaired the
+  // first time the admin dashboard loads. There is no Journal branch anymore.
+  async function repairLegacyJournalContent(){
+    try{
+      const posts=await fetch('/api/published',{credentials:'same-origin'}).then(r=>r.ok?r.json():[]);
+      for(const p of posts){
+        if(p.category!=='journal')continue;
+        await fetch(`/api/published/${p.id}`,{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:p.title,content:p.content,category:'kwsnyderwriting',accessLevel:'members'})});
+      }
+      const drafts=await fetch('/api/drafts',{credentials:'same-origin'}).then(r=>r.ok?r.json():[]);
+      for(const d of drafts){
+        if(d.category!=='journal')continue;
+        await fetch(`/api/drafts/${d.id}`,{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:d.title,content:d.content,category:'kwsnyderwriting',date:d.date})});
+      }
+    }catch(_){/* dashboard remains usable if a repair request is unavailable */}
+  }
+
+  function start(){setPostEditorCategoryMode();removeDuplicateSizeSelectors();addPublishedFilters();addSubscriberDashboardLink();addTodayAnalyticsButton();installKWPublishGuard();repairLegacyJournalContent();setTimeout(removeDuplicateSizeSelectors,50);setTimeout(removeDuplicateSizeSelectors,250);setTimeout(installAnalyticsOverride,0);setTimeout(installAnalyticsOverride,100)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
