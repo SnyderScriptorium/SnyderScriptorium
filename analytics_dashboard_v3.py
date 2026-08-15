@@ -59,21 +59,20 @@ def report(period):
             if dt.tzinfo is None: dt=dt.replace(tzinfo=ZoneInfo('UTC'))
             local=dt.astimezone(EASTERN); key=local.strftime('%Y-%m-%dT%H:00') if period=='day' else local.strftime('%Y-%m-%d')
             buckets[key]=buckets.get(key,0)+1; visitor_buckets.setdefault(key,set()).add(str(rowval(row,1,'visitor_key') or ''))
-        daily=[{'day':k,'views':buckets[k],'visitors':len(visitor_buckets.get(k,set())- {''})} for k in sorted(buckets)]
+        daily=[{'day':k,'views':buckets[k],'visitors':len(visitor_buckets.get(k,set())-{''})} for k in sorted(buckets)]
         rows=conn.execute(f"SELECT pv.path AS path,pv.page_type AS page_type,pv.content_id AS content_id,pv.category AS category,COALESCE(pp.title,mb.title,mc.title) AS title,COUNT(*) AS views,COUNT(DISTINCT pv.visitor_key) AS unique_visitors FROM page_views pv LEFT JOIN published_posts pp ON pp.id=pv.content_id AND pv.page_type IN ('post','member_post') LEFT JOIN manuscript_books mb ON mb.id=pv.content_id AND pv.page_type='novel' LEFT JOIN manuscript_chapters mc ON mc.id=pv.content_id AND pv.page_type='chapter'{where} GROUP BY pv.path,pv.page_type,pv.content_id,pv.category,pp.title,mb.title,mc.title ORDER BY views DESC,pv.path",params).fetchall()
         content=[]
         for row in rows:
             path=rowval(row,0,'path'); typ=rowval(row,1,'page_type'); cat=rowval(row,3,'category'); title=rowval(row,4,'title')
             content.append({'title':label(path,typ,cat,title),'category':CATEGORIES.get(cat,'K. W. Snyder Writing' if str(cat).lower()=='journal' else (cat or 'Home')),'content_type':typ,'views':int(rowval(row,5,'views') or 0),'unique_visitors':int(rowval(row,6,'unique_visitors') or 0),'path':path})
-        src_rows=conn.execute(f"SELECT traffic_source AS source,referrer AS referrer,COUNT(*) AS views,COUNT(DISTINCT visitor_key) AS unique_visitors FROM page_views pv{where} GROUP BY traffic_source,referrer ORDER BY views DESC",params).fetchall(); sources={}
-        for row in src_rows:
-            name=source_label(rowval(row,0,'source'),rowval(row,1,'referrer')); bucket=sources.setdefault(name,{'source':name,'views':0,'unique_visitors':set()}); bucket['views']+=int(rowval(row,2,'views') or 0)
-        source_unique_rows=conn.execute(f"SELECT visitor_key,traffic_source,referrer FROM page_views pv{where} AND visitor_key IS NOT NULL" if where else "SELECT visitor_key,traffic_source,referrer FROM page_views pv WHERE visitor_key IS NOT NULL",params).fetchall()
-        unique_by_source={}
-        for row in source_unique_rows: unique_by_source.setdefault(source_label(rowval(row,1,'traffic_source'),rowval(row,2,'referrer')),set()).add(str(rowval(row,0,'visitor_key')))
-        traffic_sources=[{'source':name,'views':data['views'],'unique_visitors':len(unique_by_source.get(name,set()))} for name,data in sorted(sources.items(),key=lambda x:(-x[1]['views'],x[0]))]
+        source_rows=conn.execute(f"SELECT traffic_source AS source,referrer AS referrer,COUNT(*) AS views FROM page_views pv{where} GROUP BY traffic_source,referrer ORDER BY views DESC",params).fetchall(); source_views={}
+        for row in source_rows:
+            name=source_label(rowval(row,0,'source'),rowval(row,1,'referrer')); source_views[name]=source_views.get(name,0)+int(rowval(row,2,'views') or 0)
+        unique_rows=conn.execute(f"SELECT visitor_key,traffic_source,referrer FROM page_views pv{where}{' AND' if where else ' WHERE'} visitor_key IS NOT NULL",params).fetchall(); unique_by_source={}
+        for row in unique_rows: unique_by_source.setdefault(source_label(rowval(row,1,'traffic_source'),rowval(row,2,'referrer')),set()).add(str(rowval(row,0,'visitor_key')))
+        traffic_sources=[{'source':name,'views':views,'unique_visitors':len(unique_by_source.get(name,set()))} for name,views in sorted(source_views.items(),key=lambda x:(-x[1],x[0]))]
         counts={str(rowval(r,0,'subscription_status') or 'inactive'):int(rowval(r,1,'count') or 0) for r in conn.execute('SELECT subscription_status,COUNT(*) AS count FROM members GROUP BY subscription_status').fetchall()}
-        new_last_30=int(rowval(conn.execute("SELECT COUNT(*) AS count FROM members WHERE created_at IS NOT NULL AND created_at >= ?",[(datetime.now(EASTERN)-timedelta(days=30)).isoformat()]).fetchone(),0,'count') or 0)
+        new_last_30=int(rowval(conn.execute("SELECT COUNT(*) AS count FROM members WHERE date_created IS NOT NULL AND date_created >= ?",[(datetime.now(EASTERN)-timedelta(days=30)).isoformat()]).fetchone(),0,'count') or 0)
         sub_params=[]; sub_where=''
         if start: sub_where=' WHERE date_started IS NOT NULL AND date_started >= ?'; sub_params=[start.isoformat()]
         new_subs=int(rowval(conn.execute(f'SELECT COUNT(*) AS count FROM subscriptions{sub_where}',sub_params).fetchone(),0,'count') or 0)
@@ -98,4 +97,4 @@ def register(app):
         if request.path!='/admin/analytics' or 'text/html' not in response.content_type: return response
         text=response.get_data(as_text=True); nav=''.join(f'<a href="/admin/analytics?period={k}">{v}</a>' for k,v in [('day','1 Day — Today'),('7d','7 Days'),('30d','30 Days'),('90d','90 Days'),('6m','6 Months'),('1y','1 Year'),('all','All Time')]); text=re.sub(r'<nav class="periods".*?</nav>',f'<nav class="periods" aria-label="Analytics period">{nav}</nav>',text,flags=re.S); text=text.replace('Journal','K. W. Snyder Writing').replace('Homepage','Home')
         if request.args.get('period') in {'day','1d','today','1'}: text=text.replace('Views by day','Views by hour')
-        return response.set_data(text) or response
+        response.set_data(text); return response
