@@ -40,28 +40,13 @@ def post_worker_init(worker):
     register_paypal_member(app)
     from member_auth_guard import register_member_auth_guard
     register_member_auth_guard(app)
-    from admin_auth_guard import register_admin_auth_guard
-    register_admin_auth_guard(app)
+
+    # IMPORTANT: admin authentication is owned by app.py.
+    # Do not install a second before_request guard or replace the login view here.
+    # The dashboard and every /api admin endpoint already use @admin_required.
+
     from site_enhancements import register_site_enhancements
     register_site_enhancements(app)
-
-    # Keep the login endpoint independent of dashboard scripts.
-    from flask import request, session, redirect, url_for, render_template
-    import os
-    from app import ADMIN_AUTH_VERSION
-    def isolated_admin_login():
-        password = request.form.get("password", "")
-        configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
-        if not configured_password:
-            return render_template("admin_login.html", login_error="Admin password is not configured on the server.")
-        if password == configured_password:
-            session.permanent = False
-            session["admin_logged_in"] = True
-            session["admin_auth_version"] = ADMIN_AUTH_VERSION
-            session["admin_reauth_ok"] = True
-            return redirect(url_for("admin_dashboard"))
-        return render_template("admin_login.html", login_error="The admin password was not recognized.")
-    app.view_functions["admin_login"] = isolated_admin_login
 
     # Single analytics authority: one tracker + one report/dashboard.
     from canonical_analytics_tracker import register as register_canonical_analytics
