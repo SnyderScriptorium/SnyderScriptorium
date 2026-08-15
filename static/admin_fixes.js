@@ -1,82 +1,20 @@
+/* The editor behavior and K.W. category restoration live here so the same logic
+   applies to new posts, resumed drafts, and unpublished posts. */
 (function(){
 'use strict';
-
-// Admin editor enhancements. This file must not control dashboard navigation.
-const EDITOR='.editor';
-const ranges=new WeakMap();
-const FONT_OPTIONS=[
- ['Cormorant Garamond','Cormorant Garamond'],['Playfair Display','Playfair Display'],['Libre Baskerville','Libre Baskerville'],['Bodoni Moda','Bodoni Moda'],['EB Garamond','EB Garamond'],['Cinzel','Cinzel'],['IM FELL English','IM FELL English'],['UnifrakturMaguntia','UnifrakturMaguntia'],['Italianno','Italianno'],['Great Vibes','Great Vibes'],['Alex Brush','Alex Brush'],['Allura','Allura'],['Lora','Lora'],['Crimson Text','Crimson Text'],['Cormorant Infant','Cormorant Infant'],['Georgia','Georgia'],['Times New Roman','Times New Roman']
-];
+const EDITOR='.editor', ranges=new WeakMap();
+const FONT_OPTIONS=[['Cormorant Garamond','Cormorant Garamond'],['Playfair Display','Playfair Display'],['Libre Baskerville','Libre Baskerville'],['Bodoni Moda','Bodoni Moda'],['EB Garamond','EB Garamond'],['Cinzel','Cinzel'],['IM FELL English','IM FELL English'],['UnifrakturMaguntia','UnifrakturMaguntia'],['Italianno','Italianno'],['Great Vibes','Great Vibes'],['Alex Brush','Alex Brush'],['Allura','Allura'],['Lora','Lora'],['Crimson Text','Crimson Text'],['Cormorant Infant','Cormorant Infant'],['Georgia','Georgia'],['Times New Roman','Times New Roman']];
 const FONT_SIZES=[8,9,10,11,12,14,16,18,20,22,24,26,28,32,36,48,72];
 function loadEditorFonts(){if(document.getElementById('snyder-editor-fonts'))return;const link=document.createElement('link');link.id='snyder-editor-fonts';link.rel='stylesheet';link.href='https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600&family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:wght@400;500;600&family=Cormorant+Infant:wght@400;500;600&family=Crimson+Text:wght@400;600&family=EB+Garamond:wght@400;500;600&family=Great+Vibes&family=IM+Fell+English&family=Italianno&family=Lora:wght@400;500;600&family=Libre+Baskerville:wght@400;700&family=Playfair+Display:wght@400;500;600;700&family=UnifrakturMaguntia&display=swap';document.head.appendChild(link)}
-function inside(editor){const s=getSelection();return !!(editor&&s&&s.rangeCount&&editor.contains(s.anchorNode)&&editor.contains(s.focusNode))}
-function remember(editor){const s=getSelection();if(inside(editor))ranges.set(editor,s.getRangeAt(0).cloneRange())}
-function restore(editor){const r=ranges.get(editor),s=getSelection();if(!r||!editor.contains(r.commonAncestorContainer))return false;s.removeAllRanges();s.addRange(r);return true}
-function focusEditor(editor){if(!editor)return false;editor.contentEditable='true';editor.removeAttribute('disabled');editor.removeAttribute('readonly');editor.focus({preventScroll:true});return true}
-function keepScroll(editor,fn){const x=scrollX,y=scrollY,ex=editor.scrollLeft,ey=editor.scrollTop;fn();scrollTo(x,y);editor.scrollLeft=ex;editor.scrollTop=ey}
-function selectedBlock(editor){const s=getSelection();if(!inside(editor))return null;let n=s.anchorNode;if(n&&n.nodeType===3)n=n.parentElement;return n&&n.closest?n.closest('p,h1,h2,h3,h4,h5,h6,blockquote,pre,div,li')||editor:editor}
-function indent(editor,outdent){focusEditor(editor);restore(editor);let block=selectedBlock(editor);if(block===editor){document.execCommand('formatBlock',false,'p');block=selectedBlock(editor)}if(!block||block===editor)return;const current=parseFloat(block.style.textIndent)||0;const next=Math.max(0,current+(outdent?-2:2));if(next===0)block.style.removeProperty('text-indent');else block.style.textIndent=next+'em';remember(editor)}
-function cmd(editor,command,value){focusEditor(editor);restore(editor);document.execCommand('styleWithCSS',false,true);keepScroll(editor,()=>document.execCommand(command,false,value==null?null:value));remember(editor)}
-function size(editor,pt){focusEditor(editor);restore(editor);const s=getSelection();if(!s.rangeCount||!inside(editor))return;const r=s.getRangeAt(0);keepScroll(editor,()=>{const span=document.createElement('span');span.style.fontSize=pt+'pt';if(r.collapsed){span.appendChild(document.createTextNode('\u200b'));r.insertNode(span);const n=document.createRange();n.setStart(span.firstChild,1);n.collapse(true);s.removeAllRanges();s.addRange(n)}else{span.appendChild(r.extractContents());r.insertNode(span);const n=document.createRange();n.selectNodeContents(span);s.removeAllRanges();s.addRange(n)}});remember(editor)}
-function opt(select,value,text){const o=document.createElement('option');o.value=value;o.textContent=text;select.appendChild(o)}
-const RECENT_COLORS_KEY='snyderEditorRecentColors';
-function recentColors(){try{const a=JSON.parse(localStorage.getItem(RECENT_COLORS_KEY)||'[]');return Array.isArray(a)?a.filter(x=>/^#[0-9a-f]{6}$/i.test(x)).slice(0,12):[]}catch(_){return[]}}
-function saveRecentColor(color){color=String(color||'').toLowerCase();if(!/^#[0-9a-f]{6}$/.test(color))return;const a=[color,...recentColors().filter(x=>x!==color)].slice(0,12);try{localStorage.setItem(RECENT_COLORS_KEY,JSON.stringify(a))}catch(_) {}}
-function makeColorPicker(editor,initial){const wrap=document.createElement('span');wrap.className='editor-color-picker';wrap.title='Font color — choose any color or reuse a recent color';const input=document.createElement('input');input.type='color';input.value=initial||'#24333B';input.className='editor-font-color';input.setAttribute('aria-label','Choose font color');const recent=document.createElement('div');recent.className='editor-recent-colors';recent.setAttribute('aria-label','Recently used font colors');function render(){recent.replaceChildren();recentColors().forEach(color=>{const b=document.createElement('button');b.type='button';b.className='editor-recent-color';b.style.backgroundColor=color;b.title='Reuse '+color;b.setAttribute('aria-label','Reuse '+color);b.addEventListener('mousedown',e=>{e.preventDefault();remember(editor)});b.addEventListener('click',e=>{e.preventDefault();focusEditor(editor);restore(editor);input.value=color;cmd(editor,'foreColor',color);saveRecentColor(color);render()});recent.appendChild(b)})}input.addEventListener('mousedown',()=>remember(editor));input.addEventListener('change',()=>{cmd(editor,'foreColor',input.value);saveRecentColor(input.value);render()});wrap.append(input,recent);render();return wrap}
-function enhanceToolbar(toolbar){if(!toolbar||toolbar.dataset.snyderEnhanced==='1')return;const editor=toolbar.nextElementSibling&&toolbar.nextElementSibling.matches(EDITOR)?toolbar.nextElementSibling:null;if(!editor)return;toolbar.dataset.snyderEnhanced='1';const selects=toolbar.querySelectorAll('select');const font=selects[0];const sizeSelect=selects[1];if(font){font.replaceChildren();opt(font,'','Font');FONT_OPTIONS.forEach(([value,label])=>{const o=document.createElement('option');o.value=value;o.textContent=label;o.style.fontFamily='"'+value+'",serif';font.appendChild(o)});font.addEventListener('mousedown',()=>remember(editor));font.addEventListener('change',()=>{if(font.value)cmd(editor,'fontName',font.value);font.selectedIndex=0})}if(sizeSelect){sizeSelect.replaceChildren();opt(sizeSelect,'','Size');FONT_SIZES.forEach(n=>opt(sizeSelect,String(n),n+'pt'));sizeSelect.addEventListener('mousedown',()=>remember(editor));sizeSelect.addEventListener('change',()=>{if(sizeSelect.value)size(editor,Number(sizeSelect.value));sizeSelect.selectedIndex=0})}const divider=toolbar.querySelector('.divider');const colorPicker=makeColorPicker(editor,'#24333B');if(divider)toolbar.insertBefore(colorPicker,divider);else toolbar.appendChild(colorPicker);const format=document.createElement('select');format.title='Paragraph / heading style';[['P','Paragraph'],['H1','Heading 1'],['H2','Heading 2'],['H3','Heading 3'],['H4','Heading 4'],['BLOCKQUOTE','Quote']].forEach(([v,t])=>opt(format,v,t));format.addEventListener('mousedown',()=>remember(editor));format.addEventListener('change',()=>{if(format.value)cmd(editor,'formatBlock',format.value);format.selectedIndex=0});if(font)toolbar.insertBefore(format,font);else toolbar.prepend(format);toolbar.querySelectorAll('button').forEach(button=>button.addEventListener('mousedown',()=>remember(editor)))}
-function applyEditorBehavior(editor){if(editor.dataset.snyderEditorBehavior==='1')return;editor.dataset.snyderEditorBehavior='1';editor.contentEditable='true';editor.addEventListener('focus',()=>remember(editor));editor.addEventListener('mouseup',()=>remember(editor));editor.addEventListener('keyup',()=>remember(editor));editor.addEventListener('keydown',event=>{if(event.key!=='Tab')return;event.preventDefault();event.stopImmediatePropagation();indent(editor,event.shiftKey)},true);editor.addEventListener('paste',event=>{event.preventDefault();event.stopPropagation();focusEditor(editor);restore(editor);const html=event.clipboardData&&event.clipboardData.getData('text/html');const text=event.clipboardData&&event.clipboardData.getData('text/plain')||'';const value=html||text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r\n|\r|\n/g,'<br>');if(value)document.execCommand('insertHTML',false,value);remember(editor)})}
-
-// Robust K. W. Snyder Writing category/subcategory restoration. This runs
-// after the inline admin script, so resumeDraft/editPublished always gets the
-// same function regardless of whether the editor was started fresh or loaded
-// from a draft/published record.
-const KW_SUBCATEGORIES=new Set(['kwsnyderwriting','kw_short_stories','kw_poems','kw_vignettes']);
-function installKWCategoryRestorer(){
-  const c=document.getElementById('postCategory'),wrap=document.getElementById('postKWSubcategoryWrap'),sub=document.getElementById('postKWSubcategory');
-  if(!c||!wrap||!sub)return false;
-  function set(value){
-    let v=String(value||'').trim().toLowerCase();
-    if(v==='journal'||v==='kw_snyder_writing'||v==='kw-snyder-writing')v='kwsnyderwriting';
-    if(KW_SUBCATEGORIES.has(v)){
-      c.value='kwsnyderwriting';
-      sub.value=v;
-      c.dataset.effectiveKW=v;
-      wrap.classList.remove('hidden');
-    }else{
-      c.value=v||'curations';
-      delete c.dataset.effectiveKW;
-      wrap.classList.add('hidden');
-    }
-    if(typeof window.syncAccess==='function')window.syncAccess();
-    else{
-      const access=document.getElementById('postAccess');
-      if(access){const locked=c.value==='kwsnyderwriting';access.value=locked?'members':'public';access.disabled=locked;}
-    }
-  }
-  window.setPostCategory=set;
-  window.effectivePostCategory=function(){
-    const value=c.value;
-    return value==='kwsnyderwriting'?(c.dataset.effectiveKW||sub.value||'kwsnyderwriting'):value;
-  };
-  if(!c.dataset.kwRestorerWired){
-    c.dataset.kwRestorerWired='1';
-    c.addEventListener('change',()=>{
-      if(c.value==='kwsnyderwriting'){
-        wrap.classList.remove('hidden');
-        if(!KW_SUBCATEGORIES.has(sub.value))sub.value='kwsnyderwriting';
-        c.dataset.effectiveKW=sub.value;
-      }else{
-        wrap.classList.add('hidden');
-        delete c.dataset.effectiveKW;
-      }
-    });
-    sub.addEventListener('change',()=>{if(c.value==='kwsnyderwriting')c.dataset.effectiveKW=sub.value});
-  }
-  return true;
-}
-
-function install(){if(window.__snyderAdminFixesInstalled)return;window.__snyderAdminFixesInstalled=true;loadEditorFonts();document.querySelectorAll('.toolbar').forEach(enhanceToolbar);document.querySelectorAll(EDITOR).forEach(applyEditorBehavior);installKWCategoryRestorer()}
-window.resetManuscriptEditor=function(){const title=document.getElementById('chapterTitle');const number=document.getElementById('chapterNumber');const editor=document.getElementById('chapterEditor');const published=document.getElementById('chapterPublished');if(title)title.value='';if(number)number.value='';if(editor)editor.innerHTML='';if(published)published.checked=false};
-
+function inside(e){const s=getSelection();return !!(e&&s&&s.rangeCount&&e.contains(s.anchorNode)&&e.contains(s.focusNode))}function remember(e){const s=getSelection();if(inside(e))ranges.set(e,s.getRangeAt(0).cloneRange())}function restore(e){const r=ranges.get(e),s=getSelection();if(!r||!e.contains(r.commonAncestorContainer))return false;s.removeAllRanges();s.addRange(r);return true}function focusEditor(e){if(!e)return false;e.contentEditable='true';e.removeAttribute('disabled');e.removeAttribute('readonly');e.focus({preventScroll:true});return true}function keepScroll(e,fn){const x=scrollX,y=scrollY,ex=e.scrollLeft,ey=e.scrollTop;fn();scrollTo(x,y);e.scrollLeft=ex;e.scrollTop=ey}function selectedBlock(e){const s=getSelection();if(!inside(e))return null;let n=s.anchorNode;if(n&&n.nodeType===3)n=n.parentElement;return n&&n.closest?n.closest('p,h1,h2,h3,h4,h5,h6,blockquote,pre,div,li')||e:e}function indent(e,out){focusEditor(e);restore(e);let b=selectedBlock(e);if(b===e){document.execCommand('formatBlock',false,'p');b=selectedBlock(e)}if(!b||b===e)return;const cur=parseFloat(b.style.textIndent)||0,next=Math.max(0,cur+(out?-2:2));if(next===0)b.style.removeProperty('text-indent');else b.style.textIndent=next+'em';remember(e)}function cmd(e,c,v){focusEditor(e);restore(e);document.execCommand('styleWithCSS',false,true);keepScroll(e,()=>document.execCommand(c,false,v==null?null:v));remember(e)}function size(e,pt){focusEditor(e);restore(e);const s=getSelection();if(!s.rangeCount||!inside(e))return;const r=s.getRangeAt(0);keepScroll(e,()=>{const span=document.createElement('span');span.style.fontSize=pt+'pt';if(r.collapsed){span.appendChild(document.createTextNode('\u200b'));r.insertNode(span);const n=document.createRange();n.setStart(span.firstChild,1);n.collapse(true);s.removeAllRanges();s.addRange(n)}else{span.appendChild(r.extractContents());r.insertNode(span);const n=document.createRange();n.selectNodeContents(span);s.removeAllRanges();s.addRange(n)}});remember(e)}function opt(s,v,t){const o=document.createElement('option');o.value=v;o.textContent=t;s.appendChild(o)}
+function enhanceToolbar(t){if(!t||t.dataset.snyderEnhanced==='1')return;const e=t.nextElementSibling&&t.nextElementSibling.matches(EDITOR)?t.nextElementSibling:null;if(!e)return;t.dataset.snyderEnhanced='1';const selects=t.querySelectorAll('select'),font=selects[0],sz=selects[1];if(font){font.replaceChildren();opt(font,'','Font');FONT_OPTIONS.forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;o.style.fontFamily='"'+v+'",serif';font.appendChild(o)});font.addEventListener('mousedown',()=>remember(e));font.addEventListener('change',()=>{if(font.value)cmd(e,'fontName',font.value);font.selectedIndex=0})}if(sz){sz.replaceChildren();opt(sz,'','Size');FONT_SIZES.forEach(n=>opt(sz,String(n),n+'pt'));sz.addEventListener('mousedown',()=>remember(e));sz.addEventListener('change',()=>{if(sz.value)size(e,Number(sz.value));sz.selectedIndex=0})}t.querySelectorAll('button').forEach(b=>b.addEventListener('mousedown',()=>remember(e)))}function applyEditorBehavior(e){if(e.dataset.snyderEditorBehavior==='1')return;e.dataset.snyderEditorBehavior='1';e.contentEditable='true';e.addEventListener('focus',()=>remember(e));e.addEventListener('mouseup',()=>remember(e));e.addEventListener('keyup',()=>remember(e));e.addEventListener('keydown',ev=>{if(ev.key!=='Tab')return;ev.preventDefault();ev.stopImmediatePropagation();indent(e,ev.shiftKey)},true)}
+const KW_SUBCATEGORIES=new Set(['kwsnyderwriting','kw_short_stories','kw_poems','kw_vignettes']), PUBLIC_CATEGORIES=new Set(['curations','reviews','curiosity']);
+function canonicalCategory(v){v=String(v||'').trim().toLowerCase();return ['journal','kw_snyder_writing','kw-snyder-writing','k.w. snyder writing'].includes(v)?'kwsnyderwriting':v}
+function installKWCategoryRestorer(){const c=document.getElementById('postCategory'),w=document.getElementById('postKWSubcategoryWrap'),sub=document.getElementById('postKWSubcategory');if(!c||!w||!sub)return false;function set(v){v=canonicalCategory(v);if(KW_SUBCATEGORIES.has(v)){c.value='kwsnyderwriting';sub.value=v;c.dataset.effectiveKW=v;w.classList.remove('hidden')}else{c.value=v||'curations';delete c.dataset.effectiveKW;w.classList.add('hidden')}if(typeof window.syncAccess==='function')window.syncAccess()}window.setPostCategory=set;window.effectivePostCategory=function(){return c.value==='kwsnyderwriting'?(c.dataset.effectiveKW||sub.value||'kwsnyderwriting'):canonicalCategory(c.value)};if(!c.dataset.kwRestorerWired){c.dataset.kwRestorerWired='1';c.addEventListener('change',()=>{if(c.value==='kwsnyderwriting'){w.classList.remove('hidden');if(!KW_SUBCATEGORIES.has(sub.value))sub.value='kwsnyderwriting';c.dataset.effectiveKW=sub.value}else{w.classList.add('hidden');delete c.dataset.effectiveKW}});sub.addEventListener('change',()=>{if(c.value==='kwsnyderwriting')c.dataset.effectiveKW=sub.value})}return true}
+function safeAccess(c){c=canonicalCategory(c);return PUBLIC_CATEGORIES.has(c)?'public':'members'}
+function showPublishStatus(m,err){if(typeof window.showStatus==='function')window.showStatus(m,err);else{const s=document.getElementById('status');if(s){s.textContent=m;s.className='status'+(err?' error':'')}}}
+window.publishPost=async function(){const title=(document.getElementById('postTitle')?.value||'').trim(),content=document.getElementById('postEditor')?.innerHTML||'',category=window.effectivePostCategory?window.effectivePostCategory():canonicalCategory(document.getElementById('postCategory')?.value||'');if(!title||!content.trim())return showPublishStatus('Add a title and some content first.',true);const access=safeAccess(category),draftId=window.editingDraftId||null;try{const r=await fetch('/api/published',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,category,content,access_level:access,accessLevel:access,date:new Date().toLocaleDateString()})});const data=await r.json().catch(()=>({}));if(!r.ok||data.success===false)throw new Error(data.error||'The post could not be published.');if(draftId)await fetch('/api/drafts/'+draftId,{method:'DELETE'});if(typeof window.clearPost==='function')window.clearPost();if(typeof window.refreshCounts==='function')await window.refreshCounts();if(typeof window.loadDrafts==='function')await window.loadDrafts();if(typeof window.loadPublished==='function')await window.loadPublished();showPublishStatus(access==='members'?'Published to Members Only.':'Published publicly.')}catch(e){showPublishStatus(e.message||'The post could not be published.',true)}};
+window.resetManuscriptEditor=function(){const t=document.getElementById('chapterTitle'),n=document.getElementById('chapterNumber'),e=document.getElementById('chapterEditor'),p=document.getElementById('chapterPublished');if(t)t.value='';if(n)n.value='';if(e)e.innerHTML='';if(p)p.checked=false};
+function install(){loadEditorFonts();document.querySelectorAll('.toolbar').forEach(enhanceToolbar);document.querySelectorAll(EDITOR).forEach(applyEditorBehavior);installKWCategoryRestorer()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
