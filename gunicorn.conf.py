@@ -11,6 +11,9 @@ def post_worker_init(worker):
         conn.execute("UPDATE published_posts SET category = 'kwsnyderwriting', category_name = 'K. W. Snyder Writing', access_level = 'members' WHERE LOWER(COALESCE(category, '')) = 'journal' OR LOWER(COALESCE(category_name, '')) = 'journal'")
         conn.execute("UPDATE drafts SET category = 'kwsnyderwriting' WHERE LOWER(COALESCE(category, '')) = 'journal'")
         conn.execute("UPDATE page_views SET category = 'kwsnyderwriting' WHERE LOWER(COALESCE(category, '')) = 'journal'")
+        # Fail closed: only the explicitly public blog categories may remain public.
+        # Anything unknown, malformed, or uncategorized becomes members-only.
+        conn.execute("UPDATE published_posts SET access_level = 'members' WHERE category NOT IN ('curations', 'reviews', 'curiosity')")
         conn.commit()
     finally:
         conn.close()
@@ -27,6 +30,13 @@ def post_worker_init(worker):
     register_site_enhancements(app)
     from analytics_dashboard_v3 import register as register_analytics_v3
     register_analytics_v3(app)
+
+    # The v3 dashboard/report is the single analytics authority.  The legacy
+    # /api/analytics endpoint is pointed at the same handler so there are not
+    # two competing analytics implementations.
+    if "analytics_api_v3" in app.view_functions:
+        app.view_functions["analytics_api"] = app.view_functions["analytics_api_v3"]
+
     from subscriber_dashboard import register_subscriber_dashboard
     register_subscriber_dashboard(app)
     from category_route_fix import register_category_route_fix
