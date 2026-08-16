@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 
 DATABASE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "scriptorium.db")
@@ -33,7 +34,16 @@ class PostgresConnection:
         self._connection = connection
 
     def _translate(self, sql):
-        return sql.replace("?", "%s")
+        """Translate the application's SQLite-style placeholders for psycopg.
+
+        The application uses '?' parameters so the same SQL works with SQLite
+        and PostgreSQL. Psycopg also uses '%' for its own placeholders, which
+        means literal percent signs in SQL (especially LIKE patterns) must be
+        escaped as '%%'. Preserve real psycopg placeholders while escaping
+        literal percent signs, then translate '?' to '%s'.
+        """
+        escaped = re.sub(r"%(?![sbt%])", "%%", sql)
+        return escaped.replace("?", "%s")
 
     def execute(self, sql, params=()):
         normalized = sql.strip()
