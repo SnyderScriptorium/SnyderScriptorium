@@ -47,7 +47,21 @@
     if(editor.dataset.snyderBackspaceFix === '1') return;
     editor.dataset.snyderBackspaceFix = '1';
     editor.addEventListener('keydown', function(event){
-      if(event.key !== 'Backspace' || event.ctrlKey || event.metaKey || event.altKey) return;
+      if(event.ctrlKey || event.metaKey || event.altKey) return;
+
+      // Shift+Tab should act exactly like Backspace in the manuscript editor.
+      if(event.key === 'Tab' && event.shiftKey){
+        const s = window.getSelection();
+        if(!s || !s.rangeCount || !inside(editor)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        editor.focus({preventScroll:true});
+        document.execCommand('delete', false, null);
+        remember(editor);
+        return;
+      }
+
+      if(event.key !== 'Backspace') return;
       const s = window.getSelection();
       if(!s || !s.rangeCount || !s.isCollapsed || !inside(editor)) return;
       const r = s.getRangeAt(0);
