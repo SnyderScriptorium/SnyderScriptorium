@@ -5,8 +5,26 @@ from flask import jsonify, render_template, request, session, redirect
 from database import get_db
 
 EASTERN = ZoneInfo('America/New_York')
-LABELS = {'/':'Home','/about':'About','/blog':'Blog','/blog/bookcurations':'Book Curations','/blog/bookreviews':'Book Reviews','/blog/curiosity_cabinet':'Curiosity Cabinet','/kwsnyderwriting':'K. W. Snyder Writing','/kwsnyderwriting/membership':'K. W. Snyder Writing Membership'}
-CATEGORIES = {'curations':'Book Curations','reviews':'Book Reviews','curiosity':'Curiosity Cabinet','kwsnyderwriting':'K. W. Snyder Writing','kw_short_stories':'K. W. Snyder Writing — Short Stories','kw_poems':'K. W. Snyder Writing — Poems','kw_vignettes':'K. W. Snyder Writing — Vignettes','blog':'Blog','site':'Home','journal':'K. W. Snyder Writing','Journal':'K. W. Snyder Writing'}
+LABELS = {
+    '/': 'Home',
+    '/about': 'About',
+    '/blog': 'Blog',
+    '/blog/bookcurations': 'Book Curations',
+    '/blog/bookreviews': 'Book Reviews',
+    '/blog/curiosity_cabinet': 'Curiosity Cabinet',
+    '/kwsnyderwriting': 'K. W. Snyder Writing',
+    '/kwsnyderwriting/membership': 'K. W. Snyder Writing Membership',
+    '/contact': 'Contact',
+    '/store': 'The Scriptorium Book Store',
+    '/merch': 'Scriptorium Merch Shop',
+    '/membership-terms': 'Membership Terms',
+}
+CATEGORIES = {
+    'curations':'Book Curations','reviews':'Book Reviews','curiosity':'Curiosity Cabinet',
+    'kwsnyderwriting':'K. W. Snyder Writing','kw_short_stories':'K. W. Snyder Writing — Short Stories',
+    'kw_poems':'K. W. Snyder Writing — Poems','kw_vignettes':'K. W. Snyder Writing — Vignettes',
+    'blog':'Blog','site':'Home','journal':'K. W. Snyder Writing','Journal':'K. W. Snyder Writing'
+}
 
 
 def admin_ok():
@@ -21,10 +39,8 @@ def normalize_period(period):
     value = str(period or '30d').strip().lower()
     aliases = {
         '1': 'day', '1d': 'day', 'day': 'day', 'today': 'day',
-        '7': '7d', '7d': '7d',
-        '30': '30d', '30d': '30d',
-        '90': '90d', '90d': '90d',
-        '6': '6m', '6m': '6m',
+        '7': '7d', '7d': '7d', '30': '30d', '30d': '30d',
+        '90': '90d', '90d': '90d', '6': '6m', '6m': '6m',
         '12': '1y', '1y': '1y', '365': '1y', '365d': '1y',
         'all': 'all', 'alltime': 'all', 'all-time': 'all',
     }
@@ -50,17 +66,34 @@ def rowval(row,index,key=None):
     except (KeyError,TypeError,IndexError): return None
 
 
+def clean_path(path):
+    value = str(path or '').split('?',1)[0].rstrip('/')
+    return value or '/'
+
+
+def pretty_path(path):
+    value = clean_path(path)
+    parts = [p for p in value.split('/') if p]
+    if not parts: return 'Home'
+    words = re.sub(r'[-_]+', ' ', parts[-1]).strip()
+    return words.title() if words else 'Page'
+
+
 def label(path,typ,cat,title):
-    path=str(path or '')
-    if path=='/': return 'Home'
+    path = clean_path(path)
     if title and str(title).strip(): return str(title).strip()
-    if path.startswith('/blog/post/'): return 'Blog Post'
-    if path.startswith('/kwsnyderwriting/post/'): return 'K. W. Snyder Writing Post'
-    if '/kwsnyderwriting/novel/' in path and '/chapter/' in path: return 'Book Chapter'
-    if '/kwsnyderwriting/novel/' in path: return 'Novel'
     if path in LABELS: return LABELS[path]
-    if str(cat) in {'site','journal','Journal'}: return 'K. W. Snyder Writing' if str(cat).lower()=='journal' else 'Site Page'
-    return CATEGORIES.get(str(cat), path or 'Site Page')
+    if path.startswith('/blog/post/'):
+        return 'Blog Post'
+    if path.startswith('/kwsnyderwriting/post/'):
+        return 'K. W. Snyder Writing Post'
+    if '/kwsnyderwriting/novel/' in path and '/chapter/' in path:
+        return 'Book Chapter'
+    if '/kwsnyderwriting/novel/' in path:
+        return 'Novel'
+    if str(cat) in {'site','journal','Journal'}:
+        return 'K. W. Snyder Writing' if str(cat).lower()=='journal' else 'Home'
+    return CATEGORIES.get(str(cat), pretty_path(path))
 
 
 def source_label(value,referrer=''):
@@ -70,6 +103,40 @@ def source_label(value,referrer=''):
     for needle,name in [('google.','Google'),('bing.','Bing'),('yahoo.','Yahoo'),('duckduckgo.','DuckDuckGo'),('facebook.','Facebook'),('instagram.','Instagram'),('pinterest.','Pinterest'),('linkedin.','LinkedIn'),('reddit.','Reddit'),('youtube.','YouTube'),('t.co','X / Twitter'),('twitter.','X / Twitter'),('x.com','X / Twitter')]:
         if needle in ref: return name
     return 'Referral'
+
+
+def build_time_buckets(period, buckets, visitor_buckets):
+    now = datetime.now(EASTERN)
+    if period == 'all':
+        return sorted(buckets)
+    if period == 'day':
+        start = now.replace(hour=0,minute=0,second=0,microsecond=0)
+        return [(start + timedelta(hours=i)).strftime('%Y-%m-%dT%H:00') for i in range(24)]
+    start = start_for(period).astimezone(EASTERN).replace(hour=0,minute=0,second=0,microsecond=0)
+    end = now.replace(hour=0,minute=0,second=0,microsecond=0)
+    keys=[]; current=start
+    while current <= end:
+        keys.append(current.strftime('%Y-%m-%d')); current += timedelta(days=1)
+    return keys
+
+
+def chart_scale(max_value):
+    max_value = max(0, int(max_value or 0))
+    if max_value <= 10: step=2
+    elif max_value <= 50: step=10
+    elif max_value <= 100: step=20
+    elif max_value <= 250: step=50
+    elif max_value <= 500: step=100
+    elif max_value <= 1000: step=200
+    elif max_value <= 2500: step=500
+    elif max_value <= 5000: step=1000
+    elif max_value <= 10000: step=2000
+    else:
+        magnitude=10 ** max(0, len(str(max_value))-2)
+        step=max(magnitude, int(round(max_value / 5 / magnitude))*magnitude)
+    chart_max=max(step, ((max_value + step - 1)//step)*step) if max_value else step
+    ticks=list(range(0, chart_max+1, step))
+    return chart_max, ticks
 
 
 def report(period):
@@ -89,11 +156,14 @@ def report(period):
             if dt.tzinfo is None: dt=dt.replace(tzinfo=ZoneInfo('UTC'))
             local=dt.astimezone(EASTERN); key=local.strftime('%Y-%m-%dT%H:00') if period=='day' else local.strftime('%Y-%m-%d')
             buckets[key]=buckets.get(key,0)+1; visitor_buckets.setdefault(key,set()).add(str(rowval(row,1,'visitor_key') or ''))
-        daily=[{'day':k,'views':buckets[k],'visitors':len(visitor_buckets.get(k,set())-{''})} for k in sorted(buckets)]
+        bucket_keys=build_time_buckets(period,buckets,visitor_buckets)
+        daily=[{'day':k,'views':buckets.get(k,0),'visitors':len(visitor_buckets.get(k,set())-{''})} for k in bucket_keys]
+        max_chart=max((item['views'] for item in daily),default=0); chart_max,chart_ticks=chart_scale(max_chart)
+
         rows=conn.execute(f"""SELECT pv.path AS path,pv.page_type AS page_type,pv.content_id AS content_id,pv.category AS category,COALESCE(pp.title,mb.title,mc.title) AS title,COUNT(*) AS views,COUNT(DISTINCT pv.visitor_key) AS unique_visitors FROM page_views pv LEFT JOIN published_posts pp ON pp.id=pv.content_id AND (pv.page_type IN ('post','member_post') OR pv.path LIKE '/blog/post/%' OR pv.path LIKE '/kwsnyderwriting/post/%') LEFT JOIN manuscript_books mb ON mb.id=pv.content_id AND (pv.page_type='novel' OR pv.path LIKE '/kwsnyderwriting/novel/%') AND pv.path NOT LIKE '%/chapter/%' LEFT JOIN manuscript_chapters mc ON mc.id=pv.content_id AND (pv.page_type='chapter' OR pv.path LIKE '/kwsnyderwriting/novel/%/chapter/%') {where} GROUP BY pv.path,pv.page_type,pv.content_id,pv.category,pp.title,mb.title,mc.title ORDER BY views DESC,pv.path""",params).fetchall()
         content=[]
         for row in rows:
-            path=rowval(row,0,'path'); typ=rowval(row,1,'page_type'); cat=rowval(row,3,'category'); title=rowval(row,4,'title'); effective_type=typ
+            path=clean_path(rowval(row,0,'path')); typ=rowval(row,1,'page_type'); cat=rowval(row,3,'category'); title=rowval(row,4,'title'); effective_type=typ
             if path.startswith('/blog/post/'): effective_type='post'
             elif path.startswith('/kwsnyderwriting/post/'): effective_type='member_post'
             elif '/kwsnyderwriting/novel/' in path and '/chapter/' in path: effective_type='chapter'
@@ -114,7 +184,7 @@ def report(period):
         if start: cancel_where+=' AND date_ends >= ?'; cancel_params=[start.isoformat()]
         cancelled=int(rowval(conn.execute(f'SELECT COUNT(*) AS count FROM subscriptions{cancel_where}',cancel_params).fetchone(),0,'count') or 0)
         all_time=int(rowval(conn.execute('SELECT COUNT(*) AS total FROM page_views').fetchone(),0,'total'))
-        return {'period':period,'total_views':total,'total_views_today':total if period=='day' else None,'unique_visitors':unique,'all_time_views':all_time,'daily_views':daily,'content_views':content,'traffic_sources':traffic_sources,'members':{'total':sum(counts.values()),'active':counts.get('active',0),'past_due':counts.get('past_due',0),'paused':counts.get('paused',0),'cancelled':counts.get('cancelled',0),'expired':counts.get('expired',0),'inactive':counts.get('inactive',0),'new_last_30_days':new_last_30},'subscription_activity':{'new':new_subs,'cancelled_or_expired':cancelled}}
+        return {'period':period,'total_views':total,'total_views_today':total if period=='day' else None,'unique_visitors':unique,'all_time_views':all_time,'daily_views':daily,'chart_max':chart_max,'chart_ticks':chart_ticks,'content_views':content,'traffic_sources':traffic_sources,'members':{'total':sum(counts.values()),'active':counts.get('active',0),'past_due':counts.get('past_due',0),'paused':counts.get('paused',0),'cancelled':counts.get('cancelled',0),'expired':counts.get('expired',0),'inactive':counts.get('inactive',0),'new_last_30_days':new_last_30},'subscription_activity':{'new':new_subs,'cancelled_or_expired':cancelled}}
     finally: conn.close()
 
 
