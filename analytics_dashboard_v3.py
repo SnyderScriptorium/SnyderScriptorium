@@ -3,12 +3,6 @@ from zoneinfo import ZoneInfo
 import re
 from flask import jsonify, render_template, request, session
 from database import get_db
-from analytics_schema_compat import ensure_schema
-
-# Make the canonical analytics/subscriber schema available before either
-# dashboard handles its first request. This is deliberately part of the one
-# canonical analytics system rather than another tracker/report implementation.
-ensure_schema()
 
 EASTERN = ZoneInfo('America/New_York')
 LABELS = {'/':'Home','/about':'About','/blog':'Blog','/blog/bookcurations':'Book Curations','/blog/bookreviews':'Book Reviews','/blog/curiosity_cabinet':'Curiosity Cabinet','/kwsnyderwriting':'K. W. Snyder Writing','/kwsnyderwriting/membership':'K. W. Snyder Writing Membership'}
@@ -84,7 +78,7 @@ def report(period):
         for row in source_rows:
             name=source_label(rowval(row,0,'source'),rowval(row,1,'referrer')); source_views[name]=source_views.get(name,0)+int(rowval(row,2,'views') or 0)
         unique_rows=conn.execute(f"SELECT visitor_key,traffic_source,referrer FROM page_views pv{where}{' AND' if where else ' WHERE'} visitor_key IS NOT NULL",params).fetchall(); unique_by_source={}
-        for row in unique_rows: unique_by_source.setdefault(source_label(rowval(row,1,'traffic_source'),rowval(row,2,'referrer')),set()).add(str(rowval(row,0,'visitor_key')))
+        for row in unique_rows: unique_by_source.setdefault(source_label(rowval(row,1,'traffic_source'),rowval(row,2,'referrer)),set()).add(str(rowval(row,0,'visitor_key')))
         traffic_sources=[{'source':name,'views':views,'unique_visitors':len(unique_by_source.get(name,set()))} for name,views in sorted(source_views.items(),key=lambda x:(-x[1],x[0]))]
         counts={str(rowval(r,0,'subscription_status') or 'inactive'):int(rowval(r,1,'count') or 0) for r in conn.execute('SELECT subscription_status,COUNT(*) AS count FROM members GROUP BY subscription_status').fetchall()}
         new_last_30=int(rowval(conn.execute("SELECT COUNT(*) AS count FROM members WHERE date_created IS NOT NULL AND date_created >= ?",[(datetime.now(EASTERN)-timedelta(days=30)).isoformat()]).fetchone(),0,'count') or 0)
