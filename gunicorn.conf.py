@@ -1,21 +1,16 @@
 def post_worker_init(worker):
     app = worker.wsgi
 
-    from flask import request, session, render_template
     from database import init_db, get_db, using_postgres
     init_db()
 
-    # The unauthenticated Admin page is deliberately isolated from the dashboard.
-    # This is the single active Admin login screen; dashboard JavaScript never loads
-    # until authentication succeeds.
-    @app.before_request
-    def isolated_admin_login():
-        if request.path == "/admin" and request.method == "GET" and session.get("admin_logged_in") is not True:
-            return render_template("admin_login.html", logged_in=False)
-        return None
-
+    # Authentication and dashboard routing belong to app.py.
+    # Do not register a second Admin login gate or inject a second tab controller here.
     legacy = app.before_request_funcs.get(None, [])
-    app.before_request_funcs[None] = [fn for fn in legacy if getattr(fn, '__name__', '') != 'analytics_request_tracker']
+    app.before_request_funcs[None] = [
+        fn for fn in legacy
+        if getattr(fn, '__name__', '') != 'analytics_request_tracker'
+    ]
 
     conn = get_db()
     try:
@@ -83,26 +78,16 @@ def post_worker_init(worker):
 
     @app.after_request
     def no_cache_admin(response):
-        from flask import request, session
-        # Failed login attempts must return the same isolated login screen rather
-        # than falling back to the dashboard template.
-        if request.path == "/admin/login" and session.get("admin_logged_in") is not True:
-            return render_template("admin_login.html", logged_in=False, login_error="The admin password was not recognized.")
+        from flask import request
         if request.path.startswith("/admin"):
-            response.headers["Cache-Control"]="no-store, no-cache, must-revalidate, max-age=0"
-            response.headers["Pragma"]="no-cache"
-            response.headers["Expires"]="0"
-            if 'text/html' in response.content_type and session.get("admin_logged_in") is True:
-                html=response.get_data(as_text=True)
-                marker='</body>'
-                scripts=[
-                    '<script src="/static/about_editor.js?v=20260814-4"></script>',
-                    '<script src="/static/admin_navigation.js?v=20260815-1"></script>'
-                ]
-                for script in scripts:
-                    if script not in html:
-                        html=html.replace(marker,script+marker)
-                response.set_data(html)
-        elif request.path in {"/static/admin_targeted_fixes.js", "/static/admin_fixes.js", "/static/style.css", "/static/about_editor.js", "/static/admin_navigation.js"}:
-            response.headers["Cache-Control"]="no-cache, must-revalidate, max-age=0"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        elif request.path in {
+            "/static/admin_targeted_fixes.js",
+            "/static/admin_fixes.js",
+            "/static/style.css",
+            "/static/about_editor.js",
+        }:
+            response.headers["Cache-Control"] = "no-cache, must-revalidate, max-age=0"
         return response
