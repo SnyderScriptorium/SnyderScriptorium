@@ -435,7 +435,7 @@ def admin_dashboard():
     if not require_admin():
         session.pop("admin_logged_in", None)
         session.pop("admin_auth_version", None)
-        return render_template("admin.html", logged_in=False)
+        return render_template("admin_login.html")
     return render_template("admin.html", logged_in=True)
 
 
@@ -444,14 +444,14 @@ def admin_login():
     password = request.form.get("password", "")
     configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
     if not configured_password:
-        return render_template("admin.html", logged_in=False, login_error="Admin password is not configured on the server.")
+        return render_template("admin_login.html", login_error="Admin password is not configured on the server."), 500
     if password == configured_password:
         session.clear()
         session.permanent = False
         session["admin_logged_in"] = True
         session["admin_auth_version"] = ADMIN_AUTH_VERSION
         return redirect(url_for("admin_dashboard"))
-    return render_template("admin.html", logged_in=False, login_error="The admin password was not recognized.")
+    return render_template("admin_login.html", login_error="The admin password was not recognized."), 401
 
 
 @app.route("/admin/logout")
