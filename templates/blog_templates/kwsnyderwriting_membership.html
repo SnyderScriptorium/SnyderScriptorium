@@ -1,98 +1,47 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block title %}K. W. Snyder Writing — Membership{% endblock %}
 {% block content %}
-<section class="content-section member-auth-section" style="max-width:760px;margin:0 auto;text-align:center;">
-  <h1>K. W. Snyder Writing</h1>
-  <p class="private-label">A private branch of the Snyder Scriptorium</p>
-  {% if session.get('member_logged_in') %}
-  <div class="member-auth-card" style="margin-top:25px;">
-    <h2>You're signed in.</h2>
-    <p class="member-auth-note">Your member account is ready. Your subscription is not active yet.</p>
-    <p class="member-auth-note">Complete the membership subscription below to enter the private writing room.</p>
-    <div class="member-auth-actions" style="justify-content:center;">
-      <a class="member-auth-button member-auth-link-button" href="#membership-subscribe">Continue to Membership</a>
-      <a class="member-auth-link" href="{{ url_for('member_logout') }}">Sign Out</a>
-    </div>
+<section class="content-section private-library-page">
+  <div class="page-heading">
+    <h1>K. W. Snyder Writing</h1>
+    <p class="private-label">Private Library Membership</p>
   </div>
-  {% else %}
-  <div class="member-auth-card" style="margin-top:25px;">
-    <h2>Enter the Private Writing Room</h2>
-    <p class="member-auth-note">This branch is reserved for subscribers. Sign in if you already have an account, or create your K. W. Snyder Writing account to continue to the subscription process.</p>
-    <div class="member-auth-actions" style="justify-content:center;">
-      <a class="member-auth-button member-auth-link-button" href="{{ url_for('member_login') }}">Sign In</a>
-      <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Your K. W. Snyder Writing Account</a>
-    </div>
-  </div>
-  {% endif %}
-
-  <div id="membership-subscribe" class="content-section" style="margin-top:28px;text-align:left;">
-    <h2>What Membership Includes</h2>
-    <p>Your subscription opens the private K. W. Snyder Writing library, including my shorter literary work and my novels as I make them available.</p>
-    <p>The library is organized into <strong>Writing, Short Stories, Poems, Vignettes, and Novels</strong>. Novels have their own book pages and chapter-by-chapter reading experience.</p>
-    <p>There is <strong>no fixed posting schedule</strong>. Writing does not always arrive on a predictable timetable, but I will be working toward sharing <strong>new writing at least once a month</strong>.</p>
-    <p>This is a place for readers who want to follow my writing beyond the public blog and spend some time in the private room behind the writing desk.</p>
-
+  <div class="membership-card">
+    <h2>Welcome to the private library.</h2>
+    <p>K. W. Snyder Writing is the subscription-only branch of The Snyder Scriptorium. Members receive access to private writing posts, short stories, poems, vignettes, novels, and published chapters.</p>
     {% if session.get('member_logged_in') %}
-    <div class="member-auth-card" style="margin-top:28px;text-align:center;">
-      <h2>Membership Subscription</h2>
-      <p class="member-auth-note">Continue securely through PayPal to start your membership.</p>
-      <div id="paypal-button-container" style="max-width:420px;margin:20px auto 0;"></div>
-      <p id="paypal-status" class="member-auth-note" style="margin-top:15px;" aria-live="polite"></p>
-    </div>
+      <p class="private-label">You are signed in. Your current membership status is shown below.</p>
+      <p><strong>Status:</strong> {{ member_status|default('inactive')|replace('_',' ')|title }}</p>
+      {% if member_status == 'active' %}
+        <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
+          <a class="member-auth-button" href="{{ url_for('kwsnyderwriting') }}">Enter the Private Library</a>
+          <a class="member-auth-link" href="{{ url_for('member_logout') }}">Sign Out</a>
+        </div>
+      {% else %}
+        <p>Your account is not currently active. If you have already subscribed, please allow the payment provider a moment to confirm your membership.</p>
+        <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
+          <a class="member-auth-button member-auth-link-button" href="{{ url_for('member_login') }}">Sign In</a>
+          <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Account</a>
+        </div>
+      {% endif %}
     {% else %}
-    <div class="member-auth-card" style="margin-top:28px;text-align:center;">
-      <p class="member-auth-note">Please sign in or create your K. W. Snyder Writing account before starting a subscription.</p>
       <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
         <a class="member-auth-button member-auth-link-button" href="{{ url_for('member_login') }}">Sign In</a>
         <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Account</a>
       </div>
-    </div>
     {% endif %}
 
     <div class="membership-terms-notice" style="margin-top:28px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);text-align:left;">
       <h2 style="margin-top:0;">Before You Subscribe</h2>
       <p style="margin-bottom:10px;">Please review the Membership Terms &amp; Conditions before completing your subscription.</p>
-      <p style="margin:0"><a href="{{ url_for('static', filename='membership_terms.html') }}">Read the Membership Terms &amp; Conditions</a></p>
+      <p style="margin:0"><a href="{{ url_for('membership_terms') }}">Read the Membership Terms &amp; Conditions</a></p>
     </div>
   </div>
 </section>
 {% endblock %}
 {% block scripts %}
-{% if session.get('member_logged_in') and config.PAYPAL_CLIENT_ID %}
-<script src="https://www.paypal.com/sdk/js?client-id={{ config.PAYPAL_CLIENT_ID|urlencode }}&components=buttons&vault=true&intent=subscription&debug=true"></script>
+{{ super() }}
 <script>
-(function () {
-  const container = document.getElementById('paypal-button-container');
-  const status = document.getElementById('paypal-status');
-  const planId = {{ config.PAYPAL_PLAN_ID|tojson }};
-  function setStatus(message, error) { if (status) { status.textContent = message; status.style.fontWeight = error ? '600' : '400'; } }
-  if (!container) return;
-  if (!window.paypal || !window.paypal.Buttons) { setStatus('PayPal checkout could not load. Please refresh the page and try again.', true); return; }
-  if (!planId) { setStatus('The membership plan is not configured yet. Please contact the site administrator.', true); return; }
-  const buttons = paypal.Buttons({
-    style: { shape: 'pill', layout: 'vertical', color: 'blue', label: 'paypal', height: 48 },
-    onInit: function () { setStatus('PayPal checkout is ready.'); },
-    createSubscription: function (data, actions) { setStatus('Opening secure PayPal checkout…'); return actions.subscription.create({ plan_id: planId }); },
-    onApprove: async function (data) {
-      setStatus('PayPal approved the subscription. Verifying it with the Scriptorium…');
-      try {
-        const response = await fetch('{{ url_for("paypal_member.attach_subscription") }}', { method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin', body: JSON.stringify({subscriptionID: data.subscriptionID}) });
-        const result = await response.json();
-        if (!response.ok || !result.ok) throw new Error(result.error || 'The Scriptorium could not verify the PayPal subscription.');
-        if (result.active) { setStatus('Subscription verified. Opening your private writing room…'); window.location.href = '{{ url_for("kwsnyderwriting") }}'; }
-        else setStatus('Your subscription was recorded and is awaiting activation. Please refresh shortly.');
-      } catch (error) { setStatus(error.message || 'We could not finish verifying the subscription. Please try again.', true); }
-    },
-    onCancel: function () { setStatus('Subscription checkout was cancelled. Your account has not been changed.'); },
-    onError: function (error) { console.error('PayPal subscription error:', error); setStatus('PayPal could not start the subscription checkout. ' + (error && (error.message || error.toString()) || ''), true); }
-  });
-  try {
-    const rendered = buttons.render('#paypal-button-container');
-    if (rendered && typeof rendered.catch === 'function') rendered.catch(function (error) { console.error('PayPal button render error:', error); setStatus('PayPal could not render the subscription button. Check that your PayPal Live credentials and membership plan are configured correctly.', true); });
-  } catch (error) { console.error('PayPal button setup error:', error); setStatus('PayPal could not initialize the subscription button. Check the PayPal Live configuration and membership plan.', true); }
-})();
+/* PayPal membership controls are provided by paypal_member_routes when configured. */
 </script>
-{% elif session.get('member_logged_in') %}
-<script>document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('paypal-status');if(s)s.textContent='PayPal checkout is not configured on the server yet.';});</script>
-{% endif %}
 {% endblock %}
