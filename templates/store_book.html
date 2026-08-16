@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.title }} — The Scriptorium Book Store{% endblock %}
+
+{% block head %}
+<style>
+.store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.4rem;font-weight:600;color:#5C4033}.store-coming{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}@media(max-width:750px){.store-book-layout{grid-template-columns:1fr}.store-book-cover{max-width:360px}}
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-section store-book-page">
+    <a class="store-back" href="{{ url_for('the_scriptorium') }}">← Back to the Book Store</a>
+    <div class="store-book-layout">
+        {% if product.cover_image_url %}
+            <img class="store-book-cover" src="{{ product.cover_image_url }}" alt="Cover of {{ product.title }}">
+        {% else %}
+            <div class="store-book-cover placeholder" aria-label="No cover available">✦</div>
+        {% endif %}
+        <div class="store-book-details">
+            <h1>{{ product.title }}</h1>
+            {% if product.author %}<p class="store-book-author">by {{ product.author }}</p>{% endif %}
+            <div class="store-book-facts">
+                <div><strong>Format:</strong> {{ product.format }}</div>
+                {% if product.isbn %}<div><strong>ISBN:</strong> {{ product.isbn }}</div>{% endif %}
+                <div class="store-book-price">${{ product.price }}</div>
+            </div>
+            {% if product.description %}<div class="store-book-description">{{ product.description }}</div>{% endif %}
+            <div class="store-coming"><strong>Purchasing is not activated yet.</strong><br>The Scriptorium is preparing the bookstore. Checkout and payment are intentionally a later phase.</div>
+        </div>
+    </div>
+</section>
+{% endblock %}
