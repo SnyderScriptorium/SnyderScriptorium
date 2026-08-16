@@ -6,12 +6,15 @@
     <h1>K. W. Snyder Writing</h1>
     <p class="private-label">Private Library Membership</p>
   </div>
+
   <div class="membership-card">
     <h2>Welcome to the private library.</h2>
     <p>K. W. Snyder Writing is the subscription-only branch of The Snyder Scriptorium. Members receive access to private writing posts, short stories, poems, vignettes, novels, and published chapters.</p>
+
     {% if session.get('member_logged_in') %}
       <p class="private-label">You are signed in. Your current membership status is shown below.</p>
       <p><strong>Status:</strong> {{ member_status|default('inactive')|replace('_',' ')|title }}</p>
+
       {% if member_status == 'active' %}
         <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
           <a class="member-auth-button" href="{{ url_for('kwsnyderwriting') }}">Enter the Private Library</a>
@@ -42,6 +45,9 @@
 {% block scripts %}
 {{ super() }}
 <script>
-/* PayPal membership controls are provided by paypal_member_routes when configured. */
+(function(){
+  var box=document.getElementById('paypal-status');
+  if(box && !box.textContent.trim()) box.textContent='PayPal checkout is not configured on the server yet.';
+})();
 </script>
 {% endblock %}
