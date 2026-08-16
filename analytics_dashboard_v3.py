@@ -8,6 +8,7 @@ EASTERN = ZoneInfo('America/New_York')
 LABELS = {'/':'Home','/about':'About','/blog':'Blog','/blog/bookcurations':'Book Curations','/blog/bookreviews':'Book Reviews','/blog/curiosity_cabinet':'Curiosity Cabinet','/kwsnyderwriting':'K. W. Snyder Writing','/kwsnyderwriting/membership':'K. W. Snyder Writing Membership'}
 CATEGORIES = {'curations':'Book Curations','reviews':'Book Reviews','curiosity':'Curiosity Cabinet','kwsnyderwriting':'K. W. Snyder Writing','kw_short_stories':'K. W. Snyder Writing — Short Stories','kw_poems':'K. W. Snyder Writing — Poems','kw_vignettes':'K. W. Snyder Writing — Vignettes','blog':'Blog','site':'Home','journal':'K. W. Snyder Writing','Journal':'K. W. Snyder Writing'}
 
+
 def admin_ok():
     try:
         from app import require_admin
@@ -15,9 +16,24 @@ def admin_ok():
     except Exception:
         return False
 
+
+def normalize_period(period):
+    value = str(period or '30d').strip().lower()
+    aliases = {
+        '1': 'day', '1d': 'day', 'day': 'day', 'today': 'day',
+        '7': '7d', '7d': '7d',
+        '30': '30d', '30d': '30d',
+        '90': '90d', '90d': '90d',
+        '6': '6m', '6m': '6m',
+        '12': '1y', '1y': '1y', '365': '1y', '365d': '1y',
+        'all': 'all', 'alltime': 'all', 'all-time': 'all',
+    }
+    return aliases.get(value, '30d')
+
+
 def start_for(period):
     now=datetime.now(EASTERN)
-    if period in {'day','1d','today'}: return now.replace(hour=0,minute=0,second=0,microsecond=0)
+    if period == 'day': return now.replace(hour=0,minute=0,second=0,microsecond=0)
     if period=='7d': return now-timedelta(days=7)
     if period=='30d': return now-timedelta(days=30)
     if period=='90d': return now-timedelta(days=90)
@@ -25,12 +41,14 @@ def start_for(period):
     if period=='1y': return now-timedelta(days=365)
     return None
 
+
 def rowval(row,index,key=None):
     if key is not None:
         try: return row[key]
         except (KeyError,TypeError,IndexError): pass
     try: return row[index]
     except (KeyError,TypeError,IndexError): return None
+
 
 def label(path,typ,cat,title):
     path=str(path or '')
@@ -44,6 +62,7 @@ def label(path,typ,cat,title):
     if str(cat) in {'site','journal','Journal'}: return 'K. W. Snyder Writing' if str(cat).lower()=='journal' else 'Site Page'
     return CATEGORIES.get(str(cat), path or 'Site Page')
 
+
 def source_label(value,referrer=''):
     if value and str(value).strip(): return str(value).strip()
     ref=str(referrer or '').lower()
@@ -52,9 +71,9 @@ def source_label(value,referrer=''):
         if needle in ref: return name
     return 'Referral'
 
+
 def report(period):
-    period=str(period or '30d').strip().lower()
-    if period in {'day','1','1d','today'}: period='day'
+    period=normalize_period(period)
     start=start_for(period); conn=get_db(); where=''; params=[]
     if start: where=' WHERE pv.viewed_at >= ?'; params=[start.isoformat()]
     try:
@@ -97,6 +116,7 @@ def report(period):
         all_time=int(rowval(conn.execute('SELECT COUNT(*) AS total FROM page_views').fetchone(),0,'total'))
         return {'period':period,'total_views':total,'total_views_today':total if period=='day' else None,'unique_visitors':unique,'all_time_views':all_time,'daily_views':daily,'content_views':content,'traffic_sources':traffic_sources,'members':{'total':sum(counts.values()),'active':counts.get('active',0),'past_due':counts.get('past_due',0),'paused':counts.get('paused',0),'cancelled':counts.get('cancelled',0),'expired':counts.get('expired',0),'inactive':counts.get('inactive',0),'new_last_30_days':new_last_30},'subscription_activity':{'new':new_subs,'cancelled_or_expired':cancelled}}
     finally: conn.close()
+
 
 def register(app):
     @app.get('/admin/analytics')
