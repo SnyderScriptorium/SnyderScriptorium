@@ -1,16 +1,13 @@
 import os
-import re
-import sqlite3
 from datetime import datetime
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import get_db as database_get_db, init_db as database_init_db, migrate_sqlite_to_postgres, IntegrityError
+from database import get_db as database_get_db, init_db as database_init_db, IntegrityError
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-DATABASE = os.path.join(basedir, "scriptorium.db")
 
 app = Flask(__name__, template_folder=os.path.join(basedir, "templates"))
 app.secret_key = os.environ.get("SECRET_KEY", "snyder-scriptorium-development-key")
@@ -24,7 +21,7 @@ app.config.update(
     KWSNYDER_DOMAIN=os.environ.get("KWSNYDER_DOMAIN", "kwsnyderwriting.com").strip().lower(),
 )
 
-ADMIN_AUTH_VERSION = "2026-08-10-3"
+ADMIN_AUTH_VERSION = "2026-08-16-1"
 
 
 def get_db():
@@ -67,7 +64,7 @@ def admin_required(view):
         if not require_admin():
             session.pop("admin_logged_in", None)
             session.pop("admin_auth_version", None)
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_login_page"))
         return view(*args, **kwargs)
     return wrapped
 
@@ -81,26 +78,8 @@ def member_required(view):
     return wrapped
 
 
-def record_page_view(path, page_type="page", content_id=None, category=None):
-    if path.startswith("/static/") or path.startswith("/api/") or path.startswith("/admin"):
-        return
-    conn = None
-    try:
-        conn = get_db()
-        conn.execute("INSERT INTO page_views(path, page_type, content_id, category) VALUES (?, ?, ?, ?)", (path, page_type, content_id, category))
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        if conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-
 def category_label(category):
-    return {"curations": "Book Curations", "reviews": "Book Reviews", "curiosity": "Curiosity Cabinet", "kwsnyderwriting": "K. W. Snyder Writing", "kw_short_stories": "Short Stories", "kw_poems": "Poems", "kw_vignettes": "Vignettes"}.get(category, "Journal")
+    return {"curations": "Book Curations", "reviews": "Book Reviews", "curiosity": "Curiosity Cabinet", "kwsnyderwriting": "K. W. Snyder Writing", "kw_short_stories": "Short Stories", "kw_poems": "Poems", "kw_vignettes": "Vignettes"}.get(category, "Site Page")
 
 
 def is_kw_domain():
@@ -138,54 +117,6 @@ def route_kw_domain():
         return None
     if request.path == "/":
         return redirect(url_for("member_login"))
-    return None
-
-
-@app.before_request
-def analytics_request_tracker():
-    path = request.path
-    if path.startswith("/static/") or path.startswith("/api/") or path.startswith("/admin"):
-        return None
-    page_type = "page"
-    category = None
-    content_id = None
-    if path == "/blog":
-        page_type, category = "section", "blog"
-    elif path.startswith("/blog/bookcurations"):
-        page_type, category = "section", "curations"
-    elif path.startswith("/blog/bookreviews"):
-        page_type, category = "section", "reviews"
-    elif path.startswith("/blog/curiosity_cabinet"):
-        page_type, category = "section", "curiosity"
-    elif path.startswith("/blog/post/"):
-        match = re.match(r"^/blog/post/(\d+)", path)
-        if match:
-            page_type, content_id = "post", int(match.group(1))
-    elif path == "/kwsnyderwriting":
-        if not member_has_access():
-            return None
-        page_type, category = "member_section", "kwsnyderwriting"
-    elif path.startswith("/kwsnyderwriting/post/"):
-        if not member_has_access():
-            return None
-        match = re.match(r"^/kwsnyderwriting/post/(\d+)", path)
-        if match:
-            page_type, content_id, category = "member_post", int(match.group(1)), "kwsnyderwriting"
-    elif path.startswith("/kwsnyderwriting/novel/") and "/chapter/" not in path:
-        if not member_has_access():
-            return None
-        match = re.match(r"^/kwsnyderwriting/novel/(\d+)", path)
-        if match:
-            page_type, content_id, category = "novel", int(match.group(1)), "kwsnyderwriting"
-    elif "/kwsnyderwriting/novel/" in path and "/chapter/" in path:
-        if not member_has_access():
-            return None
-        match = re.match(r"^/kwsnyderwriting/novel/(\d+)/chapter/(\d+)", path)
-        if match:
-            page_type, content_id, category = "chapter", int(match.group(2)), "kwsnyderwriting"
-    else:
-        category = "site"
-    record_page_view(path, page_type, content_id, category)
     return None
 
 
@@ -420,6 +351,7 @@ def contact():
         return render_template("contact.html", success="Your message has been sent. Thank you for reaching out.")
     return render_template("contact.html")
 
+
 @app.route("/store")
 def the_scriptorium():
     return render_template("store.html")
@@ -433,31 +365,34 @@ def merch_shop():
 @app.route("/admin")
 def admin_dashboard():
     if not require_admin():
-        session.pop("admin_logged_in", None)
-        session.pop("admin_auth_version", None)
-        return render_template("admin_login.html")
+        return redirect(url_for("admin_login_page"))
     return render_template("admin.html", logged_in=True)
 
 
-@app.route("/admin/login", methods=["POST"])
-def admin_login():
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login_page():
+    if request.method == "GET":
+        if require_admin():
+            return redirect(url_for("admin_dashboard"))
+        return render_template("admin_login.html")
+
     password = request.form.get("password", "")
     configured_password = os.environ.get("ADMIN_PASSWORD", "").strip()
     if not configured_password:
-        return render_template("admin_login.html", login_error="Admin password is not configured on the server."), 500
+        return render_template("admin_login.html", login_error="Admin password is not configured on the server.")
     if password == configured_password:
         session.clear()
         session.permanent = False
         session["admin_logged_in"] = True
         session["admin_auth_version"] = ADMIN_AUTH_VERSION
         return redirect(url_for("admin_dashboard"))
-    return render_template("admin_login.html", login_error="The admin password was not recognized."), 401
+    return render_template("admin_login.html", login_error="The admin password was not recognized.")
 
 
 @app.route("/admin/logout")
 def admin_logout():
     session.clear()
-    return redirect(url_for("admin_dashboard"))
+    return redirect(url_for("admin_login_page"))
 
 
 @app.route("/admin/inbox")
@@ -497,36 +432,6 @@ def update_inbox_message(message_id):
     conn.commit()
     conn.close()
     return jsonify({"success": True})
-
-
-@app.route("/api/analytics", methods=["GET"])
-@admin_required
-def get_analytics():
-    from datetime import timedelta, timezone
-    period = request.args.get("period", "30")
-    now = datetime.now(timezone.utc)
-    if period == "all":
-        start = None
-    else:
-        try:
-            days = max(1, min(int(period), 3650))
-        except (TypeError, ValueError):
-            days = 30
-        start = now - timedelta(days=days)
-    conn = get_db()
-    if start is None:
-        total = conn.execute("SELECT COUNT(*) AS count FROM page_views").fetchone()["count"]
-        daily = conn.execute("SELECT DATE(viewed_at) AS day, COUNT(*) AS views FROM page_views GROUP BY DATE(viewed_at) ORDER BY day").fetchall()
-        categories = conn.execute("SELECT category, COUNT(*) AS views FROM page_views WHERE category IS NOT NULL GROUP BY category ORDER BY views DESC").fetchall()
-        posts = conn.execute("SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC").fetchall()
-    else:
-        stamp = start.isoformat()
-        total = conn.execute("SELECT COUNT(*) AS count FROM page_views WHERE viewed_at >= ?", (stamp,)).fetchone()["count"]
-        daily = conn.execute("SELECT DATE(viewed_at) AS day, COUNT(*) AS views FROM page_views WHERE viewed_at >= ? GROUP BY DATE(viewed_at) ORDER BY day", (stamp,)).fetchall()
-        categories = conn.execute("SELECT category, COUNT(*) AS views FROM page_views WHERE category IS NOT NULL AND viewed_at >= ? GROUP BY category ORDER BY views DESC", (stamp,)).fetchall()
-        posts = conn.execute("SELECT pv.path, pv.content_id, pv.category, COALESCE(pp.title, pv.path) AS title, COUNT(*) AS views FROM page_views pv LEFT JOIN published_posts pp ON pp.id = pv.content_id WHERE pv.viewed_at >= ? AND pv.page_type IN ('post', 'member_post', 'chapter', 'novel') GROUP BY pv.path, pv.content_id, pv.category, pp.title ORDER BY views DESC", (stamp,)).fetchall()
-    conn.close()
-    return jsonify({"period": period, "total_views": total, "daily": [dict(row) for row in daily], "categories": [dict(row) for row in categories], "posts": [dict(row) for row in posts]})
 
 
 @app.route("/api/drafts", methods=["GET"])
@@ -819,7 +724,7 @@ def update_about_content():
     if row:
         conn.execute("UPDATE site_content SET value = ? WHERE key = 'about_content'", (content,))
     else:
-        conn.execute("INSERT INTO site_content(key, value) VALUES ('about_content', ?)", (content,))
+        conn.execute("INSERT INTO site_content(key, value, updated_at) VALUES ('about_content', ?, ?)", (content, now_string()))
     conn.commit()
     conn.close()
     return jsonify({"success": True})
