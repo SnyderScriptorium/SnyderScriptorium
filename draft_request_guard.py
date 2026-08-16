@@ -3,7 +3,6 @@ from flask import jsonify, request
 
 from database import get_db, using_postgres, IntegrityError
 
-
 REQUEST_HEADER = "X-Draft-Request-ID"
 
 
@@ -11,16 +10,28 @@ def ensure_table():
     conn = get_db()
     try:
         if using_postgres():
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS draft_save_requests (request_id TEXT PRIMARY KEY, draft_id BIGINT NOT NULL, response_json TEXT NOT NULL, date_created TEXT NOT NULL)"
-            )
+            conn.execute("CREATE TABLE IF NOT EXISTS draft_save_requests (request_id TEXT PRIMARY KEY, draft_id BIGINT NOT NULL, response_json TEXT NOT NULL, date_created TEXT NOT NULL)")
         else:
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS draft_save_requests (request_id TEXT PRIMARY KEY, draft_id INTEGER NOT NULL, response_json TEXT NOT NULL, date_created TEXT NOT NULL)"
-            )
+            conn.execute("CREATE TABLE IF NOT EXISTS draft_save_requests (request_id TEXT PRIMARY KEY, draft_id INTEGER NOT NULL, response_json TEXT NOT NULL, date_created TEXT NOT NULL)")
         conn.commit()
     finally:
         conn.close()
+
+
+def request_key():
+    explicit = str(request.headers.get(REQUEST_HEADER, "")).strip()
+    if explicit:
+        return explicit
+    data = request.get_json(silent=True) or {}
+    import hashlib
+    import json
+    canonical = json.dumps({
+        "title": str(data.get("title", "Untitled Draft")).strip() or "Untitled Draft",
+        "category": str(data.get("category", "curations")).strip(),
+        "content": str(data.get("content", "")),
+        "date": str(data.get("date", "")).strip(),
+    }, sort_keys=True, ensure_ascii=False)
+    return "body:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def register(app):
@@ -31,21 +42,14 @@ def register(app):
 
     @wraps(endpoint)
     def guarded_create_draft(*args, **kwargs):
-        request_id = str(request.headers.get(REQUEST_HEADER, "")).strip()
-        if not request_id:
-            return endpoint(*args, **kwargs)
-
+        request_id = request_key()
         ensure_table()
         conn = get_db()
         try:
-            existing = conn.execute(
-                "SELECT response_json FROM draft_save_requests WHERE request_id = ?",
-                (request_id,),
-            ).fetchone()
+            existing = conn.execute("SELECT response_json FROM draft_save_requests WHERE request_id = ?", (request_id,)).fetchone()
             if existing:
                 import json
-                payload = json.loads(existing["response_json"])
-                return jsonify(payload), 200
+                return jsonify(json.loads(existing["response_json"])), 200
         finally:
             conn.close()
 
@@ -65,10 +69,7 @@ def register(app):
         conn = get_db()
         try:
             try:
-                conn.execute(
-                    "INSERT INTO draft_save_requests(request_id, draft_id, response_json, date_created) VALUES (?, ?, ?, ?)",
-                    (request_id, int(draft_id), json.dumps(payload), datetime.now().strftime("%m/%d/%Y %I:%M %p")),
-                )
+                conn.execute("INSERT INTO draft_save_requests(request_id, draft_id, response_json, date_created) VALUES (?, ?, ?, ?)", (request_id, int(draft_id), json.dumps(payload), datetime.now().strftime("%m/%d/%Y %I:%M %p")))
                 conn.commit()
             except IntegrityError:
                 conn.rollback()
