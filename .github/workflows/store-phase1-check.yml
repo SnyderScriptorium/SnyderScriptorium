@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile Python modules
-        run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py
+        run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py draft_request_guard.py
       - name: Load application and verify store routes
         run: |
           python - <<'PY'
