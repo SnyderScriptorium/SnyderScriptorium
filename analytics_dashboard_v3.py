@@ -8,7 +8,13 @@ EASTERN = ZoneInfo('America/New_York')
 LABELS = {'/':'Home','/about':'About','/blog':'Blog','/blog/bookcurations':'Book Curations','/blog/bookreviews':'Book Reviews','/blog/curiosity_cabinet':'Curiosity Cabinet','/kwsnyderwriting':'K. W. Snyder Writing','/kwsnyderwriting/membership':'K. W. Snyder Writing Membership'}
 CATEGORIES = {'curations':'Book Curations','reviews':'Book Reviews','curiosity':'Curiosity Cabinet','kwsnyderwriting':'K. W. Snyder Writing','kw_short_stories':'K. W. Snyder Writing — Short Stories','kw_poems':'K. W. Snyder Writing — Poems','kw_vignettes':'K. W. Snyder Writing — Vignettes','blog':'Blog','site':'Home','journal':'K. W. Snyder Writing','Journal':'K. W. Snyder Writing'}
 
-def admin_ok(): return session.get('admin_logged_in') is True and session.get('admin_auth_version') == '2026-08-10-3'
+def admin_ok():
+    try:
+        from app import require_admin
+        return require_admin()
+    except Exception:
+        return False
+
 def start_for(period):
     now=datetime.now(EASTERN)
     if period in {'day','1d','today'}: return now.replace(hour=0,minute=0,second=0,microsecond=0)
@@ -78,7 +84,7 @@ def report(period):
         for row in source_rows:
             name=source_label(rowval(row,0,'source'),rowval(row,1,'referrer')); source_views[name]=source_views.get(name,0)+int(rowval(row,2,'views') or 0)
         unique_rows=conn.execute(f"SELECT visitor_key,traffic_source,referrer FROM page_views pv{where}{' AND' if where else ' WHERE'} visitor_key IS NOT NULL",params).fetchall(); unique_by_source={}
-        for row in unique_rows: unique_by_source.setdefault(source_label(rowval(row,1,'traffic_source'),rowval(row,2,'referrer)),set()).add(str(rowval(row,0,'visitor_key')))
+        for row in unique_rows: unique_by_source.setdefault(source_label(rowval(row,1,'traffic_source'),rowval(row,2,'referrer')),set()).add(str(rowval(row,0,'visitor_key')))
         traffic_sources=[{'source':name,'views':views,'unique_visitors':len(unique_by_source.get(name,set()))} for name,views in sorted(source_views.items(),key=lambda x:(-x[1],x[0]))]
         counts={str(rowval(r,0,'subscription_status') or 'inactive'):int(rowval(r,1,'count') or 0) for r in conn.execute('SELECT subscription_status,COUNT(*) AS count FROM members GROUP BY subscription_status').fetchall()}
         new_last_30=int(rowval(conn.execute("SELECT COUNT(*) AS count FROM members WHERE date_created IS NOT NULL AND date_created >= ?",[(datetime.now(EASTERN)-timedelta(days=30)).isoformat()]).fetchone(),0,'count') or 0)
@@ -95,7 +101,7 @@ def report(period):
 def register(app):
     @app.get('/admin/analytics')
     def analytics_dashboard_v3():
-        if not admin_ok(): return app.view_functions['admin_dashboard']()
+        if not admin_ok(): return redirect('/admin/login')
         return render_template('analytics.html',**report(request.args.get('period','30d')))
     @app.get('/api/analytics-v3')
     def analytics_api_v3():
