@@ -1,32 +1,11 @@
-{% extends "base.html" %}
-{% block title %}K. W. Snyder Writing — Private Library{% endblock %}
+{% extends 'base.html' %}
+{% block title %}K. W. Snyder Writing{% endblock %}
 {% block content %}
-<style>
-.kw-membership-actions{margin-top:30px;padding-top:20px;border-top:1px solid var(--line,#C9B78F);display:flex;flex-direction:column;align-items:center;gap:10px}
-.kw-signout-button,.kw-cancel-button{display:inline-block;font-family:inherit;font-size:.95rem;line-height:1.2;padding:9px 18px;border-radius:6px;text-decoration:none;cursor:pointer;box-sizing:border-box}
-.kw-signout-button{color:var(--brown,#5C4033);background:var(--cream,#FFFDF8);border:1px solid var(--line,#C9B78F)}
-.kw-signout-button:hover{background:rgba(201,183,143,.16)}
-.kw-cancel-button{color:var(--brown,#5C4033);background:transparent;border:1px solid var(--line,#C9B78F)}
-.kw-cancel-button:hover{background:rgba(122,41,41,.08);border-color:#A67B5B}
-.kw-cancel-button:disabled{opacity:.6;cursor:wait}
-</style>
-<section class="blog-page">
+<section class="content-section private-library-page">
   <div class="page-heading">
     <h1>K. W. Snyder Writing</h1>
-    <p class="private-label">The private literary library of K. W. Snyder</p>
-    {% if member_preview %}
-      <p class="private-label">Preview mode — you are viewing this as a member without changing subscription status.</p>
-      <a href="{{ url_for('admin_exit_member_preview') }}">Exit Preview</a>
-    {% endif %}
+    <p class="private-label">Private subscriber library</p>
   </div>
-
-  {% if not member_preview %}
-  <div class="content-section" style="margin-bottom:25px;text-align:center;">
-    <h2>My Membership</h2>
-    <p class="private-label">Your K. W. Snyder Writing membership is active through PayPal.</p>
-    <p id="membership-management-status" class="private-label" style="margin-top:10px;" aria-live="polite"></p>
-  </div>
-  {% endif %}
 
   <div id="kw-library-menu" class="blog-feed">
     <a class="blog-block" href="#kw-writing-list" data-kw-view="writing"><h2>Writing</h2><p>Standalone writing posts from the writing desk.</p></a>
@@ -35,7 +14,8 @@
     <a class="blog-block" href="{{ url_for('kwsnyderwriting_section', section='vignettes') }}"><h2>Vignettes</h2><p>Brief literary pieces and moments.</p></a>
     <a class="blog-block" href="#kw-novels-list" data-kw-view="novels"><h2>Novels</h2><p>Long-form works, organized by book and published chapter.</p></a>
   </div>
-  <div class="content-section" style="margin-top:25px;text-align:center;"><a class="blog-block" href="{{ url_for('static', filename='membership_terms.html') }}"><h2>About Membership &amp; Terms</h2><p>Membership information, publishing expectations, and the rules for the private library.</p></a></div>
+  <div class="content-section" style="margin-top:25px;text-align:center;"><a class="blog-block" href="{{ url_for('membership_terms') }}"><h2>About Membership &amp; Terms</h2><p>Membership information, publishing expectations, and the rules for the private library.</p></a></div>
+
   <section id="kw-writing-list" class="content-section kw-library-view" hidden>
     <p><a href="#kw-library-menu" data-kw-back>← Back to K. W. Snyder Writing</a></p><h2>Writing</h2><p class="private-label">Posts published from the K. W. Snyder Writing desk.</p>
     <div class="blog-feed">{% for post in posts if post['category'] == 'kwsnyderwriting' %}<a class="blog-block" href="{{ url_for('view_member_post', post_id=post['id']) }}"><h2>{{ post['title'] }}</h2><p>{{ post['date_published'] }}</p></a>{% else %}<p class="private-label">No writing posts have been published here yet.</p>{% endfor %}</div>
@@ -44,13 +24,14 @@
     <p><a href="#kw-library-menu" data-kw-back>← Back to K. W. Snyder Writing</a></p><h2>Novels</h2><p class="private-label">Long-form works by K. W. Snyder. Select a novel to view its published chapters.</p>
     <div class="blog-feed">{% for book in books %}<a class="blog-block" href="{{ url_for('view_novel', book_id=book['id']) }}"><h2>{{ book['title'] }}</h2><p>{{ book['description'] or 'A work in progress.' }}</p><p class="private-label">{{ book['chapter_count'] or 0 }} published chapter{{ '' if (book['chapter_count'] or 0) == 1 else 's' }}</p></a>{% else %}<p class="private-label">No novels have been opened in the private library yet.</p>{% endfor %}</div>
   </section>
-
-  {% if not member_preview %}
-  <div class="kw-membership-actions">
-    <a class="kw-signout-button" href="{{ url_for('member_logout') }}">Sign Out</a>
-    <button id="cancel-membership-button" type="button" class="kw-cancel-button">Cancel Membership</button>
-  </div>
-  {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}<script>(function(){const menu=document.getElementById('kw-library-menu'),views=document.querySelectorAll('.kw-library-view');function showView(id){menu.hidden=true;views.forEach(v=>v.hidden=v.id!==id);window.scrollTo({top:0,behavior:'smooth'});}function showMenu(){views.forEach(v=>v.hidden=true);menu.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}document.querySelectorAll('[data-kw-view]').forEach(l=>l.addEventListener('click',function(e){e.preventDefault();const t=this.dataset.kwView==='writing'?'kw-writing-list':'kw-novels-list';history.pushState({kwView:t},'', '#'+t);showView(t);}));document.querySelectorAll('[data-kw-back]').forEach(l=>l.addEventListener('click',function(e){e.preventDefault();history.pushState({},'', '#kw-library-menu');showMenu();}));window.addEventListener('popstate',function(){const h=window.location.hash;if(h==='#kw-writing-list')showView('kw-writing-list');else if(h==='#kw-novels-list')showView('kw-novels-list');else showMenu();});if(location.hash==='#kw-writing-list')showView('kw-writing-list');else if(location.hash==='#kw-novels-list')showView('kw-novels-list');const cancelButton=document.getElementById('cancel-membership-button');const status=document.getElementById('membership-management-status');if(cancelButton){cancelButton.addEventListener('click',async function(){if(!window.confirm('Cancel your K. W. Snyder Writing membership? This cancels the PayPal subscription and removes access to the private library.'))return;cancelButton.disabled=true;status.textContent='Cancelling your PayPal membership…';try{const r=await fetch('{{ url_for("paypal_member.cancel_subscription") }}',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin'});const data=await r.json().catch(()=>({}));if(!r.ok||!data.ok)throw new Error(data.error||'The membership could not be cancelled.');status.textContent='Your membership has been cancelled. Redirecting…';window.location.href='{{ url_for("kwsnyderwriting_membership") }}';}catch(e){cancelButton.disabled=false;status.textContent=e.message||'The membership could not be cancelled.';}});}})();</script>{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('[data-kw-view]').forEach(function(link){link.addEventListener('click',function(){var target=document.getElementById('kw-'+link.dataset.kwView+'-list');if(!target)return;document.getElementById('kw-library-menu').hidden=true;document.querySelectorAll('.kw-library-view').forEach(function(v){v.hidden=v!==target;});});});
+  document.querySelectorAll('[data-kw-back]').forEach(function(link){link.addEventListener('click',function(){document.getElementById('kw-library-menu').hidden=false;document.querySelectorAll('.kw-library-view').forEach(function(v){v.hidden=true;});});});
+});
+</script>
+{% endblock %}
