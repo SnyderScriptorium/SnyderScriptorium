@@ -15,7 +15,6 @@
     <a class="blog-block" href="#kw-novels-list" data-kw-view="novels"><h2>Novels</h2><p>Long-form works, organized by book and published chapter.</p></a>
   </div>
   <div class="content-section" style="margin-top:25px;text-align:center;"><a class="blog-block" href="{{ url_for('membership_terms') }}"><h2>About Membership &amp; Terms</h2><p>Membership information, publishing expectations, and the rules for the private library.</p></a></div>
-
   <section id="kw-writing-list" class="content-section kw-library-view" hidden>
     <p><a href="#kw-library-menu" data-kw-back>← Back to K. W. Snyder Writing</a></p><h2>Writing</h2><p class="private-label">Posts published from the K. W. Snyder Writing desk.</p>
     <div class="blog-feed">{% for post in posts if post['category'] == 'kwsnyderwriting' %}<a class="blog-block" href="{{ url_for('view_member_post', post_id=post['id']) }}"><h2>{{ post['title'] }}</h2><p>{{ post['date_published'] }}</p></a>{% else %}<p class="private-label">No writing posts have been published here yet.</p>{% endfor %}</div>
