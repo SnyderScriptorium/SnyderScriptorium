@@ -9,21 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--ivory:#F7F1E6;--paper:#FFFDF8;--camel2:#E8D9B5;--brown:#5C4033;--line:#C9B78F;--muted:#6F6257;--danger:#8B3F3F}
-*{box-sizing:border-box}
-html,body{min-height:100%;margin:0}
-body{min-height:100vh;padding:20px;background:var(--camel2);color:#24333B;font-family:"Playfair Display",Georgia,serif;display:flex;align-items:center;justify-content:center}
-.login{position:relative;z-index:1;width:min(600px,100%);background:var(--ivory);border:1px solid var(--line);border-radius:10px;box-shadow:0 5px 16px rgba(40,30,20,.08);padding:28px}
-h1{margin:0 0 8px;color:var(--brown);font-weight:400}
-h2{margin:0 0 18px;color:var(--brown);font-weight:500}
-label{display:block;margin:8px 0 4px;color:var(--brown)}
-form{position:relative;z-index:2}
-input[type="password"]{display:block;width:100%;padding:12px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:#24333B;font:inherit;box-sizing:border-box;position:relative;z-index:3;pointer-events:auto;user-select:text;cursor:text}
-input[type="password"]:focus{outline:2px solid var(--line);outline-offset:1px}
-.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
-button{border:1px solid var(--brown);border-radius:5px;padding:10px 16px;background:var(--brown);color:#fff;font:inherit;cursor:pointer}
-button.light{background:var(--paper);color:var(--brown)}
-.error{padding:10px 13px;border-radius:5px;margin-bottom:15px;background:#F4DADA;color:#7A2929;border:1px solid #C98B8B}
-.note{color:var(--muted);font-style:italic}
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{min-height:100vh;padding:20px;background:var(--camel2);color:#24333B;font-family:"Playfair Display",Georgia,serif;display:flex;align-items:center;justify-content:center}.login{position:relative;z-index:1;width:min(600px,100%);background:var(--ivory);border:1px solid var(--line);border-radius:10px;box-shadow:0 5px 16px rgba(40,30,20,.08);padding:28px}h1{margin:0 0 8px;color:var(--brown);font-weight:400}h2{margin:0 0 18px;color:var(--brown);font-weight:500}label{display:block;margin:8px 0 4px;color:var(--brown)}form{position:relative;z-index:2}input[type="password"]{display:block;width:100%;padding:12px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:#24333B;font:inherit;position:relative;z-index:3;pointer-events:auto;user-select:text;cursor:text}input[type="password"]:focus{outline:2px solid var(--line);outline-offset:1px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}button{border:1px solid var(--brown);border-radius:5px;padding:10px 16px;background:var(--brown);color:#fff;font:inherit;cursor:pointer}button.light{background:var(--paper);color:var(--brown)}.error{padding:10px 13px;border-radius:5px;margin-bottom:15px;background:#F4DADA;color:#7A2929;border:1px solid #C98B8B}.note{color:var(--muted);font-style:italic}
 </style>
 </head>
 <body>
@@ -31,13 +17,10 @@ button.light{background:var(--paper);color:var(--brown)}
 <h1>Scriptorium Control Panel</h1>
 <h2>Backend Access</h2>
 {% if login_error %}<div class="error">{{ login_error }}</div>{% endif %}
-<form action="{{ url_for('admin_login') }}" method="POST" autocomplete="on">
-<label for="admin-password">Master Password</label>
-<input id="admin-password" name="password" type="password" required autocomplete="current-password" autofocus>
-<div class="actions">
-<button type="submit">Log In</button>
-<button type="button" class="light" onclick="location.href='{{ url_for('the_hearth') }}'">Return to Home</button>
-</div>
+<form action="{{ url_for('admin_login_page') }}" method="POST">
+<label for="password">Master Password</label>
+<input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+<div class="actions"><button type="submit">Log In</button><button type="button" class="light" onclick="location.href='{{ url_for('the_hearth') }}'">Return to Home</button></div>
 </form>
 <p class="note">The administrative dashboard loads only after successful authentication.</p>
 </main>
