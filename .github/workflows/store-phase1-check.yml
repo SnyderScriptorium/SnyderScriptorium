@@ -17,21 +17,32 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile Python modules
-        run: python -m compileall -q app.py database.py store.py wsgi.py
-      - name: Load application and verify store routes
+        run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py draft_request_guard.py
+      - name: Load application and verify store routes and admin gate
         run: |
           python - <<'PY'
           import wsgi
           routes = {rule.rule for rule in wsgi.app.url_map.iter_rules()}
-          required = {
-              '/store',
-              '/store/book/<slug>',
-              '/api/store/products',
-              '/admin/store',
-              '/api/store/admin/products',
-          }
+          required = {'/store','/store/book/<slug>','/api/store/products','/admin/store','/api/store/admin/products'}
           missing = required - routes
           if missing:
               raise SystemExit(f'Missing bookstore routes: {sorted(missing)}')
-          print('Phase 1 bookstore routes verified.')
+          client = wsgi.app.test_client()
+          for path in ['/admin','/admin/analytics','/admin/inbox','/admin/store','/api/store/admin/products']:
+              response = client.get(path, follow_redirects=False)
+              if response.status_code != 302 or '/admin/login' not in response.headers.get('Location',''):
+                  raise SystemExit(f'ADMIN LOGIN REGRESSION: {path} was not protected.')
+          print('Bookstore routes and admin login gate verified.')
+          PY
+      - name: Verify analytics helpers
+        run: |
+          python - <<'PY'
+          from analytics_dashboard_v3 import chart_scale, label
+          assert chart_scale(9)[1] == [0, 2, 4, 6, 8, 10]
+          assert chart_scale(74)[1] == [0, 20, 40, 60, 80]
+          assert label('/', 'page', '', '') == 'Home'
+          assert label('/store', 'page', '', '') == 'The Scriptorium Book Store'
+          assert label('/merch', 'page', '', '') == 'Scriptorium Merch Shop'
+          assert label('/blog/post/12', 'post', '', '') == 'Blog Post'
+          print('Analytics label and chart-scale checks verified.')
           PY

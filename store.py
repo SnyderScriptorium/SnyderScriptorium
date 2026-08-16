@@ -8,7 +8,6 @@ from database import get_db, using_postgres, IntegrityError
 
 store_bp = Blueprint("store", __name__)
 
-
 ALLOWED_STATUS = {"draft", "active", "archived"}
 
 
@@ -77,7 +76,10 @@ def product_payload(data):
     if not title:
         raise ValueError("A book title is required.")
     price_cents = parse_price(data.get("price", "0"))
-    stock = int(data.get("stock_quantity", 0) or 0)
+    try:
+        stock = int(data.get("stock_quantity", 0) or 0)
+    except (TypeError, ValueError):
+        raise ValueError("Stock quantity must be a whole number.")
     if stock < 0:
         raise ValueError("Stock quantity cannot be negative.")
     status = str(data.get("status", "draft")).strip().lower()
@@ -107,6 +109,11 @@ def row_to_dict(row):
 @store_bp.before_request
 def prepare_store():
     ensure_store_tables()
+
+
+@store_bp.route("/store")
+def store_home():
+    return render_template("store.html")
 
 
 @store_bp.route("/store/book/<slug>")

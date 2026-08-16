@@ -4,6 +4,9 @@ def post_worker_init(worker):
     from database import init_db
     init_db()
 
+    from draft_request_guard import register as register_draft_guard
+    register_draft_guard(app)
+
     from paypal_plan_bootstrap import ensure_paypal_plan
     ensure_paypal_plan(app)
 
