@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import re
-from flask import jsonify, render_template, request, session
+from flask import jsonify, render_template, request, session, redirect
 from database import get_db
 
 EASTERN = ZoneInfo('America/New_York')
