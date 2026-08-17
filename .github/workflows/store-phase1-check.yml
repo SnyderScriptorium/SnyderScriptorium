@@ -34,6 +34,35 @@ jobs:
                   raise SystemExit(f'ADMIN LOGIN REGRESSION: {path} was not protected.')
           print('Bookstore routes and admin login gate verified.')
           PY
+      - name: Smoke-test public page rendering and template endpoint integrity
+        run: |
+          python - <<'PY'
+          import wsgi
+
+          client = wsgi.app.test_client()
+          public_pages = [
+              '/',
+              '/about',
+              '/blog',
+              '/blog/bookcurations',
+              '/blog/bookreviews',
+              '/blog/curiosity_cabinet',
+              '/store',
+              '/merch',
+              '/contact',
+              '/membership-terms',
+          ]
+
+          for path in public_pages:
+              response = client.get(path, follow_redirects=False)
+              if response.status_code >= 500:
+                  raise SystemExit(
+                      f'PUBLIC PAGE REGRESSION: {path} returned HTTP {response.status_code}. '
+                      'This commonly indicates a missing Flask endpoint referenced by a template.'
+                  )
+
+          print('Public page smoke tests passed.')
+          PY
       - name: Verify analytics helpers
         run: |
           python - <<'PY'
