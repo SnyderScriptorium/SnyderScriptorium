@@ -21,7 +21,7 @@
     if(!window.__storeAdminScriptLoaded){
       window.__storeAdminScriptLoaded=true;
       const script=document.createElement('script');
-      script.src="{{ url_for('static', filename='admin_store.js') }}";
+      script.src='/static/admin_store.js';
       script.onload=function(){if(typeof window.initStoreAdmin==='function')window.initStoreAdmin();};
       document.head.appendChild(script);
     }
