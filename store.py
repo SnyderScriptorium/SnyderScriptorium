@@ -113,7 +113,12 @@ def prepare_store():
 
 @store_bp.route("/store")
 def store_home():
-    return render_template("store.html")
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM store_products WHERE status = 'active' ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    return render_template("store.html", products=[row_to_dict(row) for row in rows])
 
 
 @store_bp.route("/store/book/<slug>")
