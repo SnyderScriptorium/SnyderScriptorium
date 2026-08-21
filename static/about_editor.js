@@ -1,5 +1,11 @@
 (function(){
 'use strict';
+function legacyToHtml(value){
+  const text=String(value||'');
+  if(!text.trim()) return '';
+  if(/<\/?(p|div|br|h[1-6]|ul|ol|li|blockquote|strong|em|u|a)\b/i.test(text)) return text;
+  return text.split(/\n\s*\n/).map(part=>`<p>${part.trim().replace(/\n/g,'<br>')}</p>`).join('');
+}
 function install(){
   const source=document.getElementById('aboutEditor');
   if(!source || source.dataset.richReady==='1') return;
@@ -39,7 +45,11 @@ function install(){
   let last='';
   function refreshFromSource(){
     if(document.activeElement===editor) return;
-    if(source.value!==last){editor.innerHTML=source.value||'';last=source.value||'';}
+    if(source.value!==last){
+      editor.innerHTML=legacyToHtml(source.value);
+      source.value=editor.innerHTML;
+      last=source.value;
+    }
   }
   refreshFromSource();
   setInterval(refreshFromSource,500);
