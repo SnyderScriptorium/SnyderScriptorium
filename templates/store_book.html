@@ -10,7 +10,7 @@
 
 {% block content %}
 <section class="page-section store-book-page">
-    <a class="store-back" href="{{ url_for('the_scriptorium') }}">← Back to the Book Store</a>
+    <a class="store-back" href="{{ url_for('store.store_home') }}">← Back to the Book Store</a>
     <div class="store-book-layout">
         {% if product.cover_image_url %}
             <img class="store-book-cover" src="{{ product.cover_image_url }}" alt="Cover of {{ product.title }}">
