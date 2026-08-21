@@ -4,7 +4,7 @@
 
 {% block head %}
 <style>
-.store-page{max-width:1100px;margin:0 auto;padding:30px 20px 60px}.store-hero{text-align:center;margin-bottom:35px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:720px;margin:0 auto;color:#6F6257}.store-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px}.store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}.store-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:4px;margin-bottom:15px}.store-cover.placeholder{display:grid;place-items:center;font-family:Georgia,serif;color:#75695D;font-size:2rem}.store-card h2{font-size:1.25rem;margin:0 0 4px;color:#5C4033}.store-author{margin:0 0 10px;color:#6F6257}.store-meta{font-size:.92rem;color:#75695D;margin-bottom:12px}.store-price{font-size:1.15rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}.store-button{display:inline-block;text-align:center;margin-top:14px;padding:10px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-button:hover{filter:brightness(.94)}.store-empty{text-align:center;padding:45px 25px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;color:#6F6257}.store-loading{text-align:center;color:#6F6257;padding:30px}.store-error{display:none;text-align:center;padding:30px;background:#F4DADA;border:1px solid #C98B8B;color:#7A2929;border-radius:8px}
+.store-page{max-width:1100px;margin:0 auto;padding:30px 20px 60px}.store-hero{text-align:center;margin-bottom:35px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:720px;margin:0 auto;color:#6F6257}.store-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px}.store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}.store-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:4px;margin-bottom:15px}.store-cover.placeholder{display:grid;place-items:center;font-family:Georgia,serif;color:#75695D;font-size:2rem}.store-card h2{font-size:1.25rem;margin:0 0 4px;color:#5C4033}.store-author{margin:0 0 10px;color:#6F6257}.store-meta{font-size:.92rem;color:#75695D;margin-bottom:12px}.store-price{font-size:1.15rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}.store-button{display:inline-block;text-align:center;margin-top:14px;padding:10px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-button:hover{filter:brightness(.94)}.store-empty{text-align:center;padding:45px 25px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;color:#6F6257}
 </style>
 {% endblock %}
 
@@ -15,30 +15,28 @@
         <p>Books selected for the shelves of The Snyder Scriptorium. The bookstore is separate from the Scriptorium's private manuscript workspace and separate from the Merch Shop.</p>
     </div>
 
-    <div id="storeLoading" class="store-loading">Preparing the shelves…</div>
-    <div id="storeError" class="store-error">The bookstore could not be loaded right now. Please try again shortly.</div>
-    <div id="storeEmpty" class="store-empty" style="display:none">
+    {% if products %}
+    <div id="storeGrid" class="store-grid">
+        {% for p in products %}
+        <article class="store-card">
+            {% if p.cover_image_url %}
+                <img class="store-cover" src="{{ p.cover_image_url }}" alt="Cover of {{ p.title }}">
+            {% else %}
+                <div class="store-cover placeholder" aria-label="No cover available">✦</div>
+            {% endif %}
+            <h2>{{ p.title }}</h2>
+            <p class="store-author">{{ p.author or 'The Scriptorium' }}</p>
+            <div class="store-meta">{{ p.format }}{% if p.isbn %} · ISBN {{ p.isbn }}{% endif %}</div>
+            <div class="store-price">${{ p.price }}</div>
+            <a class="store-button" href="{{ url_for('store.store_book', slug=p.slug) }}">View Book</a>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="store-empty">
         <h2>The shelves are being stocked.</h2>
         <p>Books will appear here as the Scriptorium's bookstore collection is prepared.</p>
     </div>
-    <div id="storeGrid" class="store-grid"></div>
+    {% endif %}
 </section>
-{% endblock %}
-
-{% block scripts %}
-<script>
-function escapeHtml(value){
-    return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
-}
-function renderStore(products){
-    const grid=document.getElementById('storeGrid');
-    document.getElementById('storeLoading').style.display='none';
-    if(!products.length){ document.getElementById('storeEmpty').style.display='block'; return; }
-    grid.innerHTML=products.map(p=>{
-        const cover=p.cover_image_url ? `<img class="store-cover" src="${escapeHtml(p.cover_image_url)}" alt="Cover of ${escapeHtml(p.title)}">` : `<div class="store-cover placeholder" aria-label="No cover available">✦</div>`;
-        return `<article class="store-card">${cover}<h2>${escapeHtml(p.title)}</h2><p class="store-author">${escapeHtml(p.author || 'The Scriptorium')}</p><div class="store-meta">${escapeHtml(p.format)}${p.isbn ? ' · ISBN ' + escapeHtml(p.isbn) : ''}</div><div class="store-price">$${escapeHtml(p.price)}</div><a class="store-button" href="/store/book/${encodeURIComponent(p.slug)}">View Book</a></article>`;
-    }).join('');
-}
-fetch('/api/store/products').then(r=>{if(!r.ok) throw new Error(); return r.json();}).then(renderStore).catch(()=>{document.getElementById('storeLoading').style.display='none';document.getElementById('storeError').style.display='block';});
-</script>
 {% endblock %}
