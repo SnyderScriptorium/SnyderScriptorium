@@ -1,34 +1,24 @@
+"""Production WSGI entry point for Snyder Scriptorium.
+
+Gunicorn loads ``app`` from this module.  Application routes remain owned by
+``app.py`` and the bookstore routes remain owned by ``store.py``; this module
+only wires the two together and performs the database initialization needed at
+startup.
+"""
+
 from app import app, init_db
-from store import store_bp, ensure_store_tables, store_home
+from store import store_bp, ensure_store_tables
 
-# The bookstore is a separate Flask blueprint. Register it here so its routes,
-# database setup, and future commerce code stay outside the main application.
-app.register_blueprint(store_bp)
 
-# The legacy application already owns the /store endpoint. Delegate that view
-# to the bookstore module so the public URL remains unchanged while the actual
-# storefront implementation lives entirely in store.py.
-app.view_functions["the_scriptorium"] = store_home
+# Register the bookstore blueprint exactly once at application startup.
+# The blueprint owns /store, /store/book/<slug>, and the bookstore API/admin
+# routes defined in store.py.
+if "store" not in app.blueprints:
+    app.register_blueprint(store_bp)
 
-# Ensure the independent bookstore schema exists on deployment/startup.
+
+# Initialize the shared application database and the bookstore tables when
+# Gunicorn starts the worker.  These functions are idempotent in the current
+# database layer, so this is safe on normal Render restarts/deploys.
 init_db()
 ensure_store_tables()
-
-
-@app.after_request
-def add_store_admin_link(response):
-    """Expose the Book Store Manager from the existing admin tabs."""
-    if request_path_is_admin(response):
-        content_type = response.headers.get("Content-Type", "")
-        if "text/html" in content_type and not response.is_streamed:
-            body = response.get_data(as_text=True)
-            marker = '<button type="button" class="light" onclick="location.href=\'/admin/store\'">Book Store</button>'
-            if marker not in body and 'id="dashboard"' in body:
-                body = body.replace('<div class="tabs">', '<div class="tabs">' + marker, 1)
-                response.set_data(body)
-    return response
-
-
-def request_path_is_admin(response):
-    from flask import request
-    return request.path == "/admin"
