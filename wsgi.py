@@ -6,8 +6,12 @@ from store import store_bp, ensure_store_tables
 if "store" not in app.blueprints:
     app.register_blueprint(store_bp)
 
-# Wire the live admin inbox/member actions after app.py is loaded.
+# Build the base schema first; the inbox module then adds its member/blocking
+# columns against tables that are guaranteed to exist.
+init_db()
+
+# Wire the live admin inbox/member actions after app.py and the base database
+# have been loaded.
 import inbox_admin_routes  # noqa: F401,E402
 
-init_db()
 ensure_store_tables()
