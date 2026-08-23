@@ -7,9 +7,9 @@ def ensure_schema():
     conn=get_db()
     try:
         if using_postgres():
-            statements=["ALTER TABLE members ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'","ALTER TABLE members ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ","ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS replied_at TIMESTAMPTZ","CREATE TABLE IF NOT EXISTS inbox_replies (id BIGSERIAL PRIMARY KEY,message_id BIGINT NOT NULL REFERENCES inbox_messages(id) ON DELETE CASCADE,recipient_email TEXT NOT NULL,subject TEXT NOT NULL,message TEXT NOT NULL,sent_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,delivery_status TEXT NOT NULL DEFAULT 'pending')"]
+            statements=["ALTER TABLE members ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'","ALTER TABLE members ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ","ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS replied_at TIMESTAMPTZ"]
         else:
-            statements=["ALTER TABLE members ADD COLUMN status TEXT NOT NULL DEFAULT 'active'","ALTER TABLE members ADD COLUMN blocked_at TEXT","ALTER TABLE inbox_messages ADD COLUMN replied_at TEXT","CREATE TABLE IF NOT EXISTS inbox_replies (id INTEGER PRIMARY KEY AUTOINCREMENT,message_id INTEGER NOT NULL,recipient_email TEXT NOT NULL,subject TEXT NOT NULL,message TEXT NOT NULL,sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,delivery_status TEXT NOT NULL DEFAULT 'pending',FOREIGN KEY(message_id) REFERENCES inbox_messages(id) ON DELETE CASCADE)"]
+            statements=["ALTER TABLE members ADD COLUMN status TEXT NOT NULL DEFAULT 'active'","ALTER TABLE members ADD COLUMN blocked_at TEXT"]
         for sql in statements:
             try: conn.execute(sql)
             except Exception as exc:
@@ -62,6 +62,15 @@ def unblock_member(member_id):
     conn=get_db(); row=conn.execute('SELECT id FROM members WHERE id=?',(member_id,)).fetchone()
     if not row: conn.close(); return jsonify({'error':'Member not found.'}),404
     conn.execute("UPDATE members SET status='active',blocked_at=NULL WHERE id=?",(member_id,)); conn.commit(); conn.close(); return jsonify({'success':True})
+
+@app.after_request
+def inject_live_inbox_controls(response):
+    if request.path != '/admin' or 'text/html' not in response.headers.get('Content-Type',''):
+        return response
+    script='''<script>(function(){function install(){if(typeof window.loadInbox!=="function")return;if(window.__snyderInboxWrapped)return;window.__snyderInboxWrapped=true;const original=window.loadInbox;async function decorate(){const list=document.getElementById("inboxList");if(!list)return;list.querySelectorAll(".card").forEach(card=>{if(card.querySelector("[data-snyder-inbox-action]"))return;const select=card.querySelector("select[onchange*='updateInboxStatus']");if(!select)return;const match=(select.getAttribute("onchange")||"").match(/updateInboxStatus\\((\\d+)/);if(!match)return;const id=match[1];const actions=select.parentElement;const del=document.createElement("button");del.type="button";del.className="danger";del.dataset.snyderInboxAction="delete";del.textContent="Delete Permanently";del.onclick=async function(){if(!confirm("Delete this message permanently? This cannot be undone."))return;try{const r=await fetch("/api/inbox/"+id,{method:"DELETE",credentials:"same-origin"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Delete failed.");await original();}catch(e){alert(e.message)}};const block=document.createElement("button");block.type="button";block.className="secondary";block.dataset.snyderInboxAction="block";block.textContent="Block Sender";block.onclick=async function(){if(!confirm("Block the member associated with this message? They will no longer be able to log in."))return;try{const r=await fetch("/api/inbox/"+id+"/block-sender",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:"{}"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Block failed.");alert("Member blocked.");await original();}catch(e){alert(e.message)}};actions.appendChild(block);actions.appendChild(del);});}window.loadInbox=async function(status){await original(status);decorate()};setTimeout(decorate,0)}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else install()})();</script>'''
+    html=response.get_data(as_text=True)
+    if '</body>' in html: response.set_data(html.replace('</body>',script+'</body>'))
+    return response
 
 @app.before_request
 def reject_blocked_members():
