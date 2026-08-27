@@ -39,19 +39,41 @@ def ensure_store_tables():
         if using_postgres():
             statements = [
                 "CREATE TABLE IF NOT EXISTS store_categories (id BIGSERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, date_created TEXT NOT NULL)",
-                "CREATE TABLE IF NOT EXISTS store_products (id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', stock_quantity INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_products (id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', language TEXT NOT NULL DEFAULT 'English', fulfillment_source TEXT NOT NULL DEFAULT 'Ingram Content Group', fulfillment_method TEXT NOT NULL DEFAULT 'Direct to Home', stock_quantity INTEGER NOT NULL DEFAULT 0, availability_status TEXT NOT NULL DEFAULT 'automatic', status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_orders (id BIGSERIAL PRIMARY KEY, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id BIGINT NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
             ]
         else:
             statements = [
                 "CREATE TABLE IF NOT EXISTS store_categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, date_created TEXT NOT NULL)",
-                "CREATE TABLE IF NOT EXISTS store_products (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', stock_quantity INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_products (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', language TEXT NOT NULL DEFAULT 'English', fulfillment_source TEXT NOT NULL DEFAULT 'Ingram Content Group', fulfillment_method TEXT NOT NULL DEFAULT 'Direct to Home', stock_quantity INTEGER NOT NULL DEFAULT 0, availability_status TEXT NOT NULL DEFAULT 'automatic', status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id INTEGER NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
             ]
         for statement in statements:
             conn.execute(statement)
+
+        if using_postgres():
+            migrations = [
+                "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'English'",
+                "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS fulfillment_source TEXT NOT NULL DEFAULT 'Ingram Content Group'",
+                "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS fulfillment_method TEXT NOT NULL DEFAULT 'Direct to Home'",
+                "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS availability_status TEXT NOT NULL DEFAULT 'automatic'",
+            ]
+        else:
+            existing = {row["name"] for row in conn.execute("PRAGMA table_info(store_products)").fetchall()}
+            migrations = []
+            for name, definition in [
+                ("language", "TEXT NOT NULL DEFAULT 'English'"),
+                ("fulfillment_source", "TEXT NOT NULL DEFAULT 'Ingram Content Group'"),
+                ("fulfillment_method", "TEXT NOT NULL DEFAULT 'Direct to Home'"),
+                ("availability_status", "TEXT NOT NULL DEFAULT 'automatic'"),
+            ]:
+                if name not in existing:
+                    migrations.append(f"ALTER TABLE store_products ADD COLUMN {name} {definition}")
+        for statement in migrations:
+            conn.execute(statement)
+
         conn.execute(
             "INSERT INTO store_categories(name, date_created) VALUES (?, ?) ON CONFLICT(name) DO NOTHING",
             ("Books", now_string()),
@@ -76,15 +98,18 @@ def product_payload(data):
     if not title:
         raise ValueError("A book title is required.")
     price_cents = parse_price(data.get("price", "0"))
-    try:
-        stock = int(data.get("stock_quantity", 0) or 0)
-    except (TypeError, ValueError):
-        raise ValueError("Stock quantity must be a whole number.")
-    if stock < 0:
-        raise ValueError("Stock quantity cannot be negative.")
     status = str(data.get("status", "draft")).strip().lower()
     if status not in ALLOWED_STATUS:
         raise ValueError("Invalid product status.")
+
+    raw_categories = data.get("categories", data.get("category", "Books"))
+    if isinstance(raw_categories, list):
+        categories = [str(x).strip() for x in raw_categories if str(x).strip()]
+    else:
+        categories = [x.strip() for x in str(raw_categories or "Books").split(",") if x.strip()]
+    if not categories:
+        categories = ["Books"]
+
     return {
         "title": title,
         "slug": slugify(data.get("slug") or title),
@@ -94,8 +119,12 @@ def product_payload(data):
         "format": str(data.get("format", "Paperback")).strip() or "Paperback",
         "isbn": str(data.get("isbn", "")).strip(),
         "cover_image_url": str(data.get("cover_image_url", "")).strip(),
-        "category": str(data.get("category", "Books")).strip() or "Books",
-        "stock_quantity": stock,
+        "category": ", ".join(dict.fromkeys(categories)),
+        "language": str(data.get("language", "English")).strip() or "English",
+        "fulfillment_source": str(data.get("fulfillment_source", "Ingram Content Group")).strip() or "Ingram Content Group",
+        "fulfillment_method": str(data.get("fulfillment_method", "Direct to Home")).strip() or "Direct to Home",
+        "availability_status": str(data.get("availability_status", "automatic")).strip() or "automatic",
+        "stock_quantity": 0,
         "status": status,
     }
 
@@ -189,8 +218,8 @@ def admin_create_product():
     try:
         timestamp = now_string()
         conn.execute(
-            "INSERT INTO store_products(title, slug, author, description, price_cents, format, isbn, cover_image_url, category, stock_quantity, status, date_created, date_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (product["title"], product["slug"], product["author"], product["description"], product["price_cents"], product["format"], product["isbn"], product["cover_image_url"], product["category"], product["stock_quantity"], product["status"], timestamp, timestamp),
+            "INSERT INTO store_products(title, slug, author, description, price_cents, format, isbn, cover_image_url, category, language, fulfillment_source, fulfillment_method, stock_quantity, availability_status, status, date_created, date_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (product["title"], product["slug"], product["author"], product["description"], product["price_cents"], product["format"], product["isbn"], product["cover_image_url"], product["category"], product["language"], product["fulfillment_source"], product["fulfillment_method"], product["stock_quantity"], product["availability_status"], product["status"], timestamp, timestamp),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM store_products WHERE slug = ?", (product["slug"],)).fetchone()
@@ -231,8 +260,8 @@ def admin_update_product(product_id):
         return jsonify({"error": "Book not found."}), 404
     try:
         conn.execute(
-            "UPDATE store_products SET title = ?, slug = ?, author = ?, description = ?, price_cents = ?, format = ?, isbn = ?, cover_image_url = ?, category = ?, stock_quantity = ?, status = ?, date_updated = ? WHERE id = ?",
-            (product["title"], product["slug"], product["author"], product["description"], product["price_cents"], product["format"], product["isbn"], product["cover_image_url"], product["category"], product["stock_quantity"], product["status"], now_string(), product_id),
+            "UPDATE store_products SET title = ?, slug = ?, author = ?, description = ?, price_cents = ?, format = ?, isbn = ?, cover_image_url = ?, category = ?, language = ?, fulfillment_source = ?, fulfillment_method = ?, stock_quantity = ?, availability_status = ?, status = ?, date_updated = ? WHERE id = ?",
+            (product["title"], product["slug"], product["author"], product["description"], product["price_cents"], product["format"], product["isbn"], product["cover_image_url"], product["category"], product["language"], product["fulfillment_source"], product["fulfillment_method"], product["stock_quantity"], product["availability_status"], product["status"], now_string(), product_id),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM store_products WHERE id = ?", (product_id,)).fetchone()
