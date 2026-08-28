@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install dependencies
@@ -67,11 +67,12 @@ jobs:
         run: |
           python - <<'PY'
           from analytics_dashboard_v3 import chart_scale, label
-          assert chart_scale(9)[1] == [0, 2, 4, 6, 8, 10]
-          assert chart_scale(74)[1] == [0, 20, 40, 60, 80]
+          assert chart_scale(9)[1] == [0, 50]
+          assert chart_scale(74)[1] == [0, 50, 100]
+          assert chart_scale(149)[1] == [0, 50, 100, 150]
           assert label('/', 'page', '', '') == 'Home'
           assert label('/store', 'page', '', '') == 'The Scriptorium Book Store'
           assert label('/merch', 'page', '', '') == 'Scriptorium Merch Shop'
           assert label('/blog/post/12', 'post', '', '') == 'Blog Post'
-          print('Analytics label and chart-scale checks verified.')
+          print('Analytics label and 50-view chart-scale checks verified.')
           PY
