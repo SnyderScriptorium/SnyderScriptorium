@@ -74,17 +74,7 @@ def build_time_buckets(period,buckets,visitor_buckets):
 
 def chart_scale(max_value):
     max_value=max(0,int(max_value or 0))
-    if max_value<=10:step=2
-    elif max_value<=50:step=10
-    elif max_value<=100:step=20
-    elif max_value<=250:step=50
-    elif max_value<=500:step=100
-    elif max_value<=1000:step=200
-    elif max_value<=2500:step=500
-    elif max_value<=5000:step=1000
-    elif max_value<=10000:step=2000
-    else:
-        magnitude=10**max(0,len(str(max_value))-2);step=max(magnitude,int(round(max_value/5/magnitude))*magnitude)
+    step=50
     chart_max=max(step,((max_value+step-1)//step)*step) if max_value else step
     return chart_max,list(range(0,chart_max+1,step))
 

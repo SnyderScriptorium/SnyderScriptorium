@@ -4,7 +4,28 @@
 
 {% block head %}
 <style>
-.store-page{max-width:1100px;margin:0 auto;padding:30px 20px 60px}.store-hero{text-align:center;margin-bottom:35px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:720px;margin:0 auto;color:#6F6257}.store-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px}.store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}.store-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:4px;margin-bottom:15px}.store-cover.placeholder{display:grid;place-items:center;font-family:Georgia,serif;color:#75695D;font-size:2rem}.store-card h2{font-size:1.25rem;margin:0 0 4px;color:#5C4033}.store-author{margin:0 0 10px;color:#6F6257}.store-meta{font-size:.92rem;color:#75695D;margin-bottom:12px}.store-price{font-size:1.15rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}.store-button{display:inline-block;text-align:center;margin-top:14px;padding:10px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-button:hover{filter:brightness(.94)}.store-empty{text-align:center;padding:45px 25px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;color:#6F6257}
+.store-page{max-width:1150px;margin:0 auto;padding:30px 20px 70px}
+.store-hero{text-align:center;margin-bottom:28px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:760px;margin:0 auto;color:#6F6257}
+.store-controls{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;margin-bottom:28px;box-shadow:0 4px 14px rgba(40,30,20,.05)}
+.genre-tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px}
+.genre-tab{border:1px solid #C9B78F;background:#F5EEE3;color:#5C4033;border-radius:999px;padding:8px 13px;font:inherit;cursor:pointer}
+.genre-tab:hover,.genre-tab.active{background:#5C4033;color:#fff;border-color:#5C4033}
+.store-search-row{display:flex;gap:10px;align-items:center;max-width:720px;margin:0 auto 14px}
+.store-search{flex:1;padding:11px 13px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924}
+.store-clear{padding:11px 14px;border:1px solid #C9B78F;border-radius:6px;background:#F5EEE3;color:#5C4033;font:inherit;cursor:pointer}
+.alphabet{display:flex;flex-wrap:wrap;justify-content:center;gap:5px}
+.alpha-button{min-width:30px;padding:6px 7px;border:1px solid #D3C3A5;border-radius:4px;background:#fff;color:#5C4033;font:inherit;cursor:pointer}
+.alpha-button:hover,.alpha-button.active{background:#5C4033;color:#fff;border-color:#5C4033}
+.store-filter-note{text-align:center;color:#6F6257;font-size:.9rem;margin:12px 0 0}
+.store-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px}
+.store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}
+.store-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:4px;margin-bottom:15px}
+.store-cover.placeholder{display:grid;place-items:center;font-family:Georgia,serif;color:#75695D;font-size:2rem}
+.store-card h2{font-size:1.25rem;margin:0 0 4px;color:#5C4033}.store-author{margin:0 0 10px;color:#6F6257}
+.store-meta{font-size:.92rem;color:#75695D;margin-bottom:12px}.store-price{font-size:1.15rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}
+.store-button{display:inline-block;text-align:center;margin-top:14px;padding:10px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-button:hover{filter:brightness(.94)}
+.store-empty{text-align:center;padding:45px 25px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;color:#6F6257}
+@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.genre-tabs{justify-content:flex-start}.alphabet{justify-content:flex-start}}
 </style>
 {% endblock %}
 
@@ -16,9 +37,31 @@
     </div>
 
     {% if products %}
+    <div class="store-controls" aria-label="Bookstore filters">
+        <div class="genre-tabs" id="genreTabs">
+            <button class="genre-tab active" type="button" data-genre="All Books">All Books</button>
+            {% for genre in ['Classics','Literary Fiction','Science Fiction','Fantasy','Horror','Thriller','Mystery','Romance','Poetry',"Children's Books",'Young Adult','Historical Fiction','Nonfiction','Foreign Language'] %}
+            <button class="genre-tab" type="button" data-genre="{{ genre }}">{{ genre }}</button>
+            {% endfor %}
+        </div>
+
+        <div class="store-search-row">
+            <input id="storeSearch" class="store-search" type="search" placeholder="Search by book title or author…" aria-label="Search books">
+            <button id="storeClear" class="store-clear" type="button">Clear</button>
+        </div>
+
+        <div class="alphabet" id="alphabet" aria-label="Browse books alphabetically">
+            <button class="alpha-button active" type="button" data-letter="">All</button>
+            {% for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
+            <button class="alpha-button" type="button" data-letter="{{ letter }}">{{ letter }}</button>
+            {% endfor %}
+        </div>
+        <p id="storeFilterNote" class="store-filter-note"></p>
+    </div>
+
     <div id="storeGrid" class="store-grid">
         {% for p in products %}
-        <article class="store-card">
+        <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-categories="{{ p.category|lower }}">
             {% if p.cover_image_url %}
                 <img class="store-cover" src="{{ p.cover_image_url }}" alt="Cover of {{ p.title }}">
             {% else %}
@@ -32,6 +75,10 @@
         </article>
         {% endfor %}
     </div>
+    <div id="storeNoResults" class="store-empty" hidden>
+        <h2>No books found.</h2>
+        <p>Try another genre, letter, or search term.</p>
+    </div>
     {% else %}
     <div class="store-empty">
         <h2>The shelves are being stocked.</h2>
@@ -39,4 +86,53 @@
     </div>
     {% endif %}
 </section>
+
+{% if products %}
+<script>
+(function(){
+  const cards=[...document.querySelectorAll('.store-card')];
+  const tabs=[...document.querySelectorAll('.genre-tab')];
+  const letters=[...document.querySelectorAll('.alpha-button')];
+  const search=document.getElementById('storeSearch');
+  const clear=document.getElementById('storeClear');
+  const note=document.getElementById('storeFilterNote');
+  const empty=document.getElementById('storeNoResults');
+  let genre='All Books', letter='', query='';
+
+  function apply(){
+    const q=query.trim().toLowerCase();
+    let visible=0;
+    cards.forEach(card=>{
+      const title=card.dataset.title||'', author=card.dataset.author||'', categories=card.dataset.categories||'';
+      const genreOK=genre==='All Books'||categories.split(',').map(x=>x.trim()).includes(genre.toLowerCase());
+      const letterOK=!letter||title.startsWith(letter.toLowerCase());
+      const searchOK=!q||title.includes(q)||author.includes(q);
+      const show=genreOK&&letterOK&&searchOK;
+      card.hidden=!show;
+      if(show) visible++;
+    });
+    empty.hidden=visible!==0;
+    const pieces=[];
+    if(genre!=='All Books') pieces.push(genre);
+    if(letter) pieces.push(letter);
+    if(q) pieces.push('“'+q+'”');
+    note.textContent=visible+' book'+(visible===1?'':'s')+(pieces.length?' · '+pieces.join(' · '):'');
+  }
+
+  tabs.forEach(btn=>btn.addEventListener('click',()=>{
+    genre=btn.dataset.genre;
+    tabs.forEach(x=>x.classList.toggle('active',x===btn));
+    apply();
+  }));
+  letters.forEach(btn=>btn.addEventListener('click',()=>{
+    letter=btn.dataset.letter||'';
+    letters.forEach(x=>x.classList.toggle('active',x===btn));
+    apply();
+  }));
+  search.addEventListener('input',()=>{query=search.value;apply();});
+  clear.addEventListener('click',()=>{search.value='';query='';apply();search.focus();});
+  apply();
+})();
+</script>
+{% endif %}
 {% endblock %}
