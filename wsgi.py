@@ -15,9 +15,3 @@ init_db()
 import inbox_admin_routes  # noqa: F401,E402
 
 ensure_store_tables()
-
-# Find Us: public event page plus authenticated admin event management.
-from find_us_routes import find_us_bp, ensure_find_us_tables  # noqa: E402
-ensure_find_us_tables()
-if "find_us" not in app.blueprints:
-    app.register_blueprint(find_us_bp)
