@@ -2,37 +2,51 @@
 {% block title %}Find Us | The Snyder Scriptorium{% endblock %}
 {% block head %}
 <style>
-.find-us-page{max-width:1000px;margin:55px auto 70px;padding:0 20px}
-.find-us-page h2{text-align:center;color:#5c4033;font-weight:500;font-size:2.2rem;margin:0 0 12px}
-.find-us-intro{text-align:center;max-width:720px;margin:0 auto 38px;color:#6f6257;font-size:1.08rem}
+.find-us-page{max-width:1000px;margin:0 auto;padding:55px 20px 70px;color:#3d3028}
+.find-us-page h2{font-family:"Cormorant Garamond",Georgia,serif;font-size:2.7rem;font-weight:500;text-align:center;color:#5c4033;margin:0 0 12px}
+.find-us-intro{text-align:center;max-width:720px;margin:0 auto 40px;color:#6f6257;font-size:1.05rem}
 .find-us-list{display:grid;gap:22px}
-.find-us-card{background:#fffdf8;border:1px solid #c9b78f;border-radius:8px;padding:24px;box-shadow:0 4px 12px rgba(40,30,20,.06)}
-.find-us-date{color:#75695d;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
-.find-us-card h3{color:#5c4033;font-weight:500;margin:5px 0 8px;font-size:1.45rem}
-.find-us-location{font-weight:500;margin-bottom:10px}
-.find-us-description{white-space:pre-wrap}
-.find-us-link{display:inline-block;margin-top:15px;color:#5c4033}
-.find-us-empty{text-align:center;color:#6f6257;background:#fffdf8;border:1px solid #c9b78f;padding:28px;border-radius:8px;font-style:italic}
+.find-us-card{background:#fffdf8;border:1px solid #c9b78f;border-radius:9px;box-shadow:0 5px 16px rgba(40,30,20,.07);padding:25px}
+.find-us-card.featured{border-width:2px}
+.find-us-card-layout{display:grid;grid-template-columns:1fr 220px;gap:24px}
+.find-us-card h3{font-family:"Cormorant Garamond",Georgia,serif;font-size:1.75rem;font-weight:500;color:#5c4033;margin:0 0 8px}
+.find-us-meta{display:flex;flex-wrap:wrap;gap:8px 18px;color:#6f6257;margin-bottom:15px}
+.find-us-card p{white-space:pre-line}
+.find-us-image{width:100%;max-height:190px;object-fit:cover;border-radius:6px;border:1px solid #c9b78f}
+.find-us-link{display:inline-block;margin-top:12px;color:#5c4033}
+.find-us-empty{text-align:center;padding:40px;background:#f7f1e6;border:1px solid #c9b78f;border-radius:9px;color:#6f6257}
+.find-us-badge{display:inline-block;margin-bottom:8px;padding:3px 9px;border:1px solid #c9b78f;border-radius:999px;background:#f4ecdd;color:#5c4033;font-size:.82rem}
+@media(max-width:750px){.find-us-card-layout{grid-template-columns:1fr}.find-us-image{max-height:260px}.find-us-page{padding-top:35px}}
 </style>
 {% endblock %}
 {% block content %}
 <section class="find-us-page">
     <h2>Find Us</h2>
-    <p class="find-us-intro">See where you can find the Snyder Scriptorium out in the world — at events, appearances, pop-ups, and other gatherings.</p>
+    <p class="find-us-intro">Come find the Snyder Scriptorium out in the world. Here you can see upcoming appearances, events, readings, markets, and pop-ups.</p>
     {% if events %}
     <div class="find-us-list">
         {% for event in events %}
-        <article class="find-us-card">
-            <div class="find-us-date">{{ event["event_date"] }}</div>
-            <h3>{{ event["title"] }}</h3>
-            <div class="find-us-location">{{ event["location"] }}</div>
-            {% if event["description"] %}<div class="find-us-description">{{ event["description"] }}</div>{% endif %}
-            {% if event["link"] %}<a class="find-us-link" href="{{ event["link"] }}" target="_blank" rel="noopener noreferrer">Event details →</a>{% endif %}
+        <article class="find-us-card{% if event['is_featured'] %} featured{% endif %}">
+            <div class="find-us-card-layout">
+                <div>
+                    {% if event['is_featured'] %}<span class="find-us-badge">Featured</span>{% endif %}
+                    <h3>{{ event['title'] }}</h3>
+                    <div class="find-us-meta">
+                        <span><strong>{{ event['date']|display_event_date }}</strong></span>
+                        {% if event['start_time'] %}<span>{{ event['start_time'] }}{% if event['end_time'] %}–{{ event['end_time'] }}{% endif %}</span>{% endif %}
+                        {% if event['location'] %}<span>{{ event['location'] }}</span>{% endif %}
+                    </div>
+                    {% if event['address'] %}<p><strong>Address:</strong> {{ event['address'] }}</p>{% endif %}
+                    {% if event['description'] %}<p>{{ event['description'] }}</p>{% endif %}
+                    {% if event['website_url'] %}<a class="find-us-link" href="{{ event['website_url'] }}" target="_blank" rel="noopener noreferrer">Event details ↗</a>{% endif %}
+                </div>
+                {% if event['image_url'] %}<div><img class="find-us-image" src="{{ event['image_url'] }}" alt="{{ event['title'] }}"></div>{% endif %}
+            </div>
         </article>
         {% endfor %}
     </div>
     {% else %}
-    <div class="find-us-empty">No upcoming appearances are posted yet. Check back soon.</div>
+    <div class="find-us-empty">There are no upcoming appearances scheduled right now. Check back soon.</div>
     {% endif %}
 </section>
 {% endblock %}
