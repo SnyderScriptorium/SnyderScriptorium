@@ -14,4 +14,8 @@ init_db()
 # have been loaded.
 import inbox_admin_routes  # noqa: F401,E402
 
+# Register Find Us only after the application and base database are initialized.
+# The module uses the existing admin authentication and database abstraction.
+import find_us_routes  # noqa: F401,E402
+
 ensure_store_tables()
