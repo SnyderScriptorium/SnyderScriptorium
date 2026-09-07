@@ -2,29 +2,31 @@
 
 from datetime import datetime
 
-from flask import jsonify, redirect, render_template, request, url_for
+from flask import jsonify, render_template, request
 
 from app import app, admin_required, get_db, now_string
-
-
-FIND_US_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS find_us_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    event_date TEXT NOT NULL,
-    location TEXT NOT NULL DEFAULT '',
-    description TEXT NOT NULL DEFAULT '',
-    link TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'published',
-    created_at TEXT NOT NULL DEFAULT ''
-)
-"""
+from database import using_postgres
 
 
 def ensure_find_us_table():
     conn = get_db()
     try:
-        conn.execute(FIND_US_TABLE_SQL)
+        if using_postgres():
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS find_us_events ("
+                "id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, event_date TEXT NOT NULL, "
+                "location TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', "
+                "link TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'published', "
+                "created_at TEXT NOT NULL DEFAULT '')"
+            )
+        else:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS find_us_events ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, event_date TEXT NOT NULL, "
+                "location TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', "
+                "link TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'published', "
+                "created_at TEXT NOT NULL DEFAULT '')"
+            )
         conn.commit()
     finally:
         conn.close()
@@ -74,7 +76,6 @@ def create_find_us_event():
 
     if not title or not event_date or not location:
         return jsonify({"error": "Title, date and location are required."}), 400
-
     try:
         datetime.fromisoformat(event_date)
     except ValueError:
