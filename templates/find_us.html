@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Find Us | The Snyder Scriptorium{% endblock %}
+{% block content %}
+<section class="page-section">
+    <div class="page-header">
+        <h1>Find Us</h1>
+        <p>Come find the Snyder Scriptorium out in the world. This is where you'll find upcoming events, appearances, bookish gatherings, and places where I plan to pop up.</p>
+    </div>
+
+    {% if events %}
+        <div class="find-us-events">
+            {% for event in events %}
+            <article class="find-us-event">
+                <div class="find-us-date">
+                    <span>{{ event.event_date[5:7] }}/{{ event.event_date[8:10] }}</span>
+                    <small>{{ event.event_date[:4] }}</small>
+                </div>
+                <div class="find-us-details">
+                    <h2>{{ event.title }}</h2>
+                    {% if event.event_time %}<p class="event-time">{{ event.event_time }}</p>{% endif %}
+                    {% if event.venue or event.city or event.state %}
+                    <p class="event-location">
+                        {% if event.venue %}{{ event.venue }}{% endif %}{% if event.venue and (event.city or event.state) %} · {% endif %}{% if event.city %}{{ event.city }}{% endif %}{% if event.city and event.state %}, {% endif %}{% if event.state %}{{ event.state }}{% endif %}
+                    </p>
+                    {% endif %}
+                    {% if event.description %}<p>{{ event.description }}</p>{% endif %}
+                    {% if event.link_url %}<p><a href="{{ event.link_url }}" target="_blank" rel="noopener noreferrer">Event details →</a></p>{% endif %}
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="find-us-empty">
+            <h2>Nothing on the calendar just yet.</h2>
+            <p>Check back soon. I'll post upcoming places and events here as they're planned.</p>
+        </div>
+    {% endif %}
+</section>
+
+<style>
+.find-us-events { max-width: 900px; margin: 36px auto 0; display: grid; gap: 22px; }
+.find-us-event { display: grid; grid-template-columns: 92px 1fr; gap: 24px; padding: 26px; background: rgba(255,253,248,.78); border: 1px solid rgba(111,91,58,.28); border-radius: 12px; }
+.find-us-date { text-align: center; padding: 12px 8px; border-right: 1px solid rgba(111,91,58,.24); font-family: Georgia, serif; }
+.find-us-date span { display: block; font-size: 1.45rem; }
+.find-us-date small { display: block; margin-top: 4px; }
+.find-us-details h2 { margin: 0 0 8px; }
+.find-us-details p { margin: 7px 0; }
+.event-time, .event-location { font-weight: 600; }
+.find-us-empty { max-width: 760px; margin: 45px auto; padding: 36px; text-align: center; background: rgba(255,253,248,.78); border: 1px solid rgba(111,91,58,.28); border-radius: 12px; }
+@media (max-width: 600px) { .find-us-event { grid-template-columns: 1fr; gap: 12px; } .find-us-date { border-right: 0; border-bottom: 1px solid rgba(111,91,58,.24); padding-bottom: 14px; } }
+</style>
+{% endblock %}
