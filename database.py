@@ -63,7 +63,7 @@ class PostgresConnection:
         wants_id = (
             upper.startswith("INSERT INTO")
             and any(f"INSERT INTO {table}" in upper for table in (
-                "DRAFTS", "PUBLISHED_POSTS", "MANUSCRIPT_BOOKS", "MANUSCRIPT_CHAPTERS", "MEMBERS", "SUBSCRIPTIONS"
+                "DRAFTS", "PUBLISHED_POSTS", "MANUSCRIPT_BOOKS", "MANUSCRIPT_CHAPTERS", "MEMBERS", "SUBSCRIPTIONS", "FIND_US_EVENTS"
             ))
             and "RETURNING" not in upper
         )
@@ -168,6 +168,7 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS inbox_messages (id BIGSERIAL PRIMARY KEY,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id BIGINT,book_id BIGINT,chapter_id BIGINT,member_id BIGINT,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text)",
                 "CREATE TABLE IF NOT EXISTS page_views (id BIGSERIAL PRIMARY KEY,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id BIGINT,category TEXT,viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT)",
+                "CREATE TABLE IF NOT EXISTS find_us_events (id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,date TEXT NOT NULL,start_time TEXT NOT NULL DEFAULT '',end_time TEXT NOT NULL DEFAULT '',location TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',website_url TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',is_active INTEGER NOT NULL DEFAULT 1,is_featured INTEGER NOT NULL DEFAULT 0,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
             ]
             for statement in statements:
                 conn.execute(statement)
@@ -198,6 +199,7 @@ def init_db():
             conn.execute("CREATE TABLE IF NOT EXISTS inbox_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id INTEGER,book_id INTEGER,chapter_id INTEGER,member_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS page_views (id INTEGER PRIMARY KEY AUTOINCREMENT,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id INTEGER,category TEXT,viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT)")
+            conn.execute("CREATE TABLE IF NOT EXISTS find_us_events (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,date TEXT NOT NULL,start_time TEXT NOT NULL DEFAULT '',end_time TEXT NOT NULL DEFAULT '',location TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',website_url TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',is_active INTEGER NOT NULL DEFAULT 1,is_featured INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
 
             def add_columns(table, columns):
                 existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
