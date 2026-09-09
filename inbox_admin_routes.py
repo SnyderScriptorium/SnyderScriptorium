@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import request, jsonify, session, url_for, render_template
+from flask import request, jsonify, session, redirect, url_for, render_template
 
 from app import app, get_db, admin_required
 
