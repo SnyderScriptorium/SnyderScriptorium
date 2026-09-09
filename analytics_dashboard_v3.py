@@ -1,19 +1,14 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import re
-from flask import jsonify, render_template, request, session, redirect
+from flask import jsonify, render_template, request
 from database import get_db
+from app import admin_required
 
 EASTERN = ZoneInfo('America/New_York')
 LABELS = {'/':'Home','/about':'About','/blog':'Blog','/blog/bookcurations':'Book Curations','/blog/bookreviews':'Book Reviews','/blog/curiosity_cabinet':'Curiosity Cabinet','/kwsnyderwriting':'K. W. Snyder Writing','/kwsnyderwriting/membership':'K. W. Snyder Writing Membership','/contact':'Contact','/store':'The Scriptorium Book Store','/merch':'Scriptorium Merch Shop','/membership-terms':'Membership Terms'}
 CATEGORIES = {'curations':'Book Curations','reviews':'Book Reviews','curiosity':'Curiosity Cabinet','kwsnyderwriting':'K. W. Snyder Writing','kw_short_stories':'K. W. Snyder Writing — Short Stories','kw_poems':'K. W. Snyder Writing — Poems','kw_vignettes':'K. W. Snyder Writing — Vignettes','blog':'Blog','site':'Home','journal':'K. W. Snyder Writing','Journal':'K. W. Snyder Writing'}
 PAGE_SIZE=25
-
-def admin_ok():
-    try:
-        from app import require_admin
-        return require_admin()
-    except Exception: return False
 
 def normalize_period(period):
     return {'1':'day','1d':'day','day':'day','today':'day','7':'7d','7d':'7d','30':'30d','30d':'30d','90':'90d','90d':'90d','6':'6m','6m':'6m','12':'1y','1y':'1y','365':'1y','365d':'1y','all':'all','alltime':'all','all-time':'all'}.get(str(period or '30d').strip().lower(),'30d')
@@ -121,68 +116,21 @@ def report(period,content_page=1,source_page=1):
         cancelled=int(rowval(conn.execute(f'SELECT COUNT(*) AS count FROM subscriptions{cancel_where}',cancel_params).fetchone(),0,'count') or 0);all_time=int(rowval(conn.execute('SELECT COUNT(*) AS total FROM page_views').fetchone(),0,'total'))
         return {'period':period,'total_views':total,'total_views_today':total if period=='day' else None,'unique_visitors':unique,'all_time_views':all_time,'daily_views':daily,'chart_max':chart_max,'chart_ticks':chart_ticks,'content_views':content_page_items,'content_pagination':{'page':content_page,'pages':content_pages,'total':content_total},'traffic_sources':traffic_sources,'source_details':source_page_items,'source_pagination':{'page':source_page,'pages':source_pages,'total':source_total},'members':{'total':sum(counts.values()),'active':counts.get('active',0),'past_due':counts.get('past_due',0),'paused':counts.get('paused',0),'cancelled':counts.get('cancelled',0),'expired':counts.get('expired',0),'inactive':counts.get('inactive',0),'new_last_30_days':new_last_30},'subscription_activity':{'new':new_subs,'cancelled_or_expired':cancelled}}
     finally:conn.close()
+
 def register(app):
-
     @app.get('/admin/analytics')
+    @admin_required
     def analytics_dashboard_v3():
-        if not admin_ok():
-            return redirect('/admin/login')
-
-        return render_template(
-            'analytics.html',
-            **report(
-                request.args.get('period', '30d'),
-                request.args.get('content_page', 1),
-                request.args.get('source_page', 1)
-            ),
-            tab=request.args.get('tab', 'overview')
-        )
+        return render_template('analytics.html',**report(request.args.get('period','30d'),request.args.get('content_page',1),request.args.get('source_page',1)),tab=request.args.get('tab','overview'))
 
     @app.get('/api/analytics-v3')
+    @admin_required
     def analytics_api_v3():
-        if not admin_ok():
-            return jsonify({'error': 'Unauthorized'}), 401
-
-        return jsonify(
-            report(
-                request.args.get('period', '30d'),
-                request.args.get('content_page', 1),
-                request.args.get('source_page', 1)
-            )
-        )
+        return jsonify(report(request.args.get('period','30d'),request.args.get('content_page',1),request.args.get('source_page',1)))
 
     @app.after_request
     def analytics_ui_v3(response):
-        if request.path != '/admin/analytics' or 'text/html' not in response.content_type:
-            return response
-
-        text = response.get_data(as_text=True)
-
-        nav = ''.join(
-            f'<a href="/admin/analytics?period={k}&tab={request.args.get("tab", "overview")}">{v}</a>'
-            for k, v in [
-                ('day', '1 Day — Today'),
-                ('7d', '7 Days'),
-                ('30d', '30 Days'),
-                ('90d', '90 Days'),
-                ('6m', '6 Months'),
-                ('1y', '1 Year'),
-                ('all', 'All Time')
-            ]
-        )
-
-        text = re.sub(
-            r'<nav class="periods".*?</nav>',
-            f'<nav class="periods" aria-label="Analytics period">{nav}</nav>',
-            text,
-            flags=re.S
-        )
-
-        text = text.replace('Journal', 'K. W. Snyder Writing')
-        text = text.replace('Homepage', 'Home')
-
-        if request.args.get('period') in {'day', '1d', 'today', '1'}:
-            text = text.replace('Views by day', 'Views by hour')
-
-        response.set_data(text)
-        return response
+        if request.path!='/admin/analytics' or 'text/html' not in response.content_type:return response
+        text=response.get_data(as_text=True);nav=''.join(f'<a href="/admin/analytics?period={k}&tab={request.args.get("tab","overview")}">{v}</a>' for k,v in [('day','1 Day — Today'),('7d','7 Days'),('30d','30 Days'),('90d','90 Days'),('6m','6 Months'),('1y','1 Year'),('all','All Time')]);text=re.sub(r'<nav class="periods".*?</nav>',f'<nav class="periods" aria-label="Analytics period">{nav}</nav>',text,flags=re.S);text=text.replace('Journal','K. W. Snyder Writing').replace('Homepage','Home')
+        if request.args.get('period') in {'day','1d','today','1'}:text=text.replace('Views by day','Views by hour')
+        response.set_data(text);return response
