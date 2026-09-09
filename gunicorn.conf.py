@@ -19,9 +19,6 @@ def post_worker_init(worker):
     from canonical_analytics_tracker import register as register_canonical_analytics
     register_canonical_analytics(app)
 
-    from analytics_dashboard_v3 import register as register_analytics_v3
-    register_analytics_v3(app)
-
     from subscriber_dashboard import register_subscriber_dashboard
     register_subscriber_dashboard(app)
 
