@@ -123,10 +123,18 @@ def report(period,content_page=1,source_page=1):
     finally:conn.close()
 
 def register(app):
-    @app.get('/admin/analytics')
-    def analytics_dashboard_v3():
-        if not admin_ok():return redirect('/admin/login')
-        return render_template('analytics.html',**report(request.args.get('period','30d'),request.args.get('content_page',1),request.args.get('source_page',1)),tab=request.args.get('tab','overview'))
+@app.get('/admin/analytics')
+@admin_required
+def analytics_dashboard_v3():
+    return render_template(
+        'analytics.html',
+        **report(
+            request.args.get('period', '30d'),
+            request.args.get('content_page', 1),
+            request.args.get('source_page', 1)
+        ),
+        tab=request.args.get('tab', 'overview')
+    )
     @app.get('/api/analytics-v3')
     def analytics_api_v3():
         if not admin_ok():return jsonify({'error':'Unauthorized'}),401
