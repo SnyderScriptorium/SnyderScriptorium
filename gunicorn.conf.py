@@ -1,9 +1,6 @@
 def post_worker_init(worker):
     app = worker.wsgi
 
-    from database import init_db
-    init_db()
-
     from draft_request_guard import register as register_draft_guard
     register_draft_guard(app)
 
