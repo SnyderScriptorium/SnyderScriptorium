@@ -163,7 +163,7 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS published_posts (id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,category_name TEXT NOT NULL,content TEXT NOT NULL,date_published TEXT NOT NULL,access_level TEXT NOT NULL DEFAULT 'public')",
                 "CREATE TABLE IF NOT EXISTS manuscript_books (id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,description TEXT DEFAULT '',date_created TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,access_level TEXT NOT NULL DEFAULT 'members')",
                 "CREATE TABLE IF NOT EXISTS manuscript_chapters (id BIGSERIAL PRIMARY KEY,book_id BIGINT NOT NULL REFERENCES manuscript_books(id) ON DELETE CASCADE,chapter_number INTEGER NOT NULL,title TEXT NOT NULL,content TEXT NOT NULL,date_created TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text,published INTEGER NOT NULL DEFAULT 0,UNIQUE(book_id, chapter_number))",
-                "CREATE TABLE IF NOT EXISTS members (id BIGSERIAL PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_status TEXT NOT NULL DEFAULT 'inactive',date_created TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS members (id BIGSERIAL PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_status TEXT NOT NULL DEFAULT 'inactive',date_created TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'active',blocked_at TIMESTAMPTZ)",
                 "CREATE TABLE IF NOT EXISTS subscriptions (id BIGSERIAL PRIMARY KEY,member_id BIGINT NOT NULL REFERENCES members(id) ON DELETE CASCADE,provider TEXT,subscription_id TEXT,status TEXT NOT NULL DEFAULT 'inactive',date_started TEXT,date_ends TEXT)",
                 "CREATE TABLE IF NOT EXISTS inbox_messages (id BIGSERIAL PRIMARY KEY,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id BIGINT,book_id BIGINT,chapter_id BIGINT,member_id BIGINT,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text)",
@@ -175,6 +175,8 @@ def init_db():
             for statement in [
                 "ALTER TABLE members ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive'",
                 "ALTER TABLE members ADD COLUMN IF NOT EXISTS date_created TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE members ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'",
+                "ALTER TABLE members ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ",
                 "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS provider TEXT",
                 "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscription_id TEXT",
                 "ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'inactive'",
@@ -194,7 +196,7 @@ def init_db():
             conn.execute("CREATE TABLE IF NOT EXISTS published_posts (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,category TEXT NOT NULL,category_name TEXT NOT NULL,content TEXT NOT NULL,date_published TEXT NOT NULL,access_level TEXT NOT NULL DEFAULT 'public')")
             conn.execute("CREATE TABLE IF NOT EXISTS manuscript_books (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,description TEXT DEFAULT '',date_created TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,access_level TEXT NOT NULL DEFAULT 'members')")
             conn.execute("CREATE TABLE IF NOT EXISTS manuscript_chapters (id INTEGER PRIMARY KEY AUTOINCREMENT,book_id INTEGER NOT NULL,chapter_number INTEGER NOT NULL,title TEXT NOT NULL,content TEXT NOT NULL,date_created TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,published INTEGER NOT NULL DEFAULT 0,UNIQUE(book_id,chapter_number),FOREIGN KEY(book_id) REFERENCES manuscript_books(id) ON DELETE CASCADE)")
-            conn.execute("CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_status TEXT NOT NULL DEFAULT 'inactive',date_created TEXT NOT NULL)")
+            conn.execute("CREATE TABLE IF NOT EXISTS members (id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_status TEXT NOT NULL DEFAULT 'inactive',date_created TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'active',blocked_at TEXT)")
             conn.execute("CREATE TABLE IF NOT EXISTS subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT,member_id INTEGER NOT NULL,provider TEXT,subscription_id TEXT,status TEXT NOT NULL DEFAULT 'inactive',date_started TEXT,date_ends TEXT,FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE)")
             conn.execute("CREATE TABLE IF NOT EXISTS inbox_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id INTEGER,book_id INTEGER,chapter_id INTEGER,member_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
@@ -207,7 +209,7 @@ def init_db():
                     if name not in existing:
                         conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
-            add_columns("members", [("subscription_status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_created", "TEXT NOT NULL DEFAULT ''")])
+            add_columns("members", [("subscription_status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_created", "TEXT NOT NULL DEFAULT ''"), ("status", "TEXT NOT NULL DEFAULT 'active'"), ("blocked_at", "TEXT")])
             add_columns("subscriptions", [("provider", "TEXT"), ("subscription_id", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_started", "TEXT"), ("date_ends", "TEXT")])
             add_columns("page_views", [("page_type", "TEXT NOT NULL DEFAULT 'page'"), ("content_id", "INTEGER"), ("category", "TEXT"), ("viewed_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"), ("visitor_key", "TEXT"), ("referrer", "TEXT"), ("traffic_source", "TEXT")])
             add_columns("site_content", [("updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP")])
