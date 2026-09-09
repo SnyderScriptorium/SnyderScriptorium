@@ -10,7 +10,7 @@
 .collection-link{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:10px 24px;border:0;border-right:1px solid rgba(255,255,255,.2);background:transparent;color:#FFFDF8;text-decoration:none;font:inherit;cursor:pointer;transition:background .15s ease,color .15s ease}
 .collection-link:last-child{border-right:0}.collection-link:hover,.collection-link.active{background:#F5EEE3;color:#5C4033}
 .store-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px;align-items:start}
-.genre-sidebar{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.06);position:sticky;top:20px}
+.genre-sidebar{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.06);position:sticky;top:20px;display:block;visibility:visible}
 .genre-sidebar h2{font-family:Georgia,serif;font-size:1.15rem;color:#5C4033;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid #D9C79E}
 .genre-tabs{display:flex;flex-direction:column;gap:4px;margin:0}
 .genre-tab{display:block;width:100%;text-align:left;border:0;border-radius:5px;background:transparent;color:#5C4033;padding:9px 10px;font:inherit;cursor:pointer}
@@ -44,14 +44,13 @@
         <h1>The Scriptorium Book Store</h1>
     </div>
 
-    <nav class="store-collection-nav" aria-label="Book collections">
-        <button class="collection-link active" type="button">New Books</button>
-        <button class="collection-link" type="button">Used Books</button>
-        <button class="collection-link" type="button">New Releases</button>
-        <button class="collection-link" type="button">K. W. Snyder Books</button>
+    <nav class="store-collection-nav" id="collectionNav" aria-label="Book collections">
+        <button class="collection-link active" type="button" data-collection="New Books">New Books</button>
+        <button class="collection-link" type="button" data-collection="Used Books">Used Books</button>
+        <button class="collection-link" type="button" data-collection="New Releases">New Releases</button>
+        <button class="collection-link" type="button" data-collection="K. W. Snyder Books">K. W. Snyder Books</button>
     </nav>
 
-    {% if products %}
     <div class="store-layout">
         <aside class="genre-sidebar" aria-label="Book genres">
             <h2>Browse by Genre</h2>
@@ -65,6 +64,7 @@
         </aside>
 
         <div class="store-main">
+            {% if products %}
             <div class="store-controls" aria-label="Bookstore search and filters">
                 <div class="store-search-row">
                     <input id="storeSearch" class="store-search" type="search" placeholder="Search by book title or author…" aria-label="Search books">
@@ -100,14 +100,14 @@
                 <h2>No books found.</h2>
                 <p>Try another genre, letter, or search term.</p>
             </div>
+            {% else %}
+            <div class="store-empty">
+                <h2>The shelves are being stocked.</h2>
+                <p>Books will appear here as the Scriptorium's bookstore collection is prepared.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
-    {% else %}
-    <div class="store-empty">
-        <h2>The shelves are being stocked.</h2>
-        <p>Books will appear here as the Scriptorium's bookstore collection is prepared.</p>
-    </div>
-    {% endif %}
 </section>
 
 {% if products %}
@@ -115,12 +115,13 @@
 (function(){
   const cards=[...document.querySelectorAll('.store-card')];
   const tabs=[...document.querySelectorAll('.genre-tab')];
+  const collections=[...document.querySelectorAll('.collection-link')];
   const letters=[...document.querySelectorAll('.alpha-button')];
   const search=document.getElementById('storeSearch');
   const clear=document.getElementById('storeClear');
   const note=document.getElementById('storeFilterNote');
   const empty=document.getElementById('storeNoResults');
-  let genre='All Books', letter='', query='';
+  let genre='All Books', letter='', query='', collection='New Books';
 
   function apply(){
     const q=query.trim().toLowerCase();
@@ -135,13 +136,18 @@
       if(show) visible++;
     });
     empty.hidden=visible!==0;
-    const pieces=[];
+    const pieces=[collection];
     if(genre!=='All Books') pieces.push(genre);
     if(letter) pieces.push(letter);
     if(q) pieces.push('“'+q+'”');
-    note.textContent=visible+' book'+(visible===1?'':'s')+(pieces.length?' · '+pieces.join(' · '):'');
+    note.textContent=visible+' book'+(visible===1?'':'s')+' · '+pieces.join(' · ');
   }
 
+  collections.forEach(btn=>btn.addEventListener('click',()=>{
+    collection=btn.dataset.collection;
+    collections.forEach(x=>x.classList.toggle('active',x===btn));
+    apply();
+  }));
   tabs.forEach(btn=>btn.addEventListener('click',()=>{
     genre=btn.dataset.genre;
     tabs.forEach(x=>x.classList.toggle('active',x===btn));
