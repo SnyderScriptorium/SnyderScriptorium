@@ -1,55 +1,12 @@
-from functools import wraps
 from datetime import datetime
 
-from flask import request, jsonify, session, redirect, url_for, render_template
+from flask import request, jsonify, session, url_for, render_template
 
-from app import app, get_db, require_admin
-from database import using_postgres
-
-
-def ensure_schema():
-    conn = get_db()
-    try:
-        if using_postgres():
-            statements = [
-                "ALTER TABLE members ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'",
-                "ALTER TABLE members ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ",
-            ]
-        else:
-            statements = [
-                "ALTER TABLE members ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
-                "ALTER TABLE members ADD COLUMN blocked_at TEXT",
-            ]
-        for sql in statements:
-            try:
-                conn.execute(sql)
-            except Exception as exc:
-                message = str(exc).lower()
-                if "duplicate column" not in message and "already exists" not in message:
-                    raise
-        conn.commit()
-    finally:
-        conn.close()
-
-
-try:
-    ensure_schema()
-except Exception:
-    pass
-
-
-def admin_only(view):
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        if not require_admin():
-            return redirect(url_for("admin_login_page"))
-        return view(*args, **kwargs)
-
-    return wrapped
+from app import app, get_db, admin_required
 
 
 @app.route("/api/inbox/<int:message_id>", methods=["DELETE"])
-@admin_only
+@admin_required
 def delete_inbox_message(message_id):
     conn = get_db()
     row = conn.execute("SELECT id FROM inbox_messages WHERE id = ?", (message_id,)).fetchone()
@@ -63,7 +20,7 @@ def delete_inbox_message(message_id):
 
 
 @app.route("/api/inbox/<int:message_id>/block-sender", methods=["POST"])
-@admin_only
+@admin_required
 def block_inbox_sender(message_id):
     conn = get_db()
     message = conn.execute(
@@ -97,7 +54,7 @@ def block_inbox_sender(message_id):
 
 
 @app.route("/api/members")
-@admin_only
+@admin_required
 def admin_members():
     conn = get_db()
     rows = conn.execute(
@@ -108,7 +65,7 @@ def admin_members():
 
 
 @app.route("/api/members/<int:member_id>/block", methods=["POST"])
-@admin_only
+@admin_required
 def block_member(member_id):
     conn = get_db()
     row = conn.execute("SELECT id FROM members WHERE id = ?", (member_id,)).fetchone()
@@ -125,7 +82,7 @@ def block_member(member_id):
 
 
 @app.route("/api/members/<int:member_id>/unblock", methods=["POST"])
-@admin_only
+@admin_required
 def unblock_member(member_id):
     conn = get_db()
     row = conn.execute("SELECT id FROM members WHERE id = ?", (member_id,)).fetchone()
@@ -170,7 +127,6 @@ def reject_blocked_members():
     return None
 
 
-# Find Us is registered here because this module is loaded by the production WSGI entry point.
 @app.route("/find-us", endpoint="find_us")
 def find_us():
     today = datetime.now().strftime("%Y-%m-%d")
@@ -195,13 +151,13 @@ def display_event_date(value):
 
 
 @app.route("/admin/find-us")
-@admin_only
+@admin_required
 def admin_find_us():
     return render_template("admin_find_us.html")
 
 
 @app.route("/api/find-us", methods=["GET"])
-@admin_only
+@admin_required
 def get_find_us_events():
     conn = get_db()
     rows = conn.execute(
@@ -246,7 +202,7 @@ def validate_event_data(data):
 
 
 @app.route("/api/find-us", methods=["POST"])
-@admin_only
+@admin_required
 def create_find_us_event():
     data = request.get_json() or {}
     event, error = validate_event_data(data)
@@ -269,7 +225,7 @@ def create_find_us_event():
 
 
 @app.route("/api/find-us/<int:event_id>", methods=["GET"])
-@admin_only
+@admin_required
 def get_find_us_event(event_id):
     conn = get_db()
     row = conn.execute("SELECT * FROM find_us_events WHERE id = ?", (event_id,)).fetchone()
@@ -280,7 +236,7 @@ def get_find_us_event(event_id):
 
 
 @app.route("/api/find-us/<int:event_id>", methods=["PUT"])
-@admin_only
+@admin_required
 def update_find_us_event(event_id):
     data = request.get_json() or {}
     event, error = validate_event_data(data)
@@ -307,7 +263,7 @@ def update_find_us_event(event_id):
 
 
 @app.route("/api/find-us/<int:event_id>", methods=["DELETE"])
-@admin_only
+@admin_required
 def delete_find_us_event(event_id):
     conn = get_db()
     cur = conn.execute("DELETE FROM find_us_events WHERE id = ?", (event_id,))
