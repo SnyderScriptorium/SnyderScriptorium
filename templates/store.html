@@ -6,7 +6,7 @@
 <style>
 .store-page{max-width:1250px;margin:0 auto;padding:30px 20px 70px}
 .store-hero{text-align:center;margin-bottom:22px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:760px;margin:0 auto;color:#6F6257}
-.store-collection-nav{display:flex;flex-wrap:wrap;justify-content:center;gap:0;background:#5C4033;border:1px solid #493126;border-radius:8px;padding:0;margin:0 0 28px;box-shadow:0 5px 16px rgba(40,30,20,.12);overflow:hidden}
+.most-viewed{margin:0 0 30px}.most-viewed h2{text-align:center;color:#5C4033;font-family:Georgia,serif;font-weight:400;margin:0 0 16px}.most-viewed-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}.most-viewed-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:13px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}.most-viewed-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:4px;margin-bottom:10px}.most-viewed-card h3{font-size:1.05rem;margin:0 0 3px;color:#5C4033}.most-viewed-card p{margin:0;color:#6F6257;font-size:.9rem}.most-viewed-link{display:block;text-align:center;margin-top:auto;padding-top:10px;color:#5C4033;font-weight:600;text-decoration:none}.store-collection-nav{display:flex;flex-wrap:wrap;justify-content:center;gap:0;background:#5C4033;border:1px solid #493126;border-radius:8px;padding:0;margin:0 0 28px;box-shadow:0 5px 16px rgba(40,30,20,.12);overflow:hidden}
 .collection-link{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:10px 24px;border:0;border-right:1px solid rgba(255,255,255,.2);background:transparent;color:#FFFDF8;text-decoration:none;font:inherit;cursor:pointer;transition:background .15s ease,color .15s ease}
 .collection-link:last-child{border-right:0}.collection-link:hover,.collection-link.active{background:#F5EEE3;color:#5C4033}
 .store-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px;align-items:start}
@@ -16,7 +16,7 @@
 .genre-tab{display:block;width:100%;text-align:left;border:0;border-radius:5px;background:transparent;color:#5C4033;padding:9px 10px;font:inherit;cursor:pointer}
 .genre-tab:hover,.genre-tab.active{background:#F5EEE3;color:#5C4033;font-weight:600}
 .genre-tab.banned-books{margin-top:8px;border-top:1px solid #D9C79E;border-radius:0;padding-top:15px;font-weight:600}
-.store-main{min-width:0}
+.store-main{min-width:0}.store-main-title{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 14px}
 .store-controls{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;margin-bottom:28px;box-shadow:0 4px 14px rgba(40,30,20,.05)}
 .store-search-row{display:flex;gap:10px;align-items:center;max-width:720px;margin:0 auto 14px}
 .store-search{flex:1;padding:11px 13px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924}
@@ -44,11 +44,31 @@
         <h1>The Scriptorium Book Store</h1>
     </div>
 
+    {% if products and products[0].view_count|default(0)|int > 0 %}
+    <section class="most-viewed" aria-labelledby="most-viewed-heading">
+        <h2 id="most-viewed-heading">Most Viewed Books</h2>
+        <div class="most-viewed-grid">
+            {% for p in products[:6] %}
+            <article class="most-viewed-card">
+                {% if p.cover_image_url %}
+                    <img class="most-viewed-cover" src="{{ p.cover_image_url }}" alt="Cover of {{ p.title }}">
+                {% else %}
+                    <div class="most-viewed-cover store-cover placeholder" aria-label="No cover available">✦</div>
+                {% endif %}
+                <h3>{{ p.title }}</h3>
+                <p>{{ p.author or 'The Scriptorium' }}</p>
+                <a class="most-viewed-link" href="{{ url_for('store.store_book', slug=p.slug) }}">View Book</a>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
     <nav class="store-collection-nav" id="collectionNav" aria-label="Book collections">
-        <button class="collection-link active" type="button" data-collection="New Books">New Books</button>
-        <button class="collection-link" type="button" data-collection="Used Books">Used Books</button>
-        <button class="collection-link" type="button" data-collection="New Releases">New Releases</button>
-        <button class="collection-link" type="button" data-collection="K. W. Snyder Books">K. W. Snyder Books</button>
+        <button class="collection-link" type="button" data-collection="new">New Books</button>
+        <button class="collection-link" type="button" data-collection="used">Used Books</button>
+        <button class="collection-link" type="button" data-collection="release">New Releases</button>
+        <button class="collection-link" type="button" data-collection="kw_snyder">K. W. Snyder Books</button>
     </nav>
 
     <div class="store-layout">
@@ -64,6 +84,7 @@
         </aside>
 
         <div class="store-main">
+            <h2 id="storeMainTitle" class="store-main-title">Browse All Books</h2>
             {% if products %}
             <div class="store-controls" aria-label="Bookstore search and filters">
                 <div class="store-search-row">
@@ -82,7 +103,7 @@
 
             <div id="storeGrid" class="store-grid">
                 {% for p in products %}
-                <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-categories="{{ p.category|lower }}">
+                <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-categories="{{ p.category|lower }}" data-condition="{{ p.condition|default('new')|lower }}" data-new-release="{{ 'true' if p.is_new_release else 'false' }}" data-kw-snyder="{{ 'true' if p.is_kw_snyder else 'false' }}">
                     {% if p.cover_image_url %}
                         <img class="store-cover" src="{{ p.cover_image_url }}" alt="Cover of {{ p.title }}">
                     {% else %}
@@ -98,7 +119,7 @@
             </div>
             <div id="storeNoResults" class="store-empty" hidden>
                 <h2>No books found.</h2>
-                <p>Try another genre, letter, or search term.</p>
+                <p>Try another collection, genre, letter, or search term.</p>
             </div>
             {% else %}
             <div class="store-empty">
@@ -110,7 +131,6 @@
     </div>
 </section>
 
-{% if products %}
 <script>
 (function(){
   const cards=[...document.querySelectorAll('.store-card')];
@@ -121,30 +141,39 @@
   const clear=document.getElementById('storeClear');
   const note=document.getElementById('storeFilterNote');
   const empty=document.getElementById('storeNoResults');
-  let genre='All Books', letter='', query='', collection='New Books';
+  const title=document.getElementById('storeMainTitle');
+  let genre='All Books', letter='', query='', collection='';
+
+  function collectionLabel(){
+    return ({new:'New Books',used:'Used Books',release:'New Releases',kw_snyder:'K. W. Snyder Books'})[collection]||'Browse All Books';
+  }
 
   function apply(){
     const q=query.trim().toLowerCase();
     let visible=0;
     cards.forEach(card=>{
-      const title=card.dataset.title||'', author=card.dataset.author||'', categories=card.dataset.categories||'';
+      const titleText=card.dataset.title||'', author=card.dataset.author||'', categories=card.dataset.categories||'';
       const genreOK=genre==='All Books'||categories.split(',').map(x=>x.trim()).includes(genre.toLowerCase());
-      const letterOK=!letter||title.startsWith(letter.toLowerCase());
-      const searchOK=!q||title.includes(q)||author.includes(q);
-      const show=genreOK&&letterOK&&searchOK;
+      const letterOK=!letter||titleText.startsWith(letter.toLowerCase());
+      const searchOK=!q||titleText.includes(q)||author.includes(q);
+      const collectionOK=!collection || (collection==='new'&&card.dataset.condition==='new') || (collection==='used'&&card.dataset.condition==='used') || (collection==='release'&&card.dataset.newRelease==='true') || (collection==='kw_snyder'&&card.dataset.kwSnyder==='true');
+      const show=genreOK&&letterOK&&searchOK&&collectionOK;
       card.hidden=!show;
       if(show) visible++;
     });
-    empty.hidden=visible!==0;
-    const pieces=[collection];
-    if(genre!=='All Books') pieces.push(genre);
-    if(letter) pieces.push(letter);
-    if(q) pieces.push('“'+q+'”');
-    note.textContent=visible+' book'+(visible===1?'':'s')+' · '+pieces.join(' · ');
+    if(empty) empty.hidden=visible!==0;
+    if(title) title.textContent=collectionLabel();
+    if(note){
+      const pieces=[collectionLabel()];
+      if(genre!=='All Books') pieces.push(genre);
+      if(letter) pieces.push(letter);
+      if(q) pieces.push('“'+q+'”');
+      note.textContent=visible+' book'+(visible===1?'':'s')+' · '+pieces.join(' · ');
+    }
   }
 
   collections.forEach(btn=>btn.addEventListener('click',()=>{
-    collection=btn.dataset.collection;
+    collection=btn.dataset.collection||'';
     collections.forEach(x=>x.classList.toggle('active',x===btn));
     apply();
   }));
@@ -158,10 +187,9 @@
     letters.forEach(x=>x.classList.toggle('active',x===btn));
     apply();
   }));
-  search.addEventListener('input',()=>{query=search.value;apply();});
-  clear.addEventListener('click',()=>{search.value='';query='';apply();search.focus();});
+  if(search) search.addEventListener('input',()=>{query=search.value;apply();});
+  if(clear) clear.addEventListener('click',()=>{search.value='';query='';apply();search.focus();});
   apply();
 })();
 </script>
-{% endif %}
 {% endblock %}
