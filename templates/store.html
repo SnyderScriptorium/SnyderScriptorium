@@ -4,12 +4,20 @@
 
 {% block head %}
 <style>
-.store-page{max-width:1150px;margin:0 auto;padding:30px 20px 70px}
-.store-hero{text-align:center;margin-bottom:28px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:760px;margin:0 auto;color:#6F6257}
+.store-page{max-width:1250px;margin:0 auto;padding:30px 20px 70px}
+.store-hero{text-align:center;margin-bottom:22px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:760px;margin:0 auto;color:#6F6257}
+.store-collection-nav{display:flex;flex-wrap:wrap;justify-content:center;gap:0;background:#5C4033;border:1px solid #493126;border-radius:8px;padding:0;margin:0 0 28px;box-shadow:0 5px 16px rgba(40,30,20,.12);overflow:hidden}
+.collection-link{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:10px 24px;border:0;border-right:1px solid rgba(255,255,255,.2);background:transparent;color:#FFFDF8;text-decoration:none;font:inherit;cursor:pointer;transition:background .15s ease,color .15s ease}
+.collection-link:last-child{border-right:0}.collection-link:hover,.collection-link.active{background:#F5EEE3;color:#5C4033}
+.store-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px;align-items:start}
+.genre-sidebar{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.06);position:sticky;top:20px}
+.genre-sidebar h2{font-family:Georgia,serif;font-size:1.15rem;color:#5C4033;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid #D9C79E}
+.genre-tabs{display:flex;flex-direction:column;gap:4px;margin:0}
+.genre-tab{display:block;width:100%;text-align:left;border:0;border-radius:5px;background:transparent;color:#5C4033;padding:9px 10px;font:inherit;cursor:pointer}
+.genre-tab:hover,.genre-tab.active{background:#F5EEE3;color:#5C4033;font-weight:600}
+.genre-tab.banned-books{margin-top:8px;border-top:1px solid #D9C79E;border-radius:0;padding-top:15px;font-weight:600}
+.store-main{min-width:0}
 .store-controls{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;margin-bottom:28px;box-shadow:0 4px 14px rgba(40,30,20,.05)}
-.genre-tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px}
-.genre-tab{border:1px solid #C9B78F;background:#F5EEE3;color:#5C4033;border-radius:999px;padding:8px 13px;font:inherit;cursor:pointer}
-.genre-tab:hover,.genre-tab.active{background:#5C4033;color:#fff;border-color:#5C4033}
 .store-search-row{display:flex;gap:10px;align-items:center;max-width:720px;margin:0 auto 14px}
 .store-search{flex:1;padding:11px 13px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924}
 .store-clear{padding:11px 14px;border:1px solid #C9B78F;border-radius:6px;background:#F5EEE3;color:#5C4033;font:inherit;cursor:pointer}
@@ -25,7 +33,8 @@
 .store-meta{font-size:.92rem;color:#75695D;margin-bottom:12px}.store-price{font-size:1.15rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}
 .store-button{display:inline-block;text-align:center;margin-top:14px;padding:10px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-button:hover{filter:brightness(.94)}
 .store-empty{text-align:center;padding:45px 25px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;color:#6F6257}
-@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.genre-tabs{justify-content:flex-start}.alphabet{justify-content:flex-start}}
+@media(max-width:850px){.store-layout{grid-template-columns:1fr}.genre-sidebar{position:static}.genre-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.genre-tab.banned-books{margin-top:4px;padding-top:9px;border-top:0}.collection-link{flex:1 1 45%;border-bottom:1px solid rgba(255,255,255,.2)}}
+@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.genre-tabs{grid-template-columns:1fr}.collection-link{flex:1 1 100%;border-right:0}}
 </style>
 {% endblock %}
 
@@ -35,48 +44,63 @@
         <h1>The Scriptorium Book Store</h1>
     </div>
 
+    <nav class="store-collection-nav" aria-label="Book collections">
+        <button class="collection-link active" type="button">New Books</button>
+        <button class="collection-link" type="button">Used Books</button>
+        <button class="collection-link" type="button">New Releases</button>
+        <button class="collection-link" type="button">K. W. Snyder Books</button>
+    </nav>
+
     {% if products %}
-    <div class="store-controls" aria-label="Bookstore filters">
-        <div class="genre-tabs" id="genreTabs">
-            <button class="genre-tab active" type="button" data-genre="All Books">All Books</button>
-            {% for genre in ['Classics','Literary Fiction','Science Fiction','Fantasy','Horror','Thriller','Mystery','Romance','Poetry',"Children's Books",'Young Adult','Historical Fiction','Nonfiction','Foreign Language'] %}
-            <button class="genre-tab" type="button" data-genre="{{ genre }}">{{ genre }}</button>
-            {% endfor %}
-        </div>
+    <div class="store-layout">
+        <aside class="genre-sidebar" aria-label="Book genres">
+            <h2>Browse by Genre</h2>
+            <div class="genre-tabs" id="genreTabs">
+                <button class="genre-tab active" type="button" data-genre="All Books">All Books</button>
+                {% for genre in ['Classics','Literary Fiction','Science Fiction','Fantasy','Horror','Thriller','Mystery','Romance','Poetry',"Children's Books",'Young Adult','Historical Fiction','Nonfiction','Foreign Language'] %}
+                <button class="genre-tab" type="button" data-genre="{{ genre }}">{{ genre }}</button>
+                {% endfor %}
+                <button class="genre-tab banned-books" type="button" data-genre="Banned Books">Banned Books</button>
+            </div>
+        </aside>
 
-        <div class="store-search-row">
-            <input id="storeSearch" class="store-search" type="search" placeholder="Search by book title or author…" aria-label="Search books">
-            <button id="storeClear" class="store-clear" type="button">Clear</button>
-        </div>
+        <div class="store-main">
+            <div class="store-controls" aria-label="Bookstore search and filters">
+                <div class="store-search-row">
+                    <input id="storeSearch" class="store-search" type="search" placeholder="Search by book title or author…" aria-label="Search books">
+                    <button id="storeClear" class="store-clear" type="button">Clear</button>
+                </div>
 
-        <div class="alphabet" id="alphabet" aria-label="Browse books alphabetically">
-            <button class="alpha-button active" type="button" data-letter="">All</button>
-            {% for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
-            <button class="alpha-button" type="button" data-letter="{{ letter }}">{{ letter }}</button>
-            {% endfor %}
-        </div>
-        <p id="storeFilterNote" class="store-filter-note"></p>
-    </div>
+                <div class="alphabet" id="alphabet" aria-label="Browse books alphabetically">
+                    <button class="alpha-button active" type="button" data-letter="">All</button>
+                    {% for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' %}
+                    <button class="alpha-button" type="button" data-letter="{{ letter }}">{{ letter }}</button>
+                    {% endfor %}
+                </div>
+                <p id="storeFilterNote" class="store-filter-note"></p>
+            </div>
 
-    <div id="storeGrid" class="store-grid">
-        {% for p in products %}
-        <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-categories="{{ p.category|lower }}">
-            {% if p.cover_image_url %}
-                <img class="store-cover" src="{{ p.cover_image_url }}" alt="Cover of {{ p.title }}">
-            {% else %}
-                <div class="store-cover placeholder" aria-label="No cover available">✦</div>
-            {% endif %}
-            <h2>{{ p.title }}</h2>
-            <p class="store-author">{{ p.author or 'The Scriptorium' }}</p>
-            <div class="store-meta">{{ p.format }}{% if p.isbn %} · ISBN {{ p.isbn }}{% endif %}</div>
-            <div class="store-price">${{ p.price }}</div>
-            <a class="store-button" href="{{ url_for('store.store_book', slug=p.slug) }}">View Book</a>
-        </article>
-        {% endfor %}
-    </div>
-    <div id="storeNoResults" class="store-empty" hidden>
-        <h2>No books found.</h2>
-        <p>Try another genre, letter, or search term.</p>
+            <div id="storeGrid" class="store-grid">
+                {% for p in products %}
+                <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-categories="{{ p.category|lower }}">
+                    {% if p.cover_image_url %}
+                        <img class="store-cover" src="{{ p.cover_image_url }}" alt="Cover of {{ p.title }}">
+                    {% else %}
+                        <div class="store-cover placeholder" aria-label="No cover available">✦</div>
+                    {% endif %}
+                    <h2>{{ p.title }}</h2>
+                    <p class="store-author">{{ p.author or 'The Scriptorium' }}</p>
+                    <div class="store-meta">{{ p.format }}{% if p.isbn %} · ISBN {{ p.isbn }}{% endif %}</div>
+                    <div class="store-price">${{ p.price }}</div>
+                    <a class="store-button" href="{{ url_for('store.store_book', slug=p.slug) }}">View Book</a>
+                </article>
+                {% endfor %}
+            </div>
+            <div id="storeNoResults" class="store-empty" hidden>
+                <h2>No books found.</h2>
+                <p>Try another genre, letter, or search term.</p>
+            </div>
+        </div>
     </div>
     {% else %}
     <div class="store-empty">
