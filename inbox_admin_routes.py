@@ -176,7 +176,7 @@ def find_us():
     today = datetime.now().strftime("%Y-%m-%d")
     conn = get_db()
     events = conn.execute(
-        "SELECT * FROM find_us_events WHERE is_active = 1 AND event_date >= ? ORDER BY is_featured DESC, event_date ASC, start_time ASC, id ASC",
+        "SELECT * FROM find_us_events WHERE is_active = 1 AND date >= ? ORDER BY is_featured DESC, date ASC, start_time ASC, id ASC",
         (today,),
     ).fetchall()
     conn.close()
@@ -205,16 +205,16 @@ def admin_find_us():
 def get_find_us_events():
     conn = get_db()
     rows = conn.execute(
-        "SELECT * FROM find_us_events ORDER BY event_date ASC, start_time ASC, id ASC"
+        "SELECT * FROM find_us_events ORDER BY date ASC, start_time ASC, id ASC"
     ).fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
 
 def validate_event_data(data):
-    event_name = str(data.get("event_name", "")).strip()
-    event_date = str(data.get("event_date", "")).strip()
-    if not event_name or not event_date:
+    title = str(data.get("title", "")).strip()
+    event_date = str(data.get("date", "")).strip()
+    if not title or not event_date:
         return None, ("Event name and date are required.", 400)
     try:
         datetime.strptime(event_date, "%Y-%m-%d")
@@ -231,8 +231,8 @@ def validate_event_data(data):
                 return None, (f"Please provide a valid {label} time.", 400)
 
     return {
-        "event_name": event_name,
-        "event_date": event_date,
+        "title": title,
+        "date": event_date,
         "start_time": start_time,
         "end_time": end_time,
         "location": str(data.get("location", "")).strip(),
@@ -255,9 +255,9 @@ def create_find_us_event():
 
     conn = get_db()
     cur = conn.execute(
-        "INSERT INTO find_us_events(event_name, event_date, start_time, end_time, location, address, description, website_url, image_url, is_active, is_featured, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        "INSERT INTO find_us_events(title, date, start_time, end_time, location, address, description, website_url, image_url, is_active, is_featured, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
         (
-            event["event_name"], event["event_date"], event["start_time"], event["end_time"],
+            event["title"], event["date"], event["start_time"], event["end_time"],
             event["location"], event["address"], event["description"], event["website_url"],
             event["image_url"], event["is_active"], event["is_featured"],
         ),
@@ -294,9 +294,9 @@ def update_find_us_event(event_id):
         return jsonify({"error": "Event not found."}), 404
 
     conn.execute(
-        "UPDATE find_us_events SET event_name = ?, event_date = ?, start_time = ?, end_time = ?, location = ?, address = ?, description = ?, website_url = ?, image_url = ?, is_active = ?, is_featured = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        "UPDATE find_us_events SET title = ?, date = ?, start_time = ?, end_time = ?, location = ?, address = ?, description = ?, website_url = ?, image_url = ?, is_active = ?, is_featured = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (
-            event["event_name"], event["event_date"], event["start_time"], event["end_time"],
+            event["title"], event["date"], event["start_time"], event["end_time"],
             event["location"], event["address"], event["description"], event["website_url"],
             event["image_url"], event["is_active"], event["is_featured"], event_id,
         ),
