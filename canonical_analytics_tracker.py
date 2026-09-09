@@ -67,6 +67,25 @@ def _classify(path):
     m = re.match(r'^/kwsnyderwriting/novel/(\d+)', path)
     if m:
         return 'novel', 'kwsnyderwriting', int(m.group(1))
+    m = re.match(r'^/store/book/([^/]+)$', path)
+    if m:
+        conn = None
+        try:
+            conn = get_db()
+            product = conn.execute(
+                "SELECT id FROM store_products WHERE slug = ? AND status = 'active'",
+                (m.group(1),),
+            ).fetchone()
+            if product:
+                return 'store_book', 'store', product['id']
+        except Exception:
+            pass
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
     return page_type, category, content_id
 
 
