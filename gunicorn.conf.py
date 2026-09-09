@@ -1,6 +1,22 @@
 def post_worker_init(worker):
     app = worker.wsgi
 
+    from database import init_db
+    init_db()
+
+    # The Render service currently starts gunicorn with app:app. Register the
+    # modular routes here so production loads the same application surface as
+    # the wsgi entry point used by CI and local smoke tests.
+    from store import store_bp, ensure_store_tables
+    if "store" not in app.blueprints:
+        app.register_blueprint(store_bp)
+    ensure_store_tables()
+
+    import inbox_admin_routes  # noqa: F401,E402
+
+    from analytics_dashboard_v3 import register as register_analytics_v3
+    register_analytics_v3(app)
+
     from draft_request_guard import register as register_draft_guard
     register_draft_guard(app)
 
