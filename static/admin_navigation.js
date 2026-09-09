@@ -26,6 +26,20 @@
       document.head.appendChild(script);
     }
   }
+  function installFindUsTab(){
+    const tabs=document.querySelector('.tabs');
+    if(!tabs||document.getElementById('tab-find-us'))return;
+    const button=document.createElement('button');
+    button.id='tab-find-us';
+    button.type='button';
+    button.className='light';
+    button.textContent='Find Us';
+    button.addEventListener('click',function(){
+      window.location.href='/admin/find-us';
+    });
+    const aboutTab=document.getElementById('tab-about');
+    if(aboutTab) aboutTab.insertAdjacentElement('afterend',button); else tabs.appendChild(button);
+  }
   function showTab(name){
     if(!TABS.includes(name))return;
     TABS.forEach(function(tab){
@@ -44,6 +58,7 @@
   function install(){
     const tabs=document.querySelector('.tabs'); if(!tabs||tabs.dataset.navigationInstalled==='1')return;
     installStoreTab();
+    installFindUsTab();
     tabs.dataset.navigationInstalled='1';
     tabs.addEventListener('click',function(event){
       const button=event.target.closest('button[id^="tab-"]'); if(!button)return;
