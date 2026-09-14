@@ -193,7 +193,7 @@ def member_login():
             session["member_id"] = member["id"]
             session["member_reauth_ok"] = True
             if member["subscription_status"] == "active":
-                return redirect(url_for("kwsnyderwriting"))
+                return redirect(url_for("kwsnyderwriting_entry"))
             return redirect(url_for("kwsnyderwriting_membership"))
         return render_template("blog_templates/kwsnyderwriting_login.html", error="The email or password was not recognized.")
     return render_template("blog_templates/kwsnyderwriting_login.html")
@@ -276,7 +276,8 @@ def kwsnyderwriting_section(section):
 @admin_required
 def admin_preview_member():
     session["member_preview"] = True
-    return redirect(url_for("kwsnyderwriting"))
+    session["member_reauth_ok"] = True
+    return redirect(url_for("kwsnyderwriting_entry"))
 
 
 @app.route("/admin/preview-member/exit")
@@ -291,7 +292,7 @@ def admin_exit_member_preview():
 def view_novel(book_id):
     conn = get_db()
     book = conn.execute("SELECT * FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
-    chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? AND published = 1 ORDER BY chapter_number", (book_id,)).fetchall()
+    chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? AND published = 1 ORDER BY chapter_number").fetchall()
     conn.close()
     if not book:
         abort(404)
