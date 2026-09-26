@@ -8,6 +8,13 @@ from database import get_db, using_postgres, IntegrityError
 
 store_bp = Blueprint("store", __name__)
 
+# --- Bookstore visibility -------------------------------------------------
+# The public storefront is hidden until inventory is ready. Set STORE_VISIBLE
+# to True to bring the store back (and re-enable the nav link in base.html).
+# Admin routes (/admin/store, /api/store/admin/*) are intentionally NOT gated
+# so inventory can keep being managed while the storefront is hidden.
+STORE_VISIBLE = False
+
 ALLOWED_STATUS = {"draft", "active", "archived"}
 ALLOWED_CONDITIONS = {"new", "used"}
 
@@ -161,6 +168,8 @@ def prepare_store():
 
 @store_bp.route("/store")
 def store_home():
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
     conn = get_db()
     rows = conn.execute(
         """SELECT p.*, COALESCE(v.view_count, 0) AS view_count
@@ -180,6 +189,8 @@ def store_home():
 
 @store_bp.route("/store/book/<slug>")
 def store_book(slug):
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
     conn = get_db()
     product = conn.execute(
         "SELECT * FROM store_products WHERE slug = ? AND status = 'active'",
@@ -193,6 +204,8 @@ def store_book(slug):
 
 @store_bp.route("/api/store/products")
 def public_products():
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM store_products WHERE status = 'active' ORDER BY id DESC"
@@ -203,6 +216,8 @@ def public_products():
 
 @store_bp.route("/api/store/products/<int:product_id>")
 def public_product(product_id):
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
     conn = get_db()
     row = conn.execute(
         "SELECT * FROM store_products WHERE id = ? AND status = 'active'",

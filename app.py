@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import get_db as database_get_db, init_db as database_init_db, IntegrityError
+from store import STORE_VISIBLE
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -355,6 +356,9 @@ def contact():
 
 @app.route("/store")
 def the_scriptorium():
+    # Bookstore hidden until inventory is ready (STORE_VISIBLE in store.py).
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
     return render_template("store.html")
 
 
