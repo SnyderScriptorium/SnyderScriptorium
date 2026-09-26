@@ -81,67 +81,12 @@
       {% endif %}
     </div>
 
-    <h2 class="section-title">{% if period == 'day' %}Views by hour{% else %}Views by date{% endif %}</h2>
-
-    {% if daily_views %}
-      <div class="chart-shell">
-        <div class="chart-axis" aria-hidden="true">
-          {% for tick in chart_ticks|reverse %}
-            <span>{{ tick }}</span>
-          {% endfor %}
-        </div>
-
-        <div class="chart-area line-chart-area">
-          <div class="chart-grid" aria-hidden="true">
-            {% for tick in chart_ticks|reverse %}
-              <div class="chart-grid-line"></div>
-            {% endfor %}
-          </div>
-
-          <div class="line-chart-scroll">
-            <svg class="views-line-chart"
-                 viewBox="0 0 1000 360"
-                 preserveAspectRatio="none"
-                 role="img"
-                 aria-label="{% if period == 'day' %}Views by hour line chart{% else %}Views by date line chart{% endif %}">
-
-              <line class="chart-baseline" x1="24" y1="300" x2="976" y2="300"></line>
-
-              <polyline class="views-line"
-                points="{% for item in daily_views %}{{ item.chart_x|round(2) }},{{ item.chart_y|round(2) }}{% if not loop.last %} {% endif %}{% endfor %}">
-              </polyline>
-
-              {% for item in daily_views %}
-                <g class="view-point">
-                  <circle cx="{{ item.chart_x|round(2) }}" cy="{{ item.chart_y|round(2) }}" r="4"></circle>
-
-                  <text x="{{ item.chart_x|round(2) }}"
-                        y="{{ [item.chart_y - 12, 14]|max|round(2) }}"
-                        text-anchor="middle">{{ item.views }}</text>
-
-                  {% if item.show_label %}
-                    <text class="x-label"
-                          x="{{ item.chart_x|round(2) }}"
-                          y="336"
-                          text-anchor="middle">{{ item.label }}</text>
-                  {% endif %}
-
-                  <title>{{ item.full_label }} · {{ item.views }} views · {{ item.visitors }} unique visitors</title>
-                </g>
-              {% endfor %}
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <p class="chart-note">
-        The vertical scale automatically adjusts to the size of the data and uses readable increments.
-        Each dot shows the exact number of views for that {% if period == 'day' %}hour{% else %}date{% endif %}.
-        The bottom axis shows times for a single day and dates for longer periods. Hover a dot for the full date/time and unique visitor count.
-      </p>
-    {% else %}
-      <p class="note">No views have been recorded for this period yet.</p>
-    {% endif %}
+    {% set c_points = daily_views %}
+    {% set c_ticks = chart_ticks %}
+    {% set c_period = period %}
+    {% set c_unit = 'hour' if period == 'day' else ('month' if period == '1y' else 'date') %}
+    {% set c_heading = 'Views by hour' if period == 'day' else 'Views by date' %}
+    {% include 'analytics_chart.html' %}
 
     <h2 class="section-title">Traffic Sources Summary</h2>
     <table class="analytics-table">
@@ -183,11 +128,22 @@
 
   {% elif tab == 'pages' %}
     <h2 class="section-title">Views by Post &amp; Page</h2>
+    {% if drilldown %}
+      <p class="chart-note" style="margin-bottom:18px">Showing <strong>{{ drilldown.total_views }}</strong> views for
+        <strong>{{ drilldown.title }}</strong>{% if drilldown.category %} ({{ drilldown.category }}){% endif %}
+        in this period. <a href="{{ url_for('analytics_dashboard_v3', period=period, tab='pages') }}">← Back to all pages</a></p>
+      {% set c_points = drilldown.daily %}
+      {% set c_ticks = drilldown.chart_ticks %}
+      {% set c_period = period %}
+      {% set c_unit = 'hour' if period == 'day' else ('month' if period == '1y' else 'date') %}
+      {% set c_heading = 'Views over time' %}
+      {% include 'analytics_chart.html' %}
+    {% endif %}
     <table class="analytics-table">
       <thead><tr><th>Post / Page</th><th>Category</th><th>Type</th><th style="text-align:right">Views</th><th style="text-align:right">Unique Visitors</th></tr></thead>
       <tbody>
         {% for item in content_views %}
-          <tr><td>{{ item.title }}</td><td class="category">{{ item.category or 'Home' }}</td><td>{{ item.content_type }}</td><td class="views">{{ item.views }}</td><td class="unique">{{ item.unique_visitors }}</td></tr>
+          <tr><td><a href="{{ url_for('analytics_dashboard_v3', period=period, tab='pages', drilldown=item.path) }}">{{ item.title }}</a></td><td class="category">{{ item.category or 'Home' }}</td><td>{{ item.content_type }}</td><td class="views">{{ item.views }}</td><td class="unique">{{ item.unique_visitors }}</td></tr>
         {% else %}
           <tr><td colspan="5" class="note">No pageviews recorded yet.</td></tr>
         {% endfor %}

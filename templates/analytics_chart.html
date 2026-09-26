@@ -1,0 +1,66 @@
+{# Reusable labeled line chart for the analytics dashboard.
+   Expects: c_points (list of point dicts), c_ticks (y-axis ticks),
+            c_period ("day" for hourly wording, else date/month wording),
+            c_unit ("hour", "date", or "month"), c_heading (h2 text). #}
+<h2 class="section-title">{{ c_heading }}</h2>
+
+{% if c_points %}
+  <div class="chart-shell">
+    <div class="chart-axis" aria-hidden="true">
+      {% for tick in c_ticks|reverse %}
+        <span>{{ tick }}</span>
+      {% endfor %}
+    </div>
+
+    <div class="chart-area line-chart-area">
+      <div class="chart-grid" aria-hidden="true">
+        {% for tick in c_ticks|reverse %}
+          <div class="chart-grid-line"></div>
+        {% endfor %}
+      </div>
+
+      <div class="line-chart-scroll">
+        <svg class="views-line-chart"
+             viewBox="0 0 1000 360"
+             preserveAspectRatio="none"
+             role="img"
+             aria-label="{{ c_heading }} line chart">
+
+          <line class="chart-baseline" x1="24" y1="300" x2="976" y2="300"></line>
+
+          <polyline class="views-line"
+            points="{% for item in c_points %}{{ item.chart_x|round(2) }},{{ item.chart_y|round(2) }}{% if not loop.last %} {% endif %}{% endfor %}">
+          </polyline>
+
+          {% for item in c_points %}
+            <g class="view-point">
+              <circle cx="{{ item.chart_x|round(2) }}" cy="{{ item.chart_y|round(2) }}" r="4"></circle>
+
+              <text x="{{ item.chart_x|round(2) }}"
+                    y="{{ [item.chart_y - 12, 14]|max|round(2) }}"
+                    text-anchor="middle">{{ item.views }}</text>
+
+              {% if item.show_label %}
+                <text class="x-label"
+                      x="{{ item.chart_x|round(2) }}"
+                      y="336"
+                      text-anchor="middle">{{ item.label }}</text>
+              {% endif %}
+
+              <title>{{ item.full_label }} · {{ item.views }} views · {{ item.visitors }} unique visitors</title>
+            </g>
+          {% endfor %}
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <p class="chart-note">
+    The vertical scale automatically adjusts to the size of the data and uses readable increments.
+    Each dot shows the exact number of views for that {{ c_unit }}.
+    {% if c_period == 'day' %}The bottom axis shows times for a single day.{% elif c_period == '1y' %}The bottom axis shows months.{% elif c_period == '7d' %}The bottom axis shows weekdays.{% else %}The bottom axis shows dates.{% endif %}
+    Hover a dot for the full date/time and unique visitor count.
+  </p>
+{% else %}
+  <p class="note">No views have been recorded for this period yet.</p>
+{% endif %}

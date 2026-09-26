@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 import math
 import re
 
 from flask import jsonify, render_template, request
+from analytics_common import traffic_source_label
 from database import get_db
 from app import admin_required
 
@@ -94,19 +96,9 @@ def label(path, typ, cat, title):
 
 
 def source_label(value, referrer=""):
+    """Prefer the stored label; otherwise map the referrer via analytics_common."""
     if value and str(value).strip(): return str(value).strip()
-    ref = str(referrer or "").lower()
-    if not ref: return "Direct"
-    for needle, name in [
-        ("google.", "Google"), ("bing.", "Bing"), ("yahoo.", "Yahoo"),
-        ("duckduckgo.", "DuckDuckGo"), ("facebook.", "Facebook"),
-        ("instagram.", "Instagram"), ("pinterest.", "Pinterest"),
-        ("linkedin.", "LinkedIn"), ("reddit.", "Reddit"),
-        ("youtube.", "YouTube"), ("t.co", "X / Twitter"),
-        ("twitter.", "X / Twitter"), ("x.com", "X / Twitter"),
-    ]:
-        if needle in ref: return name
-    return "Referral"
+    return traffic_source_label(referrer)
 
 
 def build_time_buckets(period, buckets, visitor_buckets):
@@ -117,6 +109,17 @@ def build_time_buckets(period, buckets, visitor_buckets):
         return [(start + timedelta(hours=i)).strftime("%Y-%m-%dT%H:00") for i in range(24)]
     start = start_for(period).astimezone(EASTERN).replace(hour=0, minute=0, second=0, microsecond=0)
     end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "1y":
+        # Monthly buckets: one labeled point per month, not 365 daily dots.
+        keys = []
+        current = start.replace(day=1)
+        while current <= end:
+            keys.append(current.strftime("%Y-%m"))
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+        return keys
     keys = []
     current = start
     while current <= end:
@@ -149,6 +152,16 @@ def chart_label_for(key, period):
         try:
             return datetime.strptime(key, "%Y-%m-%dT%H:00").strftime("%I %p").lstrip("0")
         except ValueError: return key
+    if period == "7d":
+        # Weekday abbreviations: Mon, Tue, ...
+        try:
+            return datetime.strptime(key, "%Y-%m-%d").strftime("%a")
+        except ValueError: return key
+    if period == "1y":
+        # Monthly buckets: Jan, Feb, ...
+        try:
+            return datetime.strptime(key, "%Y-%m").strftime("%b")
+        except ValueError: return key
     try:
         return datetime.strptime(key, "%Y-%m-%d").strftime("%b %d").replace(" 0", " ")
     except ValueError: return key
@@ -158,6 +171,14 @@ def chart_full_label_for(key, period):
     if period == "day":
         try:
             return datetime.strptime(key, "%Y-%m-%dT%H:00").strftime("%B %d, %Y at %I %p").replace(" 0", " ")
+        except ValueError: return key
+    if period == "7d":
+        try:
+            return datetime.strptime(key, "%Y-%m-%d").strftime("%A, %B %d").replace(" 0", " ")
+        except ValueError: return key
+    if period == "1y":
+        try:
+            return datetime.strptime(key, "%Y-%m").strftime("%B %Y")
         except ValueError: return key
     try:
         return datetime.strptime(key, "%Y-%m-%d").strftime("%B %d, %Y").replace(" 0", " ")
@@ -174,7 +195,29 @@ def paginate(items, page):
     return items[start:start + PAGE_SIZE], page, pages, total
 
 
-def report(period, content_page=1, source_page=1):
+def _bucket_key(local, period):
+    if period == "day":
+        return local.strftime("%Y-%m-%dT%H:00")
+    if period == "1y":
+        return local.strftime("%Y-%m")
+    return local.strftime("%Y-%m-%d")
+
+
+def _finalize_series(items, period):
+    """Attach chart coordinates/labels to a list of {day, views, visitors} points."""
+    chart_max, chart_ticks = chart_scale(max((item["views"] for item in items), default=0))
+    point_count = len(items)
+    label_stride = max(1, math.ceil(point_count / 10))
+    for index, item in enumerate(items):
+        item["label"] = chart_label_for(item["day"], period)
+        item["full_label"] = chart_full_label_for(item["day"], period)
+        item["show_label"] = index % label_stride == 0 or index == point_count - 1
+        item["chart_x"] = 24 if point_count <= 1 else 24 + (index / (point_count - 1)) * 952
+        item["chart_y"] = 300 - ((item["views"] / chart_max) * 280 if chart_max else 0)
+    return items, chart_max, chart_ticks
+
+
+def report(period, content_page=1, source_page=1, drill_path=None):
     period = normalize_period(period)
     start = start_for(period)
     conn = get_db()
@@ -190,9 +233,12 @@ def report(period, content_page=1, source_page=1):
             f"{' AND' if where else ' WHERE'} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''", params
         ).fetchone(), 0, "unique_visitors"))
 
-        rows = conn.execute(f"SELECT pv.viewed_at AS viewed_at,pv.visitor_key AS visitor_key FROM page_views pv{where}", params).fetchall()
+        rows = conn.execute(f"SELECT pv.viewed_at AS viewed_at,pv.visitor_key AS visitor_key,pv.path AS path FROM page_views pv{where}", params).fetchall()
+        drill_path = clean_path(drill_path) if drill_path else None
         buckets = {}
         visitor_buckets = {}
+        drill_buckets = {}
+        drill_visitor_buckets = {}
         for row in rows:
             raw = rowval(row, 0, "viewed_at")
             try:
@@ -201,26 +247,34 @@ def report(period, content_page=1, source_page=1):
                 continue
             if dt.tzinfo is None: dt = dt.replace(tzinfo=ZoneInfo("UTC"))
             local = dt.astimezone(EASTERN)
-            key = local.strftime("%Y-%m-%dT%H:00") if period == "day" else local.strftime("%Y-%m-%d")
+            key = _bucket_key(local, period)
             buckets[key] = buckets.get(key, 0) + 1
             visitor_buckets.setdefault(key, set()).add(str(rowval(row, 1, "visitor_key") or ""))
+            if drill_path and clean_path(rowval(row, 2, "path")) == drill_path:
+                drill_buckets[key] = drill_buckets.get(key, 0) + 1
+                drill_visitor_buckets.setdefault(key, set()).add(str(rowval(row, 1, "visitor_key") or ""))
 
         bucket_keys = build_time_buckets(period, buckets, visitor_buckets)
-        daily = [{
+        daily, chart_max, chart_ticks = _finalize_series([{
             "day": key,
             "views": buckets.get(key, 0),
             "visitors": len(visitor_buckets.get(key, set()) - {""}),
-            "label": chart_label_for(key, period),
-            "full_label": chart_full_label_for(key, period),
-        } for key in bucket_keys]
+        } for key in bucket_keys], period)
 
-        chart_max, chart_ticks = chart_scale(max((item["views"] for item in daily), default=0))
-        point_count = len(daily)
-        label_stride = max(1, math.ceil(point_count / 10))
-        for index, item in enumerate(daily):
-            item["show_label"] = index % label_stride == 0 or index == point_count - 1
-            item["chart_x"] = 24 if point_count <= 1 else 24 + (index / (point_count - 1)) * 952
-            item["chart_y"] = 300 - ((item["views"] / chart_max) * 280 if chart_max else 0)
+        drilldown = None
+        if drill_path:
+            drill_items, drill_max, drill_ticks = _finalize_series([{
+                "day": key,
+                "views": drill_buckets.get(key, 0),
+                "visitors": len(drill_visitor_buckets.get(key, set()) - {""}),
+            } for key in bucket_keys], period)
+            drilldown = {
+                "path": drill_path,
+                "daily": drill_items,
+                "chart_max": drill_max,
+                "chart_ticks": drill_ticks,
+                "total_views": sum(item["views"] for item in drill_items),
+            }
 
         rows = conn.execute(f"""
             SELECT pv.path AS path,pv.page_type AS page_type,pv.content_id AS content_id,pv.category AS category,
@@ -255,6 +309,11 @@ def report(period, content_page=1, source_page=1):
                 "path": path,
             })
         content_page_items, content_page, content_pages, content_total = paginate(content, content_page)
+
+        if drilldown is not None:
+            match = next((c for c in content if c["path"] == drilldown["path"]), None)
+            drilldown["title"] = match["title"] if match else pretty_path(drilldown["path"])
+            drilldown["category"] = match["category"] if match else ""
 
         source_rows = conn.execute(f"""
             SELECT traffic_source AS source,referrer AS referrer,COUNT(*) AS views,
@@ -292,7 +351,7 @@ def report(period, content_page=1, source_page=1):
         return {
             "period": period, "total_views": total, "total_views_today": total if period == "day" else None,
             "unique_visitors": unique, "all_time_views": all_time, "daily_views": daily,
-            "chart_max": chart_max, "chart_ticks": chart_ticks, "content_views": content_page_items,
+            "chart_max": chart_max, "chart_ticks": chart_ticks, "drilldown": drilldown, "content_views": content_page_items,
             "content_pagination": {"page": content_page, "pages": content_pages, "total": content_total},
             "traffic_sources": traffic_sources, "source_details": source_page_items,
             "source_pagination": {"page": source_page, "pages": source_pages, "total": source_total},
@@ -312,21 +371,26 @@ def register(app):
     @admin_required
     def analytics_dashboard_v3():
         return render_template("analytics.html", **report(
-            request.args.get("period", "30d"), request.args.get("content_page", 1), request.args.get("source_page", 1)),
+            request.args.get("period", "30d"), request.args.get("content_page", 1),
+            request.args.get("source_page", 1), request.args.get("drilldown")),
             tab=request.args.get("tab", "overview"))
 
     @app.get("/api/analytics-v3")
     @admin_required
     def analytics_api_v3():
         return jsonify(report(
-            request.args.get("period", "30d"), request.args.get("content_page", 1), request.args.get("source_page", 1)))
+            request.args.get("period", "30d"), request.args.get("content_page", 1),
+            request.args.get("source_page", 1), request.args.get("drilldown")))
 
     @app.after_request
     def analytics_ui_v3(response):
         if request.path != "/admin/analytics" or "text/html" not in response.content_type:
             return response
         text = response.get_data(as_text=True)
-        nav = "".join(f'<a href="/admin/analytics?period={key}&tab={request.args.get("tab", "overview")}">{value}</a>' for key, value in [
+        tab = request.args.get("tab", "overview")
+        drill = request.args.get("drilldown", "")
+        drill_q = f"&drilldown={quote(drill, safe='')}" if drill else ""
+        nav = "".join(f'<a href="/admin/analytics?period={key}&tab={tab}{drill_q}">{value}</a>' for key, value in [
             ("day", "1 Day — Today"), ("7d", "7 Days"), ("30d", "30 Days"), ("90d", "90 Days"),
             ("6m", "6 Months"), ("1y", "1 Year"), ("all", "All Time")])
         text = re.sub(r'<nav class="periods".*?</nav>', f'<nav class="periods" aria-label="Analytics period">{nav}</nav>', text, flags=re.S)
