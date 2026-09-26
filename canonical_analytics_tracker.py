@@ -1,6 +1,7 @@
 import re
 import uuid
 from flask import request, session
+from analytics_common import classify_path, traffic_source_label
 from database import get_db
 
 PUBLIC_CATEGORIES = {
@@ -17,20 +18,8 @@ BOT_RE = re.compile(
 
 
 def _source(referrer):
-    ref = str(referrer or '').lower()
-    if not ref:
-        return 'Direct'
-    for needle, name in (
-        ('google.', 'Google'), ('bing.', 'Bing'), ('yahoo.', 'Yahoo'),
-        ('duckduckgo.', 'DuckDuckGo'), ('facebook.', 'Facebook'),
-        ('instagram.', 'Instagram'), ('pinterest.', 'Pinterest'),
-        ('linkedin.', 'LinkedIn'), ('reddit.', 'Reddit'),
-        ('youtube.', 'YouTube'), ('t.co', 'X / Twitter'),
-        ('twitter.', 'X / Twitter'), ('x.com', 'X / Twitter'),
-    ):
-        if needle in ref:
-            return name
-    return 'Referral'
+    """Delegate to the shared referrer->source mapping in analytics_common."""
+    return traffic_source_label(referrer)
 
 
 def _visitor_key():
@@ -38,55 +27,23 @@ def _visitor_key():
 
 
 def _classify(path):
-    page_type = 'page'
-    category = 'site'
-    content_id = None
-    if path == '/':
-        return 'page', 'site', None
-    if path == '/about':
-        return 'page', 'about', None
-    if path == '/blog':
-        return 'section', 'blog', None
-    if path == '/blog/bookcurations':
-        return 'section', 'curations', None
-    if path == '/blog/bookreviews':
-        return 'section', 'reviews', None
-    if path == '/blog/curiosity_cabinet':
-        return 'section', 'curiosity', None
-    m = re.match(r'^/blog/post/(\d+)', path)
-    if m:
-        return 'post', 'public_post', int(m.group(1))
-    if path == '/kwsnyderwriting':
-        return 'member_section', 'kwsnyderwriting', None
-    m = re.match(r'^/kwsnyderwriting/post/(\d+)', path)
-    if m:
-        return 'member_post', 'kwsnyderwriting', int(m.group(1))
-    m = re.match(r'^/kwsnyderwriting/novel/(\d+)/chapter/(\d+)', path)
-    if m:
-        return 'chapter', 'kwsnyderwriting', int(m.group(2))
-    m = re.match(r'^/kwsnyderwriting/novel/(\d+)', path)
-    if m:
-        return 'novel', 'kwsnyderwriting', int(m.group(1))
-    m = re.match(r'^/store/book/([^/]+)$', path)
-    if m:
-        conn = None
+    """Classify a path via analytics_common, with a lazy store-slug lookup."""
+    store_slug_to_id = None
+    if (path or "").startswith("/store/book/"):
         try:
             conn = get_db()
-            product = conn.execute(
-                "SELECT id FROM store_products WHERE slug = ? AND status = 'active'",
-                (m.group(1),),
-            ).fetchone()
-            if product:
-                return 'store_book', 'store', product['id']
-        except Exception:
-            pass
-        finally:
-            if conn:
+            rows = conn.execute("SELECT slug, id FROM store_products").fetchall()
+            store_slug_to_id = {}
+            for row in rows:
                 try:
-                    conn.close()
-                except Exception:
-                    pass
-    return page_type, category, content_id
+                    slug, pid = row["slug"], row["id"]
+                except (TypeError, KeyError):
+                    slug, pid = row[0], row[1]
+                store_slug_to_id[slug] = pid
+            conn.close()
+        except Exception:
+            store_slug_to_id = None
+    return classify_path(path, store_slug_to_id)
 
 
 def register(app):
@@ -123,7 +80,7 @@ def register(app):
         try:
             conn = get_db()
             conn.execute(
-                'INSERT INTO page_views(path,page_type,content_id,category,visitor_key,referrer,traffic_source) VALUES (?,?,?,?,?,?,?)',
+                'INSERT INTO page_views(path,page_type,content_id,category,visitor_key,referrer,traffic_source,classified) VALUES (?,?,?,?,?,?,?,1)',
                 (path, page_type, content_id, category, visitor_key, referrer, _source(referrer)),
             )
             conn.commit()

@@ -1,3 +1,11 @@
+# Two sync workers instead of gunicorn's default of one. With a single
+# worker, any request that stalls (slow query, hung upstream, long migration
+# lock) blocks the entire site until it finishes. Two workers mean one stuck
+# request can never take the whole site down by itself. Sessions are
+# cookie-based, so workers are interchangeable.
+workers = 2
+
+
 def post_worker_init(worker):
     app = worker.wsgi
 

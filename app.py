@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import get_db as database_get_db, init_db as database_init_db, IntegrityError
@@ -46,17 +46,31 @@ def require_member():
 
 
 def member_has_access():
+    # Cache per request: novel/chapter views call this once per chapter, and
+    # each call used to open a brand-new database connection (N+1). One
+    # lookup per request is all we ever need.
+    if hasattr(g, "_member_has_access"):
+        return g._member_has_access
     if session.get("member_preview") is True and require_admin():
+        g._member_has_access = True
         return True
     if not require_member():
+        g._member_has_access = False
         return False
     member_id = session.get("member_id")
     if not member_id:
+        g._member_has_access = False
         return False
     conn = get_db()
-    row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
-    conn.close()
-    return bool(row and row["subscription_status"] == "active")
+    try:
+        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
+    finally:
+        # Always release the connection, even if the query raises. A leaked
+        # connection can exhaust the database's connection limit and wedge
+        # the whole site.
+        conn.close()
+    g._member_has_access = bool(row and row["subscription_status"] == "active")
+    return g._member_has_access
 
 
 def admin_required(view):

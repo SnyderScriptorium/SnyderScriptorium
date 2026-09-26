@@ -6,6 +6,22 @@ DATABASE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "scriptorium
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 
+def _ensure_database_url():
+    """Fail fast when production is missing its database URL.
+
+    On Render (RENDER is set automatically on every Render service), a missing
+    DATABASE_URL must be a loud startup error -- never a silent fall back to a
+    local SQLite file, which would serve the live site from an empty database.
+    Local development (no RENDER in the environment) keeps the SQLite fallback.
+    """
+    if os.environ.get("RENDER") and not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL is not set. On Render this must be configured as an "
+            "environment variable; refusing to start rather than silently "
+            "falling back to SQLite."
+        )
+
+
 class PostgresCursor:
     def __init__(self, cursor):
         self._cursor = cursor
@@ -93,6 +109,7 @@ def using_postgres():
 
 
 def get_db():
+    _ensure_database_url()
     if not using_postgres():
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = sqlite3.Row
@@ -101,8 +118,12 @@ def get_db():
 
     import psycopg
     from psycopg.rows import dict_row
-    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    # Fail fast instead of hanging the worker forever if the database stalls:
+    # 10s to establish the connection, 30s max per statement. A stuck query
+    # raises loudly instead of wedging a gunicorn worker indefinitely.
+    conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=10)
     conn.execute("SET TIME ZONE 'UTC'")
+    conn.execute("SET statement_timeout = '30s'")
     return PostgresConnection(conn)
 
 
@@ -154,10 +175,38 @@ def _install_access_triggers(conn):
         )
 
 
+def _log_phase(message):
+    """Startup-phase logging so a slow/hung boot is visible in Render logs."""
+    print(f"[init_db] {message}", flush=True)
+
+
 def init_db():
+    """Ensure the schema exists. Called once per gunicorn worker at boot.
+
+    This must stay FAST: schema DDL only -- no backfills, no full-table
+    scans. Historical data migration belongs in scripts/backfill_page_views.py,
+    which is run on demand, never at worker startup.
+    """
+    import time
+
+    _ensure_database_url()
+    _log_phase("starting schema check")
+    start = time.monotonic()
     conn = get_db()
     try:
         if using_postgres():
+            # Serialize migrations across gunicorn workers. With 2+ workers
+            # booting at once, concurrent DDL on the same tables can deadlock,
+            # abort a worker's boot, and take down the whole deploy (gunicorn
+            # shuts down if any worker fails to boot). The advisory lock is
+            # session-scoped and releases automatically when this connection
+            # closes in the finally block below.
+            _log_phase("acquiring advisory lock")
+            conn.execute("SELECT pg_advisory_lock(hashtext('snyderscriptorium_init_db'))")
+            # Don't wait forever on a table lock held by a live request:
+            # fail loudly instead of hanging the boot.
+            conn.execute("SET lock_timeout = '10s'")
+            _log_phase("ensuring tables")
             statements = [
                 "CREATE TABLE IF NOT EXISTS drafts (id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,content TEXT NOT NULL,date_created TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS published_posts (id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,category_name TEXT NOT NULL,content TEXT NOT NULL,date_published TEXT NOT NULL,access_level TEXT NOT NULL DEFAULT 'public')",
@@ -167,11 +216,12 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS subscriptions (id BIGSERIAL PRIMARY KEY,member_id BIGINT NOT NULL REFERENCES members(id) ON DELETE CASCADE,provider TEXT,subscription_id TEXT,status TEXT NOT NULL DEFAULT 'inactive',date_started TEXT,date_ends TEXT)",
                 "CREATE TABLE IF NOT EXISTS inbox_messages (id BIGSERIAL PRIMARY KEY,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id BIGINT,book_id BIGINT,chapter_id BIGINT,member_id BIGINT,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text)",
-                "CREATE TABLE IF NOT EXISTS page_views (id BIGSERIAL PRIMARY KEY,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id BIGINT,category TEXT,viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT)",
+                "CREATE TABLE IF NOT EXISTS page_views (id BIGSERIAL PRIMARY KEY,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id BIGINT,category TEXT,viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT,classified INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS find_us_events (id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,date TEXT NOT NULL,start_time TEXT NOT NULL DEFAULT '',end_time TEXT NOT NULL DEFAULT '',location TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',website_url TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',is_active INTEGER NOT NULL DEFAULT 1,is_featured INTEGER NOT NULL DEFAULT 0,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
             ]
             for statement in statements:
                 conn.execute(statement)
+            _log_phase("ensuring columns")
             for statement in [
                 "ALTER TABLE members ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'inactive'",
                 "ALTER TABLE members ADD COLUMN IF NOT EXISTS date_created TEXT NOT NULL DEFAULT ''",
@@ -189,9 +239,14 @@ def init_db():
                 "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS visitor_key TEXT",
                 "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS referrer TEXT",
                 "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS traffic_source TEXT",
+                "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS classified INTEGER NOT NULL DEFAULT 0",
             ]:
                 conn.execute(statement)
+            # Keeps the "any unclassified rows?" check cheap for the on-demand
+            # backfill script (scripts/backfill_page_views.py).
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_page_views_classified ON page_views(classified)")
         else:
+            _log_phase("ensuring tables (sqlite)")
             conn.execute("CREATE TABLE IF NOT EXISTS drafts (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,category TEXT NOT NULL,content TEXT NOT NULL,date_created TEXT NOT NULL)")
             conn.execute("CREATE TABLE IF NOT EXISTS published_posts (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,category TEXT NOT NULL,category_name TEXT NOT NULL,content TEXT NOT NULL,date_published TEXT NOT NULL,access_level TEXT NOT NULL DEFAULT 'public')")
             conn.execute("CREATE TABLE IF NOT EXISTS manuscript_books (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,description TEXT DEFAULT '',date_created TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,access_level TEXT NOT NULL DEFAULT 'members')")
@@ -200,7 +255,8 @@ def init_db():
             conn.execute("CREATE TABLE IF NOT EXISTS subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT,member_id INTEGER NOT NULL,provider TEXT,subscription_id TEXT,status TEXT NOT NULL DEFAULT 'inactive',date_started TEXT,date_ends TEXT,FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE)")
             conn.execute("CREATE TABLE IF NOT EXISTS inbox_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id INTEGER,book_id INTEGER,chapter_id INTEGER,member_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
-            conn.execute("CREATE TABLE IF NOT EXISTS page_views (id INTEGER PRIMARY KEY AUTOINCREMENT,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id INTEGER,category TEXT,viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT)")
+            conn.execute("CREATE TABLE IF NOT EXISTS page_views (id INTEGER PRIMARY KEY AUTOINCREMENT,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id INTEGER,category TEXT,viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT,classified INTEGER NOT NULL DEFAULT 0)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_page_views_classified ON page_views(classified)")
             conn.execute("CREATE TABLE IF NOT EXISTS find_us_events (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,date TEXT NOT NULL,start_time TEXT NOT NULL DEFAULT '',end_time TEXT NOT NULL DEFAULT '',location TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',website_url TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',is_active INTEGER NOT NULL DEFAULT 1,is_featured INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
 
             def add_columns(table, columns):
@@ -211,18 +267,23 @@ def init_db():
 
             add_columns("members", [("subscription_status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_created", "TEXT NOT NULL DEFAULT ''"), ("status", "TEXT NOT NULL DEFAULT 'active'"), ("blocked_at", "TEXT")])
             add_columns("subscriptions", [("provider", "TEXT"), ("subscription_id", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_started", "TEXT"), ("date_ends", "TEXT")])
-            add_columns("page_views", [("page_type", "TEXT NOT NULL DEFAULT 'page'"), ("content_id", "INTEGER"), ("category", "TEXT"), ("viewed_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"), ("visitor_key", "TEXT"), ("referrer", "TEXT"), ("traffic_source", "TEXT")])
+            add_columns("page_views", [("page_type", "TEXT NOT NULL DEFAULT 'page'"), ("content_id", "INTEGER"), ("category", "TEXT"), ("viewed_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"), ("visitor_key", "TEXT"), ("referrer", "TEXT"), ("traffic_source", "TEXT"), ("classified", "INTEGER NOT NULL DEFAULT 0")])
             add_columns("site_content", [("updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP")])
 
         conn.execute(
             "INSERT INTO site_content(key,value,updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING",
             ("about_content", "The Snyder Scriptorium is a growing home for books, writing, curiosity, and the stories that bring people together.", "01/01/1970 12:00 AM"),
         )
+        _log_phase("normalizing legacy data")
         _normalize_legacy_data(conn)
+        _log_phase("installing access triggers")
         _install_access_triggers(conn)
+        # NOTE: no backfill here. Historical page_view classification runs via
+        # scripts/backfill_page_views.py on demand -- never at worker boot.
         conn.commit()
     finally:
         conn.close()
+    _log_phase(f"schema check complete in {time.monotonic() - start:.2f}s")
 
 
 try:
