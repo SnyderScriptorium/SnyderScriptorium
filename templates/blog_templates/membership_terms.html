@@ -1,16 +1,72 @@
 {% extends "base.html" %}
-{% block title %}Membership Terms — Snyder Scriptorium{% endblock %}
+{% block title %}Membership Terms &amp; Conditions — Snyder Scriptorium{% endblock %}
 {% block content %}
 <section class="content-section" style="max-width:820px;margin:0 auto;">
-  <div class="page-heading"><h1>K. W. Snyder Writing — Membership Terms</h1><p class="private-label">Plain-English membership rules</p></div>
-  <p>These terms are intended to keep the private writing library fair, respectful, and sustainable for everyone.</p>
-  <h2>1. Your membership</h2><p>Your membership is for you. Please do not share your account or allow another person to use your member access.</p>
-  <h2>2. Private writing and copyright</h2><p>The K. W. Snyder Writing library and its writing are protected by copyright. Members may read the material for their personal use, but may not copy, repost, publish, sell, redistribute, or give away subscriber-only material without permission.</p>
-  <h2>3. Site abuse and harassment</h2><p>Harassment, threats, fraud, attempts to bypass access controls, deliberate abuse of the website, unauthorized sharing of member content, or other serious misuse of the service are not permitted. Access may be suspended or terminated when an account materially violates these rules.</p>
-  <h2>4. Payment disputes</h2><p>You are welcome to report a genuine billing problem, including a duplicate charge or another charge that the system processed incorrectly. A knowingly false or wrongful payment dispute, chargeback, or payment claim made to obtain free access or otherwise abuse the service may result in suspension or termination of the account.</p>
-  <h2>5. Publishing schedule</h2><p>There is no fixed posting schedule. I will work toward sharing new writing at least once a month, but membership does not guarantee a particular number of posts, chapters, dates, or publication frequency.</p>
-  <h2>6. Changes and access</h2><p>The membership offering may change over time as the Scriptorium grows. Material changes to these terms or the membership offering will be communicated appropriately. Access may be paused when a subscription payment is legitimately overdue or otherwise fails according to the payment provider's rules.</p>
-  <h2>7. Questions</h2><p>If something has gone wrong with your account or billing, please contact the Scriptorium rather than attempting to work around the membership system.</p>
+  <div class="page-heading"><h1>K. W. Snyder Writing — Membership Terms &amp; Conditions</h1><p class="private-label">The rules of the private library, in plain English</p></div>
+  <p><em>Last updated: September 26, 2026</em></p>
+  <!-- [NEEDS OWNER DECISION] Confirm the legal business name/entity below ("Snyder Scriptorium, operated by K.W. Snyder"). If there is an LLC or registered business name, use it here instead. -->
+  <p>These Membership Terms &amp; Conditions ("Terms") are an agreement between you and Snyder Scriptorium, operated by K.W. Snyder ("we," "us," "our"). They govern your K. W. Snyder Writing membership subscription and your use of the private writing library at snyderscriptorium.com. By creating a member account or subscribing, you agree to these Terms.</p>
+
+  <h2>1. What your membership is</h2>
+  <p>K. W. Snyder Writing is the subscription branch of The Snyder Scriptorium. Your membership does two things: it supports the writing directly, and it gives you access to the private library — member-only stories, chapters, poems, vignettes, novels, and other works by K.W. Snyder.</p>
+  <!-- [NEEDS OWNER DECISION] The site promises at least one complete free story or chapter for non-subscribers. The current code derives a post's access level from its category and overwrites it on every edit, so a per-post "free" flag does not survive editing without a code change. Decide: (a) add a per-post public/free toggle to the admin editor (recommended), or (b) keep the free work under a public blog category instead. Update this section to name the free work once decided. -->
+  <p>At least one complete story or chapter remains free to read without a subscription, so visitors can sample the writing before joining.</p>
+
+  <h2>2. Subscription, billing, and automatic renewal</h2>
+  <p>Membership costs <strong>$3.00 USD per month</strong> ("Founding Member" plan). Payment is processed securely by <strong>PayPal</strong>; we never see or store your full payment details.</p>
+  <p>Your subscription <strong>renews automatically each month</strong> on your billing date and you will be charged $3.00 USD each month until you cancel. There is no minimum commitment and no setup fee.</p>
+  <p>If the membership price ever changes, we will tell you in advance, and the new price will only apply going forward — never retroactively. Price increases on an existing PayPal subscription require your consent through PayPal before they take effect.</p>
+
+  <h2>3. Cancellation</h2>
+  <!-- [NEEDS OWNER DECISION] There is currently no self-service "cancel" button in the member area (the cancellation API exists, but no button calls it). Until one is added, members must cancel through PayPal directly or by contacting us. Decide: (a) add a Cancel button to the member account area (recommended), or (b) keep cancellation via PayPal/contact only. -->
+  <p>You may cancel at any time. To cancel, use the cancellation option in your member account, cancel the subscription directly in your PayPal account, or contact us (see Section 14) and we will cancel it for you.</p>
+  <!-- [NEEDS OWNER DECISION] The site's code ends library access immediately when a subscription is cancelled (access requires an "active" subscription). Confirm this is the policy you want. The alternative — letting cancelled members keep reading until the end of the month they paid for — is friendlier but requires a code change. -->
+  <p>Cancellation takes effect immediately: PayPal will not bill you again, and your access to the private library ends when the cancellation is processed. Your member account itself is not deleted; if you resubscribe later, your access is restored.</p>
+
+  <h2>4. Failed payments</h2>
+  <p>If a monthly payment fails, PayPal will retry the charge according to its own rules. If payment cannot be collected, your subscription may be marked past due or suspended and your access to the private library paused until billing is brought current. No late fees are charged by us.</p>
+
+  <h2>5. Refunds</h2>
+  <p>Because membership unlocks the full private library immediately, all payments are generally final. That said, refunds are considered <strong>case by case</strong> — for example, if you were charged by mistake, charged twice, or never received the access you paid for. To request a refund, contact us through the <a href="{{ url_for('contact') }}">Contact page</a> with your account email and a description of the problem, and we will review it promptly. Approved refunds are returned to your original payment method via PayPal.</p>
+  <p>A knowingly false payment dispute or chargeback filed to obtain free access, or any other abuse of the payment process, may result in suspension or termination of your account.</p>
+
+  <h2>6. Your account</h2>
+  <p>Your membership is for you alone. You are responsible for keeping your password confidential and for all activity under your account. Please do not share your login or allow another person to use your member access. If you believe your account has been compromised, change your password and contact us right away.</p>
+  <!-- [NEEDS OWNER DECISION] Confirm the minimum age for membership. Drafted as 18+. -->
+  <p>You must be at least 18 years old, or the age of majority in your jurisdiction, to subscribe.</p>
+
+  <h2>7. Your license to the works (copyright)</h2>
+  <p>All stories, chapters, poems, vignettes, novels, posts, and other writing in the K. W. Snyder Writing library are the copyrighted works of K.W. Snyder. All rights are reserved.</p>
+  <p>While your subscription is active, we grant you a personal, non-exclusive, non-transferable, revocable license to read the member works for your own enjoyment. This license does not transfer any ownership to you. You may not copy, reproduce, screenshot-and-share, republish, translate, sell, lend, distribute, publicly display, create derivative works from, or feed the works into AI or machine-learning training datasets without prior written permission.</p>
+
+  <h2>8. Acceptable use</h2>
+  <p>The following are not permitted: sharing or reselling member access; copying or redistributing subscriber-only material; attempting to bypass access controls; scraping or bulk-downloading the library; harassment, threats, or abuse directed at the author or other readers; fraud; or any other serious misuse of the service. If your account materially violates these rules, we may suspend or terminate your access, with or without notice for serious violations.</p>
+
+  <h2>9. Publishing schedule and availability</h2>
+  <p>There is no fixed posting schedule. The goal is to share new writing at least once a month, but membership does not guarantee a particular number of posts, chapters, dates, or publication frequency.</p>
+  <p>The site is provided on an "as is" and "as available" basis. We work to keep the library available around the clock, but we do not guarantee uninterrupted or error-free access — maintenance, hosting issues, or events beyond our control can cause downtime.</p>
+
+  <h2>10. Changes to the membership or these Terms</h2>
+  <p>The membership offering may evolve as the Scriptorium grows. If we make material changes to these Terms or to what membership includes, we will post the updated Terms on this page with a new "Last updated" date and highlight the change here for a reasonable period. Your continued use of the membership after changes take effect constitutes acceptance of the updated Terms. If you do not agree to a change, you may cancel as described in Section 3.</p>
+  <!-- [NEEDS OWNER DECISION] The site has no email-sending infrastructure, so change notices are posted on this page only. If you want email notice of term changes, that requires building member email notifications first. -->
+
+  <h2>11. Disclaimers</h2>
+  <p>To the fullest extent permitted by law, the private library and all of its content are provided without warranties of any kind, express or implied. We do not warrant that the service will always be available, uninterrupted, secure, or free of errors.</p>
+
+  <h2>12. Limitation of liability</h2>
+  <p>To the fullest extent permitted by law, Snyder Scriptorium and K.W. Snyder will not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your membership or use of the library. Our total liability for any claim related to your membership will not exceed the subscription fees you paid in the twelve (12) months before the claim arose. Some jurisdictions do not allow these limitations, so they may not apply to you.</p>
+
+  <h2>13. Governing law</h2>
+  <!-- [NEEDS OWNER DECISION] Drafted as Pennsylvania law. Confirm this is correct for your situation. -->
+  <p>These Terms are governed by the laws of the Commonwealth of Pennsylvania, without regard to conflict-of-law principles. Any dispute arising under these Terms will be brought in the state or federal courts located in Pennsylvania, and you consent to their jurisdiction.</p>
+
+  <h2>14. Contact</h2>
+  <!-- [NEEDS OWNER DECISION] No public support email was found on the site. Either add one here or keep the Contact page as the single point of contact. -->
+  <p>For billing questions, refund requests, cancellation help, or anything else about your membership, please use the <a href="{{ url_for('contact') }}">Contact page</a>. Include your account email so we can find your subscription.</p>
+
+  <h2>15. General</h2>
+  <p>If any part of these Terms is found unenforceable, the rest remain in full effect. Our failure to enforce any provision is not a waiver of our right to enforce it later. These Terms constitute the entire agreement between you and us regarding your K. W. Snyder Writing membership.</p>
+
   <p style="margin-top:28px"><a href="{{ url_for('kwsnyderwriting_membership') }}">Back to Membership</a></p>
 </section>
 {% endblock %}
