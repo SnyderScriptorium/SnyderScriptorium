@@ -207,7 +207,9 @@ def _finalize_series(items, period):
     """Attach chart coordinates/labels to a list of {day, views, visitors} points."""
     chart_max, chart_ticks = chart_scale(max((item["views"] for item in items), default=0))
     point_count = len(items)
-    label_stride = max(1, math.ceil(point_count / 10))
+    # 7d (8 points) and 1y (13 points): label EVERY tick — the user wants all
+    # weekdays / all months visible. Longer periods keep strided labels.
+    label_stride = 1 if period in ("7d", "1y") else max(1, math.ceil(point_count / 10))
     for index, item in enumerate(items):
         item["label"] = chart_label_for(item["day"], period)
         item["full_label"] = chart_full_label_for(item["day"], period)
