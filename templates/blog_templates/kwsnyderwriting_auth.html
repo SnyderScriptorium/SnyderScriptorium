@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}K. W. Snyder Writing — Sign In or Create Account{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='member_auth.css') }}">
+{% endblock %}
+{% block content %}
+<section class="content-section member-auth-section">
+  <h1>K. W. Snyder Writing</h1>
+  <p class="member-auth-note">Sign in to your account, or create one to join the private writing library.</p>
+
+  {% set tab = active_tab|default('signin') %}
+  <div class="member-auth-tabs" role="tablist" aria-label="Sign in or create account">
+    <button type="button" class="member-auth-tab{% if tab == 'signin' %} is-active{% endif %}" role="tab" aria-selected="{{ 'true' if tab == 'signin' else 'false' }}" data-tab="signin" id="tab-signin" aria-controls="panel-signin">Sign In</button>
+    <button type="button" class="member-auth-tab{% if tab == 'signup' %} is-active{% endif %}" role="tab" aria-selected="{{ 'true' if tab == 'signup' else 'false' }}" data-tab="signup" id="tab-signup" aria-controls="panel-signup">Create Account</button>
+  </div>
+
+  <div class="member-auth-card">
+    <div class="member-auth-panel{% if tab == 'signin' %} is-active{% endif %}" role="tabpanel" id="panel-signin" aria-labelledby="tab-signin" data-panel="signin">
+      {% if error and tab == 'signin' %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
+      <form class="member-auth-form" method="POST" action="{{ url_for('member_login') }}" autocomplete="on">
+        <label for="signin-email">Email</label>
+        <input id="signin-email" type="email" name="email" autocomplete="email" required>
+        <label for="signin-password">Password</label>
+        <input id="signin-password" type="password" name="password" autocomplete="current-password" required>
+        <div class="member-auth-actions">
+          <button class="member-auth-button" type="submit">Sign In</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="member-auth-panel{% if tab == 'signup' %} is-active{% endif %}" role="tabpanel" id="panel-signup" aria-labelledby="tab-signup" data-panel="signup">
+      {% if error and tab == 'signup' %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
+      <p class="member-auth-note">This account is for K. W. Snyder Writing. It is the account that will be connected to your membership subscription and your private writing-library access.</p>
+      <form class="member-auth-form" method="POST" action="{{ url_for('member_signup') }}" autocomplete="on">
+        <label for="signup-email">Email</label>
+        <input id="signup-email" type="email" name="email" autocomplete="email" required>
+        <label for="signup-password">Password</label>
+        <input id="signup-password" type="password" name="password" minlength="8" autocomplete="new-password" required>
+        <label class="member-auth-terms" for="signup-terms">
+          <input id="signup-terms" type="checkbox" name="terms_agreed" value="yes" required>
+          <span>I agree to the <a href="{{ url_for('membership_terms') }}" target="_blank" rel="noopener">Membership Terms &amp; Conditions</a>.</span>
+        </label>
+        <div class="member-auth-actions">
+          <button class="member-auth-button" type="submit">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+(function () {
+  var tabs = document.querySelectorAll('.member-auth-tab');
+  var panels = document.querySelectorAll('.member-auth-panel');
+  function activate(name) {
+    tabs.forEach(function (t) {
+      var on = t.getAttribute('data-tab') === name;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    panels.forEach(function (p) {
+      p.classList.toggle('is-active', p.getAttribute('data-panel') === name);
+    });
+  }
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () { activate(t.getAttribute('data-tab')); });
+  });
+})();
+</script>
+{% endblock %}

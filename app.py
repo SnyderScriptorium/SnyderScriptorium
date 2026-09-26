@@ -187,10 +187,16 @@ def view_post(post_id):
 
 @app.route("/kwsnyderwriting/membership")
 def kwsnyderwriting_membership():
-    if session.pop("member_reauth_ok", False) is not True:
-        session.clear()
-        return redirect(url_for("member_login"))
-    return render_template("blog_templates/kwsnyderwriting_membership.html")
+    # Public page: visitors can browse what the membership is before signing up.
+    # Only the private library itself stays behind login.
+    member_status = None
+    if session.get("member_logged_in") and session.get("member_id"):
+        conn = get_db()
+        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (session["member_id"],)).fetchone()
+        conn.close()
+        if row:
+            member_status = row["subscription_status"]
+    return render_template("blog_templates/kwsnyderwriting_membership.html", member_status=member_status)
 
 
 @app.route("/kwsnyderwriting/login", methods=["GET", "POST"])
@@ -210,8 +216,8 @@ def member_login():
             if member["subscription_status"] == "active":
                 return redirect(url_for("kwsnyderwriting_entry"))
             return redirect(url_for("kwsnyderwriting_membership"))
-        return render_template("blog_templates/kwsnyderwriting_login.html", error="The email or password was not recognized.")
-    return render_template("blog_templates/kwsnyderwriting_login.html")
+        return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signin", error="The email or password was not recognized.")
+    return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signin")
 
 
 @app.route("/kwsnyderwriting/signup", methods=["GET", "POST"])
@@ -220,17 +226,19 @@ def member_signup():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         if not email or len(password) < 8:
-            return render_template("blog_templates/kwsnyderwriting_signup.html", error="Please provide an email and a password of at least 8 characters.")
+            return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="Please provide an email and a password of at least 8 characters.")
+        if not request.form.get("terms_agreed"):
+            return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="Please agree to the Membership Terms & Conditions to create your account.")
         conn = get_db()
         try:
             conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
             conn.commit()
         except IntegrityError:
             conn.close()
-            return render_template("blog_templates/kwsnyderwriting_signup.html", error="An account with that email already exists.")
+            return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="An account with that email already exists.")
         conn.close()
         return redirect(url_for("member_login"))
-    return render_template("blog_templates/kwsnyderwriting_signup.html")
+    return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup")
 
 
 @app.route("/kwsnyderwriting/logout")

@@ -98,3 +98,62 @@
 .member-auth-note {
   color: #6b5d4e;
 }
+
+/* Combined sign-in / create-account tabs */
+.member-auth-tabs {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.member-auth-tab {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid rgba(84, 67, 47, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 253, 248, 0.6);
+  color: #6b5d4e;
+  font: 500 0.95rem Georgia, serif;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.member-auth-tab.is-active {
+  background: #46657c;
+  border-color: #46657c;
+  color: #fff;
+}
+
+.member-auth-panel {
+  display: none;
+}
+
+.member-auth-panel.is-active {
+  display: block;
+}
+
+/* Terms & Conditions acceptance on the signup form */
+.member-auth-terms {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 14px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #4d4032;
+  cursor: pointer;
+}
+
+.member-auth-terms input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  padding: 0;
+  accent-color: #46657c;
+  transform: scale(1.25);
+}
+
+.member-auth-terms a {
+  color: #46657c;
+}
