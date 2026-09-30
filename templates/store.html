@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}The Scriptorium Book Store — Antique & Vintage Books{% endblock %}
+{% block title %}The Scriptorium Book Store — Antique, Vintage & New Books{% endblock %}
 
 {% block head %}
 <style>
+[hidden]{display:none!important}
 .store-page{max-width:1250px;margin:0 auto;padding:30px 20px 70px}
 .store-hero{text-align:center;margin-bottom:22px}.store-hero h1{margin-bottom:8px}.store-hero p{max-width:760px;margin:0 auto;color:#6F6257}
 .store-preview-banner{background:#F0E8D9;border:1px solid #C9B78F;border-radius:8px;padding:12px 18px;margin-bottom:22px;color:#5C4033;text-align:center}
@@ -18,6 +19,9 @@
 .alpha-button{min-width:30px;padding:6px 7px;border:1px solid #D3C3A5;border-radius:4px;background:#fff;color:#5C4033;font:inherit;cursor:pointer}
 .alpha-button:hover,.alpha-button.active{background:#5C4033;color:#fff;border-color:#5C4033}
 .store-filter-note{text-align:center;color:#6F6257;font-size:.9rem;margin:12px 0 0}
+.genre-nav{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:0 0 20px}
+.genre-pill{padding:7px 16px;border:1px solid #C9B78F;border-radius:999px;background:#FFFDF8;color:#5C4033;font:inherit;font-size:.9rem;cursor:pointer}
+.genre-pill:hover,.genre-pill.active{background:#5C4033;color:#fff;border-color:#5C4033}
 .store-main-title{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 14px}
 .store-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px}
 .store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:14px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}
@@ -34,6 +38,13 @@
 .store-page-btn{padding:9px 18px;border:1px solid #5C4033;border-radius:5px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer}
 .store-page-btn:disabled{opacity:.4;cursor:default}
 .store-page-info{color:#6F6257}
+.store-request{margin-top:34px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:24px;box-shadow:0 4px 14px rgba(40,30,20,.05);text-align:center}
+.store-request h2{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 8px;font-size:1.3rem}
+.store-request p{color:#6F6257;margin:0 0 14px}
+.store-request-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.store-request-row input{padding:10px 12px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924;min-width:200px}
+.store-request-btn{padding:10px 20px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;cursor:pointer}
+.store-request-btn:hover{filter:brightness(.94)}
 @media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}.store-grid{grid-template-columns:repeat(3,1fr);gap:10px}.store-card{padding:10px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
 </style>
 {% endblock %}
@@ -42,7 +53,7 @@
 <section class="page-section store-page">
     <div class="store-hero">
         <h1>The Scriptorium Book Store</h1>
-        <p>Antique &amp; vintage books, each one photographed and described by hand. When a book sells, it's gone — these are one-of-a-kind copies.</p>
+        <p>Antique, vintage &amp; new books, each one photographed and described by hand. When a book sells, it's gone — these are one-of-a-kind copies.</p>
     </div>
 
     {% if preview %}
@@ -50,10 +61,12 @@
     {% endif %}
 
     <nav class="store-collection-nav" id="sectionNav" aria-label="Bookstore sections">
-        <button class="collection-link active" type="button" data-section="Antique">Antique</button>
+        <button class="collection-link" type="button" data-section="Antique">Antique</button>
         <button class="collection-link" type="button" data-section="Vintage">Vintage</button>
-        <button class="collection-link" type="button" data-section="">All Books</button>
+        <button class="collection-link" type="button" data-section="New">New</button>
+        <button class="collection-link active" type="button" data-section="">All Books</button>
     </nav>
+    <div class="genre-nav" id="genreNav" aria-label="Browse new books by genre" hidden></div>
 
     {% if products %}
     <div class="store-controls" aria-label="Bookstore search and filters">
@@ -70,7 +83,7 @@
         <p id="storeFilterNote" class="store-filter-note"></p>
     </div>
 
-    <h2 id="storeMainTitle" class="store-main-title">Antique Books</h2>
+    <h2 id="storeMainTitle" class="store-main-title">All Books</h2>
     <div id="storeGrid" class="store-grid">
         {% for p in products %}
         {% if preview %}
@@ -78,7 +91,7 @@
         {% else %}
             {% set detail_url = url_for('store.store_book', slug=p.slug) %}
         {% endif %}
-        <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-publisher="{{ (p.publisher or '')|lower }}" data-section="{{ p.category }}">
+        <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-publisher="{{ (p.publisher or '')|lower }}" data-section="{{ p.section or '' }}" data-genre="{{ p.genre or '' }}">
             {% if p.cover_image_url %}
                 <img class="store-cover" src="{{ p.cover_image_url }}" alt="Photograph of {{ p.title }}">
             {% else %}
@@ -102,9 +115,18 @@
     {% else %}
     <div class="store-empty">
         <h2>Stocking the shelves…</h2>
-        <p>The Scriptorium's antique &amp; vintage collection is being gathered, photographed, and described — new arrivals are on their way. Please check back soon.</p>
+        <p>The Scriptorium's collection is being gathered, photographed, and described — new arrivals are on their way. Please check back soon.</p>
     </div>
     {% endif %}
+    <div class="store-request">
+        <h2>Looking for a particular book?</h2>
+        <p>Tell us the author and title — if a copy turns up, we'll let you know.</p>
+        <div class="store-request-row">
+            <input id="requestAuthor" type="text" placeholder="Author" aria-label="Requested book author" autocomplete="off">
+            <input id="requestTitle" type="text" placeholder="Title" aria-label="Requested book title" autocomplete="off">
+            <button id="requestBookBtn" class="store-request-btn" type="button">Request This Book</button>
+        </div>
+    </div>
 </section>
 
 <script>
@@ -119,11 +141,35 @@
   const title=document.getElementById('storeMainTitle');
   const pages=document.getElementById('storePages');
   const grid=document.getElementById('storeGrid');
+  const genreNav=document.getElementById('genreNav');
   const PAGE_SIZE=25;
-  let section='Antique', letter='', query='', page=1;
+  let section='', genre='', letter='', query='', page=1;
 
   function sectionLabel(){
-    return section===''?'All Books':(section+' Books');
+    const base=section===''?'All Books':(section+' Books');
+    return (section==='New'&&genre)?(base+' · '+genre):base;
+  }
+
+  function buildGenrePills(){
+    if(!genreNav) return;
+    genreNav.innerHTML='';
+    if(section!=='New'){genreNav.hidden=true;return;}
+    const genres=[...new Set(cards
+      .filter(c=>c.dataset.section==='New')
+      .map(c=>(c.dataset.genre||'').trim())
+      .filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    if(!genres.length){genreNav.hidden=true;return;}
+    genreNav.hidden=false;
+    const all=document.createElement('button');
+    all.type='button';all.className='genre-pill'+(genre===''?' active':'');all.textContent='All Genres';
+    all.addEventListener('click',()=>{genre='';page=1;buildGenrePills();apply();});
+    genreNav.appendChild(all);
+    genres.forEach(g=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='genre-pill'+(genre===g?' active':'');b.textContent=g;
+      b.addEventListener('click',()=>{genre=g;page=1;buildGenrePills();apply();gridTop();});
+      genreNav.appendChild(b);
+    });
   }
 
   function gridTop(){
@@ -152,9 +198,10 @@
     cards.forEach(card=>{
       const titleText=card.dataset.title||'', author=card.dataset.author||'', publisher=card.dataset.publisher||'';
       const sectionOK=!section||card.dataset.section===section;
+      const genreOK=section!=='New'||!genre||(card.dataset.genre||'').trim().toLowerCase()===genre.toLowerCase();
       const letterOK=!letter||titleText.startsWith(letter.toLowerCase());
       const searchOK=!q||titleText.includes(q)||author.includes(q)||publisher.includes(q);
-      if(sectionOK&&letterOK&&searchOK) matched.push(card);
+      if(sectionOK&&genreOK&&letterOK&&searchOK) matched.push(card);
     });
     const totalPages=Math.max(1,Math.ceil(matched.length/PAGE_SIZE));
     if(page>totalPages) page=totalPages;
@@ -175,8 +222,10 @@
 
   sections.forEach(btn=>btn.addEventListener('click',()=>{
     section=btn.dataset.section||'';
+    genre='';
     page=1;
     sections.forEach(x=>x.classList.toggle('active',x===btn));
+    buildGenrePills();
     apply();
   }));
   letters.forEach(btn=>btn.addEventListener('click',()=>{
@@ -187,6 +236,15 @@
   }));
   if(search) search.addEventListener('input',()=>{query=search.value;page=1;apply();});
   if(clear) clear.addEventListener('click',()=>{search.value='';query='';page=1;apply();search.focus();});
+  var reqBtn=document.getElementById('requestBookBtn');
+  if(reqBtn) reqBtn.addEventListener('click',()=>{
+    var a=(document.getElementById('requestAuthor').value||'').trim();
+    var t=(document.getElementById('requestTitle').value||'').trim();
+    if(!a&&!t){document.getElementById('requestTitle').focus();return;}
+    var msg='Author: '+(a||'—')+'\nTitle: '+(t||'—')+'\n\n(Where should we reach you if a copy turns up?)';
+    window.location.href='/contact?subject='+encodeURIComponent('Book Request')+'&message='+encodeURIComponent(msg);
+  });
+  buildGenrePills();
   apply();
 })();
 </script>

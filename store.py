@@ -1,13 +1,11 @@
-import glob
 import os
 import re
 import time
-import uuid
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 import requests
-from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for, abort
+from flask import Blueprint, jsonify, make_response, redirect, render_template, request, session, url_for, abort
 
 from database import get_db, using_postgres, IntegrityError
 
@@ -22,7 +20,20 @@ STORE_VISIBLE = True
 
 ALLOWED_STATUS = {"draft", "active", "archived"}
 ALLOWED_CONDITIONS = {"new", "used"}
-ALLOWED_SECTIONS = {"Antique", "Vintage"}
+ALLOWED_SECTIONS = {"Antique", "Vintage", "New"}
+
+
+def canonical_section(value):
+    """Strict section for a category string: Antique, Vintage, New, or None.
+
+    A book belongs to exactly one section tab. Anything else (legacy
+    values like "Books") shows only under All Books.
+    """
+    text = str(value or "").strip().lower()
+    for section in ALLOWED_SECTIONS:
+        if text == section.lower():
+            return section
+    return None
 
 STORE_IMAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "store_images")
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -61,6 +72,7 @@ def ensure_store_tables():
                 "CREATE TABLE IF NOT EXISTS store_orders (id BIGSERIAL PRIMARY KEY, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id BIGINT NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS store_product_images (id BIGSERIAL PRIMARY KEY, product_id BIGINT NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_images (id BIGSERIAL PRIMARY KEY, data BYTEA NOT NULL, mime TEXT NOT NULL DEFAULT 'image/jpeg', date_created TEXT NOT NULL)",
             ]
         else:
             statements = [
@@ -69,6 +81,7 @@ def ensure_store_tables():
                 "CREATE TABLE IF NOT EXISTS store_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id INTEGER NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS store_product_images (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_images (id INTEGER PRIMARY KEY AUTOINCREMENT, data BLOB NOT NULL, mime TEXT NOT NULL DEFAULT 'image/jpeg', date_created TEXT NOT NULL)",
             ]
         for statement in statements:
             conn.execute(statement)
@@ -87,6 +100,7 @@ def ensure_store_tables():
                 "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS edition TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS condition_notes TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS genre TEXT NOT NULL DEFAULT ''",
             ]
         else:
             existing = {row["name"] for row in conn.execute("PRAGMA table_info(store_products)").fetchall()}
@@ -104,13 +118,16 @@ def ensure_store_tables():
                 ("edition", "TEXT NOT NULL DEFAULT ''"),
                 ("condition_notes", "TEXT NOT NULL DEFAULT ''"),
                 ("notes", "TEXT NOT NULL DEFAULT ''"),
+                ("genre", "TEXT NOT NULL DEFAULT ''"),
             ]:
                 if name not in existing:
                     migrations.append(f"ALTER TABLE store_products ADD COLUMN {name} {definition}")
         for statement in migrations:
             conn.execute(statement)
 
-        for seed_category in ("Books", "Antique", "Vintage"):
+        _migrate_local_store_images(conn)
+
+        for seed_category in ("Books", "Antique", "Vintage", "New"):
             conn.execute(
                 "INSERT INTO store_categories(name, date_created) VALUES (?, ?) ON CONFLICT(name) DO NOTHING",
                 (seed_category, now_string()),
@@ -149,11 +166,10 @@ def product_payload(data):
     if status not in ALLOWED_STATUS:
         raise ValueError("Invalid product status.")
 
-    section = str(data.get("category", "Antique")).strip()
-    if section not in ALLOWED_SECTIONS:
-        # Accept legacy multi-category strings by picking the first known section.
-        found = next((s for s in ALLOWED_SECTIONS if s in section), None)
-        section = found or "Antique"
+    raw_section = str(data.get("category", "")).strip()
+    # Canonicalize known sections (case-insensitive); preserve any other
+    # non-empty legacy value untouched; default blanks to Antique.
+    section = canonical_section(raw_section) or raw_section or "Antique"
 
     try:
         stock_quantity = int(str(data.get("stock_quantity", "1") or "1").strip())
@@ -172,6 +188,7 @@ def product_payload(data):
         "isbn": str(data.get("isbn", "")).strip(),
         "cover_image_url": str(data.get("cover_image_url", "")).strip(),
         "category": section,
+        "genre": str(data.get("genre", "")).strip(),
         "language": str(data.get("language", "English")).strip() or "English",
         "fulfillment_source": str(data.get("fulfillment_source", "In-house")).strip() or "In-house",
         "fulfillment_method": str(data.get("fulfillment_method", "Direct to Home")).strip() or "Direct to Home",
@@ -202,8 +219,8 @@ def image_extension_for(data):
     return None
 
 
-def save_product_photo(product_id, slug, storage):
-    """Validate and store an uploaded book photo. Returns the public URL."""
+def _validate_upload(storage):
+    """Validate an uploaded image. Returns (data, mime). Raises ValueError."""
     filename = (storage.filename or "").strip()
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
@@ -216,46 +233,127 @@ def save_product_photo(product_id, slug, storage):
     real_ext = image_extension_for(data)
     if not real_ext:
         raise ValueError("That file does not look like a real image.")
-    safe_slug = slugify(slug)[:60]
-    os.makedirs(STORE_IMAGE_DIR, exist_ok=True)
-    for old in glob.glob(os.path.join(STORE_IMAGE_DIR, f"{safe_slug}-{product_id}.*")):
-        try:
-            os.remove(old)
-        except OSError:
-            pass
-    out_name = f"{safe_slug}-{product_id}{real_ext}"
-    with open(os.path.join(STORE_IMAGE_DIR, out_name), "wb") as handle:
-        handle.write(data)
-    return "/static/store_images/" + out_name
+    mime = "image/" + ("jpeg" if real_ext == ".jpg" else real_ext[1:])
+    return data, mime
+
+
+def store_image_data(conn, data, mime):
+    """Persist image bytes in the database (survives redeploys).
+
+    Returns the public /store/image/<id> URL.
+    """
+    cur = conn.execute(
+        "INSERT INTO store_images(data, mime, date_created) VALUES (?, ?, ?)",
+        (bytes(data), mime, now_string()),
+    )
+    return "/store/image/%d" % cur.lastrowid
+
+
+def save_product_photo(conn, storage):
+    """Validate and store an uploaded book photo in the DB. Returns the public URL."""
+    data, mime = _validate_upload(storage)
+    return store_image_data(conn, data, mime)
 
 
 MAX_GALLERY_IMAGES = 6
 
 
-def save_gallery_photo(product_id, slug, storage):
-    """Validate and store one gallery photo. Returns the public URL.
+def save_gallery_photo(conn, storage):
+    """Validate and store one gallery photo in the DB. Returns the public URL."""
+    data, mime = _validate_upload(storage)
+    return store_image_data(conn, data, mime)
 
-    Unlike the cover photo, gallery files get unique names so several can
-    coexist per product.
+
+def _image_id_from_url(url):
+    """Extract the DB image id from a /store/image/<id> URL, else None."""
+    if not url or not isinstance(url, str):
+        return None
+    prefix = "/store/image/"
+    if not url.startswith(prefix):
+        return None
+    tail = url[len(prefix):]
+    return int(tail) if tail.isdigit() else None
+
+
+def delete_stored_image(conn, url):
+    """Delete a DB-backed image row. Legacy local files are removed from disk."""
+    image_id = _image_id_from_url(url)
+    if image_id:
+        conn.execute("DELETE FROM store_images WHERE id = ?", (image_id,))
+    else:
+        _delete_local_cover_image(url)
+
+
+_images_migrated = False
+
+
+def _migrate_local_store_images(conn, limit=50):
+    """One-time, strictly bounded: import surviving local /static/store_images
+    files into the database and rewrite their URLs to /store/image/<id>.
+
+    Render wipes the local upload directory on redeploy, so this rescues any
+    files still on disk. Runs once per process; never touches remote URLs.
     """
-    filename = (storage.filename or "").strip()
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise ValueError("Photo must be a PNG, JPG, GIF, or WebP file.")
-    data = storage.read(MAX_IMAGE_BYTES + 1)
-    if not data:
-        raise ValueError("The uploaded photo was empty.")
-    if len(data) > MAX_IMAGE_BYTES:
-        raise ValueError("Photo must be smaller than 5 MB.")
-    real_ext = image_extension_for(data)
-    if not real_ext:
-        raise ValueError("That file does not look like a real image.")
-    safe_slug = slugify(slug)[:60]
-    os.makedirs(STORE_IMAGE_DIR, exist_ok=True)
-    out_name = f"{safe_slug}-{product_id}-{uuid.uuid4().hex[:8]}{real_ext}"
-    with open(os.path.join(STORE_IMAGE_DIR, out_name), "wb") as handle:
-        handle.write(data)
-    return "/static/store_images/" + out_name
+    global _images_migrated
+    if _images_migrated:
+        return 0
+    _images_migrated = True
+    if not os.path.isdir(STORE_IMAGE_DIR):
+        return 0
+    migrated = 0
+    try:
+        targets = []
+        for table, column in (("store_products", "cover_image_url"),
+                              ("store_product_images", "image_url")):
+            rows = conn.execute(
+                "SELECT id, %s AS url FROM %s WHERE %s LIKE '/static/store_images/%%%%'" % (column, table, column)
+            ).fetchall()
+            targets.extend((table, column, r["id"], r["url"]) for r in rows)
+    except Exception:
+        return 0
+    for table, column, row_id, url in targets:
+        if migrated >= limit:
+            break
+        try:
+            filename = url[len("/static/store_images/"):]
+            if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
+                continue
+            path = os.path.join(STORE_IMAGE_DIR, filename)
+            if not os.path.isfile(path):
+                continue
+            with open(path, "rb") as handle:
+                data = handle.read(MAX_IMAGE_BYTES + 1)
+            if not data or len(data) > MAX_IMAGE_BYTES:
+                continue
+            real_ext = image_extension_for(data)
+            if not real_ext:
+                continue
+            mime = "image/" + ("jpeg" if real_ext == ".jpg" else real_ext[1:])
+            new_url = store_image_data(conn, data, mime)
+            conn.execute("UPDATE %s SET %s = ? WHERE id = ?" % (table, column), (new_url, row_id))
+            migrated += 1
+        except Exception:
+            continue
+    return migrated
+
+
+@store_bp.route("/store/image/<int:image_id>")
+def serve_store_image(image_id):
+    """Serve a database-backed store image with a long immutable cache."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT data, mime FROM store_images WHERE id = ?", (image_id,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        abort(404)
+    data = row["data"]
+    if isinstance(data, memoryview):
+        data = data.tobytes()
+    response = make_response(bytes(data))
+    response.headers["Content-Type"] = row["mime"] or "image/jpeg"
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 def get_product_images(conn, product_id):
@@ -287,7 +385,7 @@ def add_gallery_photos(conn, product_id, slug):
             warnings.append(f"Only {MAX_GALLERY_IMAGES} gallery photos per book are kept.")
             break
         try:
-            url = save_gallery_photo(product_id, slug, storage)
+            url = save_gallery_photo(conn, storage)
         except ValueError as exc:
             warnings.append(str(exc))
             continue
@@ -304,6 +402,9 @@ def row_to_dict(row):
     item["price"] = f"{item['price_cents'] / 100:.2f}"
     item["is_new_release"] = bool(item.get("is_new_release"))
     item["is_kw_snyder"] = bool(item.get("is_kw_snyder"))
+    item["genre"] = item.get("genre") or ""
+    # Strict storefront section: Antique, Vintage, New, or None (All Books only).
+    item["section"] = canonical_section(item.get("category"))
     return item
 
 
@@ -349,11 +450,11 @@ def _request_photo():
     return None
 
 
-PRODUCT_COLUMNS = ("title, slug, author, description, price_cents, format, isbn, cover_image_url, category, language, fulfillment_source, fulfillment_method, stock_quantity, availability_status, condition, is_new_release, is_kw_snyder, status, publisher, publication_year, edition, condition_notes, notes, date_created, date_updated")
+PRODUCT_COLUMNS = ("title, slug, author, description, price_cents, format, isbn, cover_image_url, category, genre, language, fulfillment_source, fulfillment_method, stock_quantity, availability_status, condition, is_new_release, is_kw_snyder, status, publisher, publication_year, edition, condition_notes, notes, date_created, date_updated")
 
 
 def _product_values(product):
-    return (product["title"], product["slug"], product["author"], product["description"], product["price_cents"], product["format"], product["isbn"], product["cover_image_url"], product["category"], product["language"], product["fulfillment_source"], product["fulfillment_method"], product["stock_quantity"], product["availability_status"], product["condition"], product["is_new_release"], product["is_kw_snyder"], product["status"], product["publisher"], product["publication_year"], product["edition"], product["condition_notes"], product["notes"])
+    return (product["title"], product["slug"], product["author"], product["description"], product["price_cents"], product["format"], product["isbn"], product["cover_image_url"], product["category"], product["genre"], product["language"], product["fulfillment_source"], product["fulfillment_method"], product["stock_quantity"], product["availability_status"], product["condition"], product["is_new_release"], product["is_kw_snyder"], product["status"], product["publisher"], product["publication_year"], product["edition"], product["condition_notes"], product["notes"])
 
 
 @store_bp.route("/store")
@@ -478,7 +579,7 @@ def admin_create_product():
     try:
         timestamp = now_string()
         cursor = conn.execute(
-            f"INSERT INTO store_products({PRODUCT_COLUMNS}) VALUES ({', '.join(['?'] * 25)})",
+            f"INSERT INTO store_products({PRODUCT_COLUMNS}) VALUES ({', '.join(['?'] * 26)})",
             _product_values(product) + (timestamp, timestamp),
         )
         new_id = cursor.lastrowid
@@ -486,7 +587,7 @@ def admin_create_product():
         photo = _request_photo()
         if photo:
             try:
-                product["cover_image_url"] = save_product_photo(new_id, product["slug"], photo)
+                product["cover_image_url"] = save_product_photo(conn, photo)
                 conn.execute(
                     "UPDATE store_products SET cover_image_url = ?, date_updated = ? WHERE id = ?",
                     (product["cover_image_url"], now_string(), new_id),
@@ -542,10 +643,10 @@ def admin_delete_product_image(image_id):
     if not row:
         conn.close()
         return jsonify({"error": "Photo not found."}), 404
+    delete_stored_image(conn, row["image_url"])
     conn.execute("DELETE FROM store_product_images WHERE id = ?", (image_id,))
     conn.commit()
     conn.close()
-    _delete_local_cover_image(row["image_url"])
     return jsonify({"success": True, "deleted": True})
 
 
@@ -571,14 +672,16 @@ def admin_update_product(product_id):
         return jsonify({"error": str(exc)}), 400
     try:
         conn.execute(
-            "UPDATE store_products SET title = ?, slug = ?, author = ?, description = ?, price_cents = ?, format = ?, isbn = ?, cover_image_url = ?, category = ?, language = ?, fulfillment_source = ?, fulfillment_method = ?, stock_quantity = ?, availability_status = ?, condition = ?, is_new_release = ?, is_kw_snyder = ?, status = ?, publisher = ?, publication_year = ?, edition = ?, condition_notes = ?, notes = ?, date_updated = ? WHERE id = ?",
-            _product_values(product)[0:18] + _product_values(product)[18:23] + (now_string(), product_id),
+            "UPDATE store_products SET title = ?, slug = ?, author = ?, description = ?, price_cents = ?, format = ?, isbn = ?, cover_image_url = ?, category = ?, genre = ?, language = ?, fulfillment_source = ?, fulfillment_method = ?, stock_quantity = ?, availability_status = ?, condition = ?, is_new_release = ?, is_kw_snyder = ?, status = ?, publisher = ?, publication_year = ?, edition = ?, condition_notes = ?, notes = ?, date_updated = ? WHERE id = ?",
+            _product_values(product)[0:19] + _product_values(product)[19:24] + (now_string(), product_id),
         )
         photo_warning = None
         photo = _request_photo()
         if photo:
             try:
-                cover_url = save_product_photo(product_id, product["slug"], photo)
+                old_cover = existing["cover_image_url"]
+                cover_url = save_product_photo(conn, photo)
+                delete_stored_image(conn, old_cover)
                 conn.execute(
                     "UPDATE store_products SET cover_image_url = ?, date_updated = ? WHERE id = ?",
                     (cover_url, now_string(), product_id),
@@ -647,6 +750,10 @@ def admin_delete_product(product_id):
             # Order line items reference the product without ON DELETE CASCADE.
             conn.execute("DELETE FROM store_order_items WHERE product_id = ?", (product_id,))
             conn.execute("DELETE FROM store_products WHERE id = ?", (product_id,))
+            for url in gallery_urls + [row["cover_image_url"]]:
+                image_id = _image_id_from_url(url)
+                if image_id:
+                    conn.execute("DELETE FROM store_images WHERE id = ?", (image_id,))
             conn.commit()
         except Exception as exc:  # Surface as JSON, never an HTML 500 page.
             try:
@@ -798,22 +905,31 @@ def paypal_start_checkout():
                 "user_action": "PAY_NOW",
             },
         })
+        body = resp.json()
     except Exception as exc:
         conn.close()
         return jsonify({"error": "Could not start checkout. (%s)" % exc}), 502
     if resp.status_code not in (200, 201):
+        detail = ""
+        try:
+            err = (body.get("details") or body.get("message")) if isinstance(body, dict) else ""
+            detail = (" — %s" % err) if err else ""
+        except Exception:
+            pass
         conn.close()
-        return jsonify({"error": "Could not start checkout."}), 502
-    body = resp.json() or {}
-    paypal_order_id = body.get("id", "")
+        return jsonify({"error": "Checkout was declined by PayPal (status %d%s)." % (resp.status_code, detail)}), 502
+    paypal_order_id = body.get("id", "") if isinstance(body, dict) else ""
     approval_url = ""
-    for link in body.get("links", []):
-        if link.get("rel") == "approve":
-            approval_url = link.get("href", "")
-            break
+    try:
+        for link in body.get("links", []):
+            if link.get("rel") == "approve" and link.get("href"):
+                approval_url = link["href"]
+                break
+    except Exception:
+        approval_url = ""
     if not paypal_order_id or not approval_url:
         conn.close()
-        return jsonify({"error": "Could not start checkout."}), 502
+        return jsonify({"error": "PayPal did not return an approval link. Please try again."}), 502
     conn.execute(
         "UPDATE store_orders SET provider_order_id = ?, date_updated = ? WHERE id = ?",
         (paypal_order_id, now_string(), local_order_id),

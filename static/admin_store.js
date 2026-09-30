@@ -30,7 +30,7 @@
           <div id="storePhotosPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
           <div id="storeGalleryExisting" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
           <label>Cover Image URL <span class="note">(optional — paste a link instead of uploading)</span></label><input id="storeCover" type="url" placeholder="https://...">
-          <label>Category</label><input id="storeCategory" type="text" value="Books">
+          <div class="two"><div><label>Section</label><select id="storeCategory"><option>Antique</option><option selected>Vintage</option><option>New</option></select></div><div><label>Genre <span class="note">(used under New — e.g. Mystery)</span></label><input id="storeGenre" type="text" list="storeGenreList" placeholder="e.g. Mystery"><datalist id="storeGenreList"></datalist></div></div>
           <label>Status</label><select id="storeStatus"><option value="draft">Draft</option><option value="active">Active — show on the store</option><option value="archived">Archived</option></select>
           <div class="actions"><button type="button" id="storeSaveButton" onclick="window.saveStoreProduct()">Add Book</button><button type="button" class="light" onclick="window.clearStoreForm()">Clear</button></div>
         </div>
@@ -70,7 +70,8 @@
     document.getElementById('storeAuthor').value='K. W. Snyder';
     document.getElementById('storePrice').value='';
     document.getElementById('storeStock').value='0';
-    document.getElementById('storeCategory').value='Books';
+    document.getElementById('storeCategory').value='Vintage';
+    document.getElementById('storeGenre').value='';
     document.getElementById('storeFormat').value='Paperback';
     document.getElementById('storeStatus').value='draft';
   }
@@ -105,7 +106,13 @@
     });
     document.getElementById('storePhotos').value='';
     document.getElementById('storePhotosPreview').innerHTML='';
-    document.getElementById('storeCategory').value=p.category||'Books';
+    const catSel=document.getElementById('storeCategory');
+    const cat=p.category||'Vintage';
+    if(![...catSel.options].some(o=>o.value===cat)){
+      const opt=document.createElement('option');opt.value=cat;opt.textContent=cat+' (legacy)';catSel.appendChild(opt);
+    }
+    catSel.value=cat;
+    document.getElementById('storeGenre').value=p.genre||'';
     document.getElementById('storeStatus').value=p.status||'draft';
     document.getElementById('storeTitle').focus();
   }
@@ -115,11 +122,16 @@
     list.innerHTML='<p class="note">Loading books...</p>';
     try{
       const products=await api('/api/store/admin/products');
+      const dl=document.getElementById('storeGenreList');
+      if(dl){
+        const genres=[...new Set(products.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+        dl.innerHTML=genres.map(g=>`<option value="${esc(g)}">`).join('');
+      }
       list.innerHTML=products.length?'':'<p class="note">No books have been added to the store yet. Add your first finished book on the left.</p>';
       products.forEach(p=>{
         const card=document.createElement('div'); card.className='card';
         const status=p.status||'draft';
-        card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong></small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
+        card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
         list.appendChild(card);
       });
     }catch(e){list.innerHTML=`<p class="note">${esc(e.message)}</p>`;}
@@ -153,7 +165,8 @@
     fd.append('stock_quantity',document.getElementById('storeStock').value);
     const url=document.getElementById('storeCover').value.trim();
     if(url)fd.append('cover_image_url',url);
-    fd.append('category',document.getElementById('storeCategory').value.trim()||'Books');
+    fd.append('category',document.getElementById('storeCategory').value.trim()||'Vintage');
+    fd.append('genre',document.getElementById('storeGenre').value.trim());
     fd.append('status',document.getElementById('storeStatus').value);
     const f=document.getElementById('storePhoto').files[0];
     if(f)fd.append('photo',await fileToUpload(f));

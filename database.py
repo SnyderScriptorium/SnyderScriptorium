@@ -79,7 +79,8 @@ class PostgresConnection:
         wants_id = (
             upper.startswith("INSERT INTO")
             and any(f"INSERT INTO {table}" in upper for table in (
-                "DRAFTS", "PUBLISHED_POSTS", "MANUSCRIPT_BOOKS", "MANUSCRIPT_CHAPTERS", "MEMBERS", "SUBSCRIPTIONS", "FIND_US_EVENTS", "STORE_PRODUCTS"
+                "DRAFTS", "PUBLISHED_POSTS", "MANUSCRIPT_BOOKS", "MANUSCRIPT_CHAPTERS", "MEMBERS", "SUBSCRIPTIONS", "FIND_US_EVENTS", "STORE_PRODUCTS",
+                "STORE_ORDERS", "STORE_IMAGES",
             ))
             and "RETURNING" not in upper
         )

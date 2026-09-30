@@ -372,7 +372,7 @@ def contact():
         conn.commit()
         conn.close()
         return render_template("contact.html", success="Your message has been sent. Thank you for reaching out.")
-    return render_template("contact.html", subject=request.args.get("subject", ""))
+    return render_template("contact.html", subject=request.args.get("subject", ""), message=request.args.get("message", ""))
     return render_template("contact.html")
 
 
