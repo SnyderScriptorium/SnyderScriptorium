@@ -516,8 +516,18 @@ def admin_delete_product(product_id):
         conn.close()
         return jsonify({"error": "Book not found."}), 404
     if permanent:
-        conn.execute("DELETE FROM store_products WHERE id = ?", (product_id,))
-        conn.commit()
+        try:
+            # Order line items reference the product without ON DELETE CASCADE.
+            conn.execute("DELETE FROM store_order_items WHERE product_id = ?", (product_id,))
+            conn.execute("DELETE FROM store_products WHERE id = ?", (product_id,))
+            conn.commit()
+        except Exception as exc:  # Surface as JSON, never an HTML 500 page.
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            conn.close()
+            return jsonify({"error": "Could not delete the book. (%s)" % exc}), 500
         conn.close()
         _delete_local_cover_image(row["cover_image_url"])
         return jsonify({"success": True, "deleted": True})
