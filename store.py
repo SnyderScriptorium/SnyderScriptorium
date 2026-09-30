@@ -1,9 +1,11 @@
 import glob
 import os
 import re
+import time
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+import requests
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for, abort
 
 from database import get_db, using_postgres, IntegrityError
@@ -532,6 +534,232 @@ def admin_delete_product(product_id):
         _delete_local_cover_image(row["cover_image_url"])
         return jsonify({"success": True, "deleted": True})
     conn.execute("UPDATE store_products SET status = 'archived', date_updated = ? WHERE id = ?", (now_string(), product_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+# --- PayPal checkout ------------------------------------------------------
+# Single-entry checkout: books are entered once in the store admin. When a
+# customer buys, the backend builds the PayPal order from the database row —
+# nothing is ever typed into PayPal by hand.
+#
+# Server env vars (set in Render; never committed):
+#   PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE=sandbox|live
+# The client ID is public by design (it ships in the page JS). The secret
+# stays server-side and is only used for server-to-server API calls.
+
+PAYPAL_SANDBOX_API = "https://api-m.sandbox.paypal.com"
+PAYPAL_LIVE_API = "https://api-m.paypal.com"
+
+_paypal_token_cache = {"token": None, "expires_at": 0.0}
+
+
+def paypal_mode():
+    return (os.environ.get("PAYPAL_MODE", "sandbox") or "sandbox").strip().lower()
+
+
+def paypal_api_base():
+    return PAYPAL_LIVE_API if paypal_mode() == "live" else PAYPAL_SANDBOX_API
+
+
+def paypal_configured():
+    return bool(os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET"))
+
+
+def paypal_access_token():
+    """Server-to-server OAuth token, cached until near expiry."""
+    now = time.time()
+    if _paypal_token_cache["token"] and _paypal_token_cache["expires_at"] > now + 60:
+        return _paypal_token_cache["token"]
+    resp = requests.post(
+        paypal_api_base() + "/v1/oauth2/token",
+        auth=(os.environ.get("PAYPAL_CLIENT_ID", ""), os.environ.get("PAYPAL_SECRET", "")),
+        data={"grant_type": "client_credentials"},
+        headers={"Accept": "application/json"},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    _paypal_token_cache["token"] = data["access_token"]
+    _paypal_token_cache["expires_at"] = now + int(data.get("expires_in", 3000))
+    return _paypal_token_cache["token"]
+
+
+def paypal_request(method, path, payload=None):
+    return requests.request(
+        method,
+        paypal_api_base() + path,
+        headers={
+            "Authorization": "Bearer " + paypal_access_token(),
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=20,
+    )
+
+
+@store_bp.route("/api/store/paypal/config")
+def paypal_config():
+    if not STORE_VISIBLE:
+        return jsonify({"configured": False})
+    return jsonify({
+        "configured": paypal_configured(),
+        "client_id": os.environ.get("PAYPAL_CLIENT_ID", "") if paypal_configured() else "",
+        "mode": paypal_mode(),
+    })
+
+
+@store_bp.route("/api/store/paypal/create-order", methods=["POST"])
+def paypal_create_order():
+    """Create a PayPal order from the book in our own database. The price is
+    always read server-side — the browser never decides what a book costs."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    if not paypal_configured():
+        return jsonify({"error": "Card payments are not set up yet."}), 503
+    data = _request_data()
+    try:
+        product_id = int(data.get("product_id") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid book."}), 400
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM store_products WHERE id = ? AND status = 'active'",
+        (product_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "That book is no longer available."}), 404
+    product = row_to_dict(row)
+    if int(product.get("stock_quantity") or 0) < 1:
+        conn.close()
+        return jsonify({"error": "That book is out of stock."}), 409
+    total_cents = int(product.get("price_cents") or 0)
+    if total_cents < 1:
+        conn.close()
+        return jsonify({"error": "That book has no price set."}), 409
+    now = now_string()
+    cursor = conn.execute(
+        "INSERT INTO store_orders (customer_name, customer_email, total_cents, payment_status, order_status, provider, provider_order_id, date_created, date_updated)"
+        " VALUES (?, ?, ?, 'unpaid', 'pending', 'paypal', '', ?, ?)",
+        ("", "", total_cents, now, now),
+    )
+    local_order_id = cursor.lastrowid
+    conn.execute(
+        "INSERT INTO store_order_items (order_id, product_id, quantity, unit_price_cents) VALUES (?, ?, 1, ?)",
+        (local_order_id, product_id, total_cents),
+    )
+    conn.commit()
+    try:
+        resp = paypal_request("POST", "/v2/checkout/orders", {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": str(local_order_id),
+                "description": (product.get("title") or "Book")[:120],
+                "amount": {
+                    "currency_code": "USD",
+                    "value": f"{total_cents / 100:.2f}",
+                },
+            }],
+        })
+    except Exception as exc:
+        conn.close()
+        return jsonify({"error": "Could not start checkout. (%s)" % exc}), 502
+    if resp.status_code not in (200, 201):
+        conn.close()
+        return jsonify({"error": "Could not start checkout."}), 502
+    paypal_order_id = (resp.json() or {}).get("id", "")
+    if not paypal_order_id:
+        conn.close()
+        return jsonify({"error": "Could not start checkout."}), 502
+    conn.execute(
+        "UPDATE store_orders SET provider_order_id = ?, date_updated = ? WHERE id = ?",
+        (paypal_order_id, now_string(), local_order_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"orderID": paypal_order_id, "local_order_id": local_order_id})
+
+
+@store_bp.route("/api/store/paypal/capture-order", methods=["POST"])
+def paypal_capture_order():
+    """Capture an approved PayPal order, verify the amount server-side, then
+    record payment and decrement stock. Idempotent: already-paid orders just
+    report success."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    if not paypal_configured():
+        return jsonify({"error": "Card payments are not set up yet."}), 503
+    data = _request_data()
+    paypal_order_id = str(data.get("orderID") or "").strip()
+    try:
+        local_order_id = int(data.get("local_order_id") or 0)
+    except (TypeError, ValueError):
+        local_order_id = 0
+    if not paypal_order_id or not local_order_id:
+        return jsonify({"error": "Invalid order."}), 400
+    conn = get_db()
+    row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Order not found."}), 404
+    order = dict(row)
+    if order.get("provider_order_id") != paypal_order_id or order.get("provider") != "paypal":
+        conn.close()
+        return jsonify({"error": "Order mismatch."}), 400
+    if order.get("payment_status") == "paid":
+        conn.close()
+        return jsonify({"success": True, "already_paid": True})
+    try:
+        resp = paypal_request("POST", "/v2/checkout/orders/%s/capture" % paypal_order_id)
+    except Exception as exc:
+        conn.close()
+        return jsonify({"error": "Could not capture payment. (%s)" % exc}), 502
+    if resp.status_code not in (200, 201):
+        conn.close()
+        return jsonify({"error": "The payment was not completed."}), 402
+    capture = resp.json() or {}
+    if capture.get("status") != "COMPLETED":
+        conn.close()
+        return jsonify({"error": "The payment was not completed."}), 402
+    captured_cents = 0
+    for unit in capture.get("purchase_units", []):
+        for cap in (unit.get("payments") or {}).get("captures", []):
+            amount = cap.get("amount") or {}
+            if amount.get("currency_code") == "USD":
+                try:
+                    captured_cents += int(round(float(amount.get("value", "0")) * 100))
+                except (TypeError, ValueError):
+                    pass
+    if captured_cents != int(order.get("total_cents") or 0):
+        conn.close()
+        return jsonify({"error": "The payment amount did not match the order."}), 402
+    payer = capture.get("payer") or {}
+    payer_name = payer.get("name") or {}
+    full_name = (str(payer_name.get("given_name", "")) + " " + str(payer_name.get("surname", ""))).strip()
+    now = now_string()
+    conn.execute(
+        "UPDATE store_orders SET payment_status = 'paid', order_status = 'processing',"
+        " customer_name = ?, customer_email = ?, date_updated = ? WHERE id = ?",
+        (full_name, payer.get("email_address", ""), now, local_order_id),
+    )
+    items = conn.execute(
+        "SELECT product_id, quantity FROM store_order_items WHERE order_id = ?",
+        (local_order_id,),
+    ).fetchall()
+    for item in items:
+        item = dict(item)
+        conn.execute(
+            "UPDATE store_products SET stock_quantity = MAX(0, stock_quantity - ?), date_updated = ? WHERE id = ?",
+            (int(item.get("quantity") or 1), now, item.get("product_id")),
+        )
+    conn.execute(
+        "UPDATE store_products SET status = 'archived', date_updated = ?"
+        " WHERE id IN (SELECT product_id FROM store_order_items WHERE order_id = ?)"
+        " AND stock_quantity <= 0 AND status = 'active'",
+        (now, local_order_id),
+    )
     conn.commit()
     conn.close()
     return jsonify({"success": True})
