@@ -732,19 +732,20 @@ def paypal_config():
         return jsonify({"configured": False})
     return jsonify({
         "configured": paypal_configured(),
-        "client_id": os.environ.get("PAYPAL_CLIENT_ID", "") if paypal_configured() else "",
         "mode": paypal_mode(),
     })
 
 
-@store_bp.route("/api/store/paypal/create-order", methods=["POST"])
-def paypal_create_order():
-    """Create a PayPal order from the book in our own database. The price is
+@store_bp.route("/api/store/paypal/start-checkout", methods=["POST"])
+def paypal_start_checkout():
+    """Start checkout for a book. Creates the local order and a PayPal order,
+    then returns PayPal's approval URL. The buyer approves on PayPal's site and
+    is sent back to /store/checkout/return, where we capture. The price is
     always read server-side — the browser never decides what a book costs."""
     if not STORE_VISIBLE:
         return jsonify({"error": "The store is not available."}), 404
     if not paypal_configured():
-        return jsonify({"error": "Card payments are not set up yet."}), 503
+        return jsonify({"error": "Checkout is not set up yet."}), 503
     data = _request_data()
     try:
         product_id = int(data.get("product_id") or 0)
@@ -778,6 +779,7 @@ def paypal_create_order():
         (local_order_id, product_id, total_cents),
     )
     conn.commit()
+    base = request.host_url.rstrip("/")
     try:
         resp = paypal_request("POST", "/v2/checkout/orders", {
             "intent": "CAPTURE",
@@ -789,6 +791,12 @@ def paypal_create_order():
                     "value": f"{total_cents / 100:.2f}",
                 },
             }],
+            "application_context": {
+                "brand_name": "Snyder Scriptorium",
+                "return_url": base + "/store/checkout/return",
+                "cancel_url": base + "/store/checkout/cancel",
+                "user_action": "PAY_NOW",
+            },
         })
     except Exception as exc:
         conn.close()
@@ -796,8 +804,14 @@ def paypal_create_order():
     if resp.status_code not in (200, 201):
         conn.close()
         return jsonify({"error": "Could not start checkout."}), 502
-    paypal_order_id = (resp.json() or {}).get("id", "")
-    if not paypal_order_id:
+    body = resp.json() or {}
+    paypal_order_id = body.get("id", "")
+    approval_url = ""
+    for link in body.get("links", []):
+        if link.get("rel") == "approve":
+            approval_url = link.get("href", "")
+            break
+    if not paypal_order_id or not approval_url:
         conn.close()
         return jsonify({"error": "Could not start checkout."}), 502
     conn.execute(
@@ -806,50 +820,30 @@ def paypal_create_order():
     )
     conn.commit()
     conn.close()
-    return jsonify({"orderID": paypal_order_id, "local_order_id": local_order_id})
+    return jsonify({"approval_url": approval_url})
 
 
-@store_bp.route("/api/store/paypal/capture-order", methods=["POST"])
-def paypal_capture_order():
+def _capture_paypal_order(conn, local_order_id, paypal_order_id):
     """Capture an approved PayPal order, verify the amount server-side, then
     record payment and decrement stock. Idempotent: already-paid orders just
-    report success."""
-    if not STORE_VISIBLE:
-        return jsonify({"error": "The store is not available."}), 404
-    if not paypal_configured():
-        return jsonify({"error": "Card payments are not set up yet."}), 503
-    data = _request_data()
-    paypal_order_id = str(data.get("orderID") or "").strip()
-    try:
-        local_order_id = int(data.get("local_order_id") or 0)
-    except (TypeError, ValueError):
-        local_order_id = 0
-    if not paypal_order_id or not local_order_id:
-        return jsonify({"error": "Invalid order."}), 400
-    conn = get_db()
+    report success. Returns (True, None) or (False, error_message)."""
     row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
     if not row:
-        conn.close()
-        return jsonify({"error": "Order not found."}), 404
+        return False, "Order not found."
     order = dict(row)
     if order.get("provider_order_id") != paypal_order_id or order.get("provider") != "paypal":
-        conn.close()
-        return jsonify({"error": "Order mismatch."}), 400
+        return False, "Order mismatch."
     if order.get("payment_status") == "paid":
-        conn.close()
-        return jsonify({"success": True, "already_paid": True})
+        return True, None
     try:
         resp = paypal_request("POST", "/v2/checkout/orders/%s/capture" % paypal_order_id)
     except Exception as exc:
-        conn.close()
-        return jsonify({"error": "Could not capture payment. (%s)" % exc}), 502
+        return False, "Could not capture payment. (%s)" % exc
     if resp.status_code not in (200, 201):
-        conn.close()
-        return jsonify({"error": "The payment was not completed."}), 402
+        return False, "The payment was not completed."
     capture = resp.json() or {}
     if capture.get("status") != "COMPLETED":
-        conn.close()
-        return jsonify({"error": "The payment was not completed."}), 402
+        return False, "The payment was not completed."
     captured_cents = 0
     for unit in capture.get("purchase_units", []):
         for cap in (unit.get("payments") or {}).get("captures", []):
@@ -860,8 +854,7 @@ def paypal_capture_order():
                 except (TypeError, ValueError):
                     pass
     if captured_cents != int(order.get("total_cents") or 0):
-        conn.close()
-        return jsonify({"error": "The payment amount did not match the order."}), 402
+        return False, "The payment amount did not match the order."
     payer = capture.get("payer") or {}
     payer_name = payer.get("name") or {}
     full_name = (str(payer_name.get("given_name", "")) + " " + str(payer_name.get("surname", ""))).strip()
@@ -877,9 +870,12 @@ def paypal_capture_order():
     ).fetchall()
     for item in items:
         item = dict(item)
+        quantity = int(item.get("quantity") or 1)
+        # CASE WHEN keeps the floor at zero on both SQLite and PostgreSQL.
         conn.execute(
-            "UPDATE store_products SET stock_quantity = MAX(0, stock_quantity - ?), date_updated = ? WHERE id = ?",
-            (int(item.get("quantity") or 1), now, item.get("product_id")),
+            "UPDATE store_products SET stock_quantity = CASE WHEN stock_quantity - ? < 0 THEN 0 ELSE stock_quantity - ? END,"
+            " date_updated = ? WHERE id = ?",
+            (quantity, quantity, now, item.get("product_id")),
         )
     conn.execute(
         "UPDATE store_products SET status = 'archived', date_updated = ?"
@@ -888,5 +884,58 @@ def paypal_capture_order():
         (now, local_order_id),
     )
     conn.commit()
+    return True, None
+
+
+@store_bp.route("/store/checkout/return")
+def paypal_checkout_return():
+    """PayPal sends the buyer back here after approval. Capture the payment and
+    show the thank-you page."""
+    if not STORE_VISIBLE:
+        abort(404)
+    token = (request.args.get("token") or "").strip()
+    conn = get_db()
+    order = None
+    if token:
+        row = conn.execute(
+            "SELECT * FROM store_orders WHERE provider_order_id = ? AND provider = 'paypal'",
+            (token,),
+        ).fetchone()
+        order = dict(row) if row else None
+    title = "your book"
+    status = "error"
+    message = "We couldn't find that order. If you were charged, contact us and we'll sort it out."
+    if order:
+        ok, err = _capture_paypal_order(conn, order["id"], token)
+        item = conn.execute(
+            "SELECT p.title FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
+            " WHERE oi.order_id = ? LIMIT 1",
+            (order["id"],),
+        ).fetchone()
+        if item:
+            title = item[0]
+        if ok:
+            status = "success"
+            message = ""
+        else:
+            message = err or "The payment was not completed."
     conn.close()
-    return jsonify({"success": True})
+    return render_template("store_checkout_result.html", status=status, title=title, message=message)
+
+
+@store_bp.route("/store/checkout/cancel")
+def paypal_checkout_cancel():
+    """Buyer cancelled on PayPal's site — no charge was made."""
+    if not STORE_VISIBLE:
+        abort(404)
+    token = (request.args.get("token") or "").strip()
+    if token:
+        conn = get_db()
+        conn.execute(
+            "UPDATE store_orders SET order_status = 'cancelled', date_updated = ?"
+            " WHERE provider_order_id = ? AND provider = 'paypal' AND payment_status = 'unpaid'",
+            (now_string(), token),
+        )
+        conn.commit()
+        conn.close()
+    return render_template("store_checkout_result.html", status="cancelled", title="", message="")

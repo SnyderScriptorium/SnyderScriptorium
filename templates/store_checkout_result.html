@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}{% if status == 'success' %}Thank You — The Scriptorium Book Store{% elif status == 'cancelled' %}Checkout Cancelled — The Scriptorium Book Store{% else %}Checkout Problem — The Scriptorium Book Store{% endif %}{% endblock %}
+
+{% block head %}
+<style>
+.checkout-result{max-width:640px;margin:0 auto;padding:60px 20px;text-align:center}
+.checkout-result h1{color:#5C4033;font-weight:400;margin-bottom:14px}
+.checkout-result p{color:#6F6257;line-height:1.6}
+.checkout-result .store-button{display:inline-block;margin-top:22px;padding:11px 22px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="checkout-result">
+        {% if status == 'success' %}
+        <h1>Thank you!</h1>
+        <p>Your payment for <strong>{{ title }}</strong> was received.</p>
+        <p>We'll be in touch about shipping. Your book is one of a kind — it's now off the shelf.</p>
+        {% elif status == 'cancelled' %}
+        <h1>Checkout cancelled</h1>
+        <p>No charge was made. The book is still on the shelf if you'd like to come back to it.</p>
+        {% else %}
+        <h1>Something went wrong</h1>
+        <p>{{ message }}</p>
+        <p>If you were charged, please <a href="/contact">contact us</a> and we'll sort it out right away.</p>
+        {% endif %}
+        <a class="store-button" href="/store">Back to the Bookstore</a>
+    </div>
+</section>
+{% endblock %}

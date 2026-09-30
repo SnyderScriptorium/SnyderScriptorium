@@ -4,7 +4,7 @@
 
 {% block head %}
 <style>
-.store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.5rem;font-weight:600;color:#5C4033}.store-book-stock{color:#6F6257;font-size:.95rem}.store-book-condition{margin-top:20px;padding:14px 16px;background:#F5EEE3;border:1px solid #D9C79E;border-radius:6px}.store-book-condition h3{margin:0 0 6px;color:#5C4033;font-size:1.05rem;font-weight:600}.store-book-condition p{margin:0;white-space:pre-wrap}.store-inquire{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-inquire .store-button{display:inline-block;margin-top:10px;padding:10px 18px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-buy{margin-top:25px;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-buy-price{font-size:1.25rem;font-weight:600;color:#5C4033}#paypal-button-container{margin-top:12px;max-width:420px}.store-buy-note{color:#6F6257;font-size:.9rem;min-height:1.2em}.store-buy-success{color:#3F6B3F;font-weight:600}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}
+.store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.5rem;font-weight:600;color:#5C4033}.store-book-stock{color:#6F6257;font-size:.95rem}.store-book-condition{margin-top:20px;padding:14px 16px;background:#F5EEE3;border:1px solid #D9C79E;border-radius:6px}.store-book-condition h3{margin:0 0 6px;color:#5C4033;font-size:1.05rem;font-weight:600}.store-book-condition p{margin:0;white-space:pre-wrap}.store-inquire{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-inquire .store-button{display:inline-block;margin-top:10px;padding:10px 18px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-buy{margin-top:25px;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-buy-price{font-size:1.25rem;font-weight:600;color:#5C4033}.store-buy-button{display:block;width:100%;max-width:420px;margin-top:12px;padding:13px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;font-size:1.05rem;cursor:pointer}.store-buy-button:hover{filter:brightness(.94)}.store-buy-button:disabled{opacity:.55;cursor:default}.store-buy-note{color:#6F6257;font-size:.9rem;min-height:1.2em;margin:10px 0 0}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}
 .store-gallery-main{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border:1px solid #D9C79E;border-radius:5px;background:#EFE7D8;scrollbar-width:none}
 .store-gallery-main::-webkit-scrollbar{display:none}
 .store-gallery-slide{flex:0 0 100%;scroll-snap-align:center;display:grid;place-items:center;min-height:320px}
@@ -93,7 +93,7 @@
             <div class="store-buy" id="storeBuy" hidden>
                 <strong>Buy this book now</strong><br>
                 <span class="store-buy-price">${{ product.price }}</span> — secure checkout
-                <div id="paypal-button-container"></div>
+                <button class="store-buy-button" id="storeBuyNow" type="button">Buy Now</button>
                 <p class="store-buy-note" id="storeBuyNote"></p>
             </div>
             {% endif %}
@@ -110,55 +110,31 @@
   var buyBox = document.getElementById('storeBuy');
   if(!buyBox) return;
   var productId = {{ product.id }};
+  var btn = document.getElementById('storeBuyNow');
   var note = document.getElementById('storeBuyNote');
   fetch('/api/store/paypal/config').then(function(r){ return r.json(); }).then(function(cfg){
-    if(!cfg.configured || !cfg.client_id) return;  /* payments not set up: stay hidden */
+    if(!cfg.configured) return;  /* payments not set up: stay hidden */
     buyBox.hidden = false;
-    var s = document.createElement('script');
-    s.src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(cfg.client_id) + '&currency=USD&intent=capture';
-    s.onload = renderButtons;
-    s.onerror = function(){ buyBox.hidden = true; };
-    document.head.appendChild(s);
   }).catch(function(){ /* leave the buy box hidden */ });
 
-  function renderButtons(){
-    paypal.Buttons({
-      style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal' },
-      createOrder: function(){
-        return fetch('/api/store/paypal/create-order', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ product_id: productId })
-        }).then(function(r){ return r.json(); }).then(function(d){
-          if(!d.orderID) throw new Error(d.error || 'Could not start checkout.');
-          window._snyderOrderId = d.local_order_id;
-          return d.orderID;
-        });
-      },
-      onApprove: function(data){
-        note.textContent = 'Processing payment…';
-        return fetch('/api/store/paypal/capture-order', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ orderID: data.orderID, local_order_id: window._snyderOrderId })
-        }).then(function(r){ return r.json(); }).then(function(d){
-          if(d.success){
-            document.getElementById('paypal-button-container').innerHTML =
-              '<p class="store-buy-success">Payment received — thank you! We\u2019ll be in touch about shipping.</p>';
-            note.textContent = '';
-          } else {
-            throw new Error(d.error || 'The payment was not completed.');
-          }
-        });
-      },
-      onError: function(err){
-        note.textContent = 'Something went wrong: ' + (err && err.message ? err.message : 'checkout error');
-      },
-      onCancel: function(){
-        note.textContent = 'Checkout cancelled \u2014 no charge was made.';
+  btn.addEventListener('click', function(){
+    btn.disabled = true;
+    note.textContent = 'Starting secure checkout\u2026';
+    fetch('/api/store/paypal/start-checkout', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ product_id: productId })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(d.approval_url){
+        window.location.href = d.approval_url;
+      } else {
+        throw new Error(d.error || 'Could not start checkout.');
       }
-    }).render('#paypal-button-container');
-  }
+    }).catch(function(err){
+      note.textContent = 'Something went wrong: ' + (err && err.message ? err.message : 'checkout error');
+      btn.disabled = false;
+    });
+  });
 })();
 </script>
 {% endblock %}
