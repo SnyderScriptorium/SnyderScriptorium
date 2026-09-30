@@ -4,29 +4,49 @@
 
 {% block head %}
 <style>
-.store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.4rem;font-weight:600;color:#5C4033}.store-coming{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}@media(max-width:750px){.store-book-layout{grid-template-columns:1fr}.store-book-cover{max-width:360px}}
+.store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.5rem;font-weight:600;color:#5C4033}.store-book-stock{color:#6F6257;font-size:.95rem}.store-book-condition{margin-top:20px;padding:14px 16px;background:#F5EEE3;border:1px solid #D9C79E;border-radius:6px}.store-book-condition h3{margin:0 0 6px;color:#5C4033;font-size:1.05rem;font-weight:600}.store-book-condition p{margin:0;white-space:pre-wrap}.store-inquire{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-inquire .store-button{display:inline-block;margin-top:10px;padding:10px 18px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}@media(max-width:750px){.store-book-layout{grid-template-columns:1fr}.store-book-cover{max-width:360px}}
 </style>
 {% endblock %}
 
 {% block content %}
 <section class="page-section store-book-page">
-    <a class="store-back" href="{{ url_for('store.store_home') }}">← Back to the Book Store</a>
+    {% if preview %}
+        <a class="store-back" href="{{ url_for('store.admin_store_preview') }}">← Back to Preview</a>
+    {% else %}
+        <a class="store-back" href="{{ url_for('store.store_home') }}">← Back to the Book Store</a>
+    {% endif %}
     <div class="store-book-layout">
         {% if product.cover_image_url %}
-            <img class="store-book-cover" src="{{ product.cover_image_url }}" alt="Cover of {{ product.title }}">
+            <img class="store-book-cover" src="{{ product.cover_image_url }}" alt="Photograph of {{ product.title }}">
         {% else %}
-            <div class="store-book-cover placeholder" aria-label="No cover available">✦</div>
+            <div class="store-book-cover placeholder" aria-label="No photo available">✦</div>
         {% endif %}
         <div class="store-book-details">
             <h1>{{ product.title }}</h1>
             {% if product.author %}<p class="store-book-author">by {{ product.author }}</p>{% endif %}
             <div class="store-book-facts">
-                <div><strong>Format:</strong> {{ product.format }}</div>
+                <div><strong>Section:</strong> {{ product.category }}</div>
+                {% if product.publisher %}<div><strong>Publisher:</strong> {{ product.publisher }}</div>{% endif %}
+                {% if product.publication_year %}<div><strong>Published:</strong> {{ product.publication_year }}</div>{% endif %}
+                {% if product.edition %}<div><strong>Edition / Printing:</strong> {{ product.edition }}</div>{% endif %}
+                <div><strong>Binding:</strong> {{ product.format }}</div>
                 {% if product.isbn %}<div><strong>ISBN:</strong> {{ product.isbn }}</div>{% endif %}
+                {% if product.language %}<div><strong>Language:</strong> {{ product.language }}</div>{% endif %}
                 <div class="store-book-price">${{ product.price }}</div>
+                <div class="store-book-stock">{% if product.stock_quantity|int > 1 %}{{ product.stock_quantity }} copies in stock{% elif product.stock_quantity|int == 1 %}Only 1 copy in stock{% else %}Currently unavailable{% endif %}</div>
             </div>
+            {% if product.condition_notes %}
+            <div class="store-book-condition">
+                <h3>Condition</h3>
+                <p>{{ product.condition_notes }}</p>
+            </div>
+            {% endif %}
             {% if product.description %}<div class="store-book-description">{{ product.description }}</div>{% endif %}
-            <div class="store-coming"><strong>Purchasing is not activated yet.</strong><br>The Scriptorium is preparing the bookstore. Checkout and payment are intentionally a later phase.</div>
+            <div class="store-inquire">
+                <strong>Interested in this book?</strong><br>
+                Every copy here is one of a kind. Send a message and we'll arrange the sale with you directly.
+                <br><a class="store-button" href="/contact?subject={{ ('Question about: ' ~ product.title)|urlencode }}">Ask About This Book</a>
+            </div>
         </div>
     </div>
 </section>
