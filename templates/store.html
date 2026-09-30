@@ -19,18 +19,22 @@
 .alpha-button:hover,.alpha-button.active{background:#5C4033;color:#fff;border-color:#5C4033}
 .store-filter-note{text-align:center;color:#6F6257;font-size:.9rem;margin:12px 0 0}
 .store-main-title{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 14px}
-.store-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:24px}
-.store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}
-.store-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:4px;margin-bottom:15px}
+.store-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px}
+.store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:14px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}
+.store-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:4px;margin-bottom:12px}
 .store-cover.placeholder{display:grid;place-items:center;font-family:Georgia,serif;color:#75695D;font-size:2rem}
-.store-card h2{font-size:1.25rem;margin:0 0 4px;color:#5C4033}.store-author{margin:0 0 8px;color:#6F6257}
-.store-publine{font-size:.92rem;color:#75695D;margin-bottom:8px}
-.store-condition{font-size:.9rem;color:#6F6257;font-style:italic;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.store-price{font-size:1.25rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}
-.store-stock{font-size:.88rem;color:#75695D}
-.store-button{display:inline-block;text-align:center;margin-top:14px;padding:10px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-button:hover{filter:brightness(.94)}
+.store-card h2{font-size:1.1rem;margin:0 0 4px;color:#5C4033}.store-author{margin:0 0 8px;color:#6F6257}
+.store-publine{font-size:.9rem;color:#75695D;margin-bottom:8px}
+.store-condition{font-size:.88rem;color:#6F6257;font-style:italic;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.store-price{font-size:1.15rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}
+.store-stock{font-size:.85rem;color:#75695D}
+.store-button{display:inline-block;text-align:center;margin-top:12px;padding:9px 10px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-button:hover{filter:brightness(.94)}
 .store-empty{text-align:center;padding:45px 25px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;color:#6F6257}
-@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}}
+.store-pages{display:flex;gap:14px;justify-content:center;align-items:center;margin-top:30px}
+.store-page-btn{padding:9px 18px;border:1px solid #5C4033;border-radius:5px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer}
+.store-page-btn:disabled{opacity:.4;cursor:default}
+.store-page-info{color:#6F6257}
+@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}.store-grid{grid-template-columns:repeat(3,1fr);gap:10px}.store-card{padding:10px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
 </style>
 {% endblock %}
 
@@ -94,6 +98,7 @@
         <h2>No books found.</h2>
         <p>Try another section, letter, or search term.</p>
     </div>
+    <div id="storePages" class="store-pages" hidden></div>
     {% else %}
     <div class="store-empty">
         <h2>Stocking the shelves…</h2>
@@ -112,46 +117,76 @@
   const note=document.getElementById('storeFilterNote');
   const empty=document.getElementById('storeNoResults');
   const title=document.getElementById('storeMainTitle');
-  let section='Antique', letter='', query='';
+  const pages=document.getElementById('storePages');
+  const grid=document.getElementById('storeGrid');
+  const PAGE_SIZE=25;
+  let section='Antique', letter='', query='', page=1;
 
   function sectionLabel(){
     return section===''?'All Books':(section+' Books');
   }
 
+  function gridTop(){
+    if(grid) grid.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function renderPages(total){
+    if(!pages) return;
+    if(total<=1){pages.hidden=true;pages.innerHTML='';return;}
+    pages.hidden=false;
+    pages.innerHTML='';
+    const prev=document.createElement('button');
+    prev.type='button';prev.className='store-page-btn';prev.textContent='← Prev';prev.disabled=page<=1;
+    prev.addEventListener('click',()=>{if(page>1){page--;apply();gridTop();}});
+    const info=document.createElement('span');
+    info.className='store-page-info';info.textContent='Page '+page+' of '+total;
+    const next=document.createElement('button');
+    next.type='button';next.className='store-page-btn';next.textContent='Next →';next.disabled=page>=total;
+    next.addEventListener('click',()=>{if(page<total){page++;apply();gridTop();}});
+    pages.appendChild(prev);pages.appendChild(info);pages.appendChild(next);
+  }
+
   function apply(){
     const q=query.trim().toLowerCase();
-    let visible=0;
+    const matched=[];
     cards.forEach(card=>{
       const titleText=card.dataset.title||'', author=card.dataset.author||'', publisher=card.dataset.publisher||'';
       const sectionOK=!section||card.dataset.section===section;
       const letterOK=!letter||titleText.startsWith(letter.toLowerCase());
       const searchOK=!q||titleText.includes(q)||author.includes(q)||publisher.includes(q);
-      const show=sectionOK&&letterOK&&searchOK;
-      card.hidden=!show;
-      if(show) visible++;
+      if(sectionOK&&letterOK&&searchOK) matched.push(card);
     });
-    if(empty) empty.hidden=visible!==0;
+    const totalPages=Math.max(1,Math.ceil(matched.length/PAGE_SIZE));
+    if(page>totalPages) page=totalPages;
+    const start=(page-1)*PAGE_SIZE;
+    cards.forEach(card=>{card.hidden=true;});
+    matched.forEach((card,i)=>{card.hidden=!(i>=start&&i<start+PAGE_SIZE);});
+    if(empty) empty.hidden=matched.length!==0;
     if(title) title.textContent=sectionLabel();
     if(note){
       const pieces=[sectionLabel()];
       if(letter) pieces.push(letter);
       if(q) pieces.push('“'+q+'”');
-      note.textContent=visible+' book'+(visible===1?'':'s')+' · '+pieces.join(' · ');
+      if(totalPages>1) pieces.push('Page '+page+' of '+totalPages);
+      note.textContent=matched.length+' book'+(matched.length===1?'':'s')+' · '+pieces.join(' · ');
     }
+    renderPages(totalPages);
   }
 
   sections.forEach(btn=>btn.addEventListener('click',()=>{
     section=btn.dataset.section||'';
+    page=1;
     sections.forEach(x=>x.classList.toggle('active',x===btn));
     apply();
   }));
   letters.forEach(btn=>btn.addEventListener('click',()=>{
     letter=btn.dataset.letter||'';
+    page=1;
     letters.forEach(x=>x.classList.toggle('active',x===btn));
     apply();
   }));
-  if(search) search.addEventListener('input',()=>{query=search.value;apply();});
-  if(clear) clear.addEventListener('click',()=>{search.value='';query='';apply();search.focus();});
+  if(search) search.addEventListener('input',()=>{query=search.value;page=1;apply();});
+  if(clear) clear.addEventListener('click',()=>{search.value='';query='';page=1;apply();search.focus();});
   apply();
 })();
 </script>
