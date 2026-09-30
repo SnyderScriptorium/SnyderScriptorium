@@ -484,16 +484,43 @@ def admin_update_product(product_id):
     return jsonify(payload)
 
 
+def _delete_local_cover_image(cover_url):
+    """Remove a locally uploaded cover image file. Remote URLs are untouched."""
+    if not cover_url or not isinstance(cover_url, str):
+        return
+    prefix = "/static/store_images/"
+    if not cover_url.startswith(prefix):
+        return
+    filename = cover_url[len(prefix):]
+    if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
+        return
+    path = os.path.join(STORE_IMAGE_DIR, filename)
+    # Belt and suspenders: never delete outside the store image dir.
+    if os.path.abspath(path).startswith(os.path.abspath(STORE_IMAGE_DIR) + os.sep):
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except OSError:
+            pass
+
+
 @store_bp.route("/api/store/admin/products/<int:product_id>", methods=["DELETE"])
 def admin_delete_product(product_id):
     blocked = admin_required()
     if blocked:
         return blocked
+    permanent = request.args.get("permanent") == "1"
     conn = get_db()
-    row = conn.execute("SELECT id FROM store_products WHERE id = ?", (product_id,)).fetchone()
+    row = conn.execute("SELECT id, cover_image_url FROM store_products WHERE id = ?", (product_id,)).fetchone()
     if not row:
         conn.close()
         return jsonify({"error": "Book not found."}), 404
+    if permanent:
+        conn.execute("DELETE FROM store_products WHERE id = ?", (product_id,))
+        conn.commit()
+        conn.close()
+        _delete_local_cover_image(row["cover_image_url"])
+        return jsonify({"success": True, "deleted": True})
     conn.execute("UPDATE store_products SET status = 'archived', date_updated = ? WHERE id = ?", (now_string(), product_id))
     conn.commit()
     conn.close()
