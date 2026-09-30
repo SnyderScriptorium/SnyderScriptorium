@@ -4,7 +4,10 @@
   const esc=v=>{const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML;};
   async function api(url,options={}){
     const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
-    let data={}; try{data=await r.json();}catch(_){}
+    const ct=r.headers.get('content-type')||'';
+    if(!ct.includes('application/json'))
+      throw new Error('Your admin login expired — refresh the page and log in again, then retry.');
+    const data=await r.json();
     if(!r.ok)throw new Error(data.error||`Request failed (${r.status})`);
     return data;
   }
