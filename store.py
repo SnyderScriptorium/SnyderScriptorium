@@ -255,7 +255,7 @@ def active_products(conn):
                GROUP BY content_id
            ) v ON v.content_id = p.id
            WHERE p.status = 'active'
-           ORDER BY view_count DESC, p.id DESC"""
+           ORDER BY LOWER(p.title), p.id"""
     ).fetchall()
 
 
@@ -341,7 +341,7 @@ def public_products():
         return redirect(url_for("the_hearth"))
     conn = get_db()
     rows = conn.execute(
-        "SELECT * FROM store_products WHERE status = 'active' ORDER BY id DESC"
+        "SELECT * FROM store_products WHERE status = 'active' ORDER BY LOWER(title), id"
     ).fetchall()
     conn.close()
     return jsonify([public_dict(row) for row in rows])
@@ -376,7 +376,7 @@ def admin_products():
     if blocked:
         return blocked
     conn = get_db()
-    rows = conn.execute("SELECT * FROM store_products ORDER BY id DESC").fetchall()
+    rows = conn.execute("SELECT * FROM store_products ORDER BY LOWER(title), id").fetchall()
     conn.close()
     return jsonify([public_dict(row) for row in rows])
 
