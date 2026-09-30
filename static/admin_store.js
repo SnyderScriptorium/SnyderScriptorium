@@ -71,7 +71,7 @@
       products.forEach(p=>{
         const card=document.createElement('div'); card.className='card';
         const status=p.status||'draft';
-        card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong></small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}</div>`;
+        card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong></small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
         list.appendChild(card);
       });
     }catch(e){list.innerHTML=`<p class="note">${esc(e.message)}</p>`;}
@@ -87,6 +87,7 @@
   }
   async function edit(id){try{fill(await api(`/api/store/admin/products/${id}`));}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
   async function archive(id){if(!confirm('Archive this book? It will no longer appear on the public store.'))return;try{await api(`/api/store/admin/products/${id}`,{method:'DELETE'});await load();window.showStatus&&window.showStatus('Book archived.');}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
+  async function del(id){if(!confirm('Delete this book permanently? This cannot be undone.'))return;try{await api(`/api/store/admin/products/${id}?permanent=1`,{method:'DELETE'});await load();window.showStatus&&window.showStatus('Book deleted.');}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
   function view(slug){window.open('/store/book/'+encodeURIComponent(slug),'_blank','noopener');}
   window.initStoreAdmin=mount;
   window.loadStoreAdmin=load;
@@ -94,5 +95,6 @@
   window.saveStoreProduct=save;
   window.editStoreProduct=edit;
   window.archiveStoreProduct=archive;
+  window.deleteStoreProduct=del;
   window.viewStoreProduct=view;
 })();
