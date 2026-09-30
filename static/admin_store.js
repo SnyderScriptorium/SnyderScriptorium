@@ -93,6 +93,22 @@
       });
     }catch(e){list.innerHTML=`<p class="note">${esc(e.message)}</p>`;}
   }
+  async function fileToUpload(file){
+    // Shrink phone photos so they clear the 5 MB server limit.
+    let bitmap=null;
+    try{bitmap=await createImageBitmap(file);}catch(_){return file;}
+    const MAX=1600;
+    let w=bitmap.width,h=bitmap.height;
+    if(Math.max(w,h)<=MAX&&file.size<=4500000){bitmap.close();return file;}
+    const scale=Math.min(1,MAX/Math.max(w,h));
+    w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    canvas.getContext('2d').drawImage(bitmap,0,0,w,h);
+    bitmap.close();
+    const blob=await new Promise(res=>{try{canvas.toBlob(res,'image/jpeg',0.85);}catch(_){res(null);}});
+    if(!blob)return file;
+    return new File([blob],String(file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
+  }
   async function save(){
     const title=document.getElementById('storeTitle').value.trim();
     if(!title){return window.showStatus&&window.showStatus('Give the book a title first.',true);}
@@ -109,10 +125,13 @@
     fd.append('category',document.getElementById('storeCategory').value.trim()||'Books');
     fd.append('status',document.getElementById('storeStatus').value);
     const f=document.getElementById('storePhoto').files[0];
-    if(f)fd.append('photo',f);
+    if(f)fd.append('photo',await fileToUpload(f));
     try{
       const r=await fetch(editingId?`/api/store/admin/products/${editingId}`:'/api/store/admin/products',{method:editingId?'PUT':'POST',credentials:'same-origin',body:fd});
-      let data={}; try{data=await r.json();}catch(_){ /* non-JSON: treat as failure below */ }
+      const ct=r.headers.get('content-type')||'';
+      if(!ct.includes('application/json'))
+        throw new Error('Your admin login expired — refresh the page and log in again, then retry.');
+      const data=await r.json();
       if(!r.ok||data.success===false)throw new Error(data.error||`Could not save the book (${r.status}).`);
       clearForm(); await load();
       if(window.showStatus)window.showStatus(data.photo_warning?('Book saved, but the photo was not: '+data.photo_warning):(editingId?'Book updated.':'Book added to The Scriptorium Store.'));
