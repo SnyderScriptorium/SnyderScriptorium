@@ -6,7 +6,6 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import get_db as database_get_db, init_db as database_init_db, IntegrityError
-from store import STORE_VISIBLE
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -373,15 +372,13 @@ def contact():
         conn.commit()
         conn.close()
         return render_template("contact.html", success="Your message has been sent. Thank you for reaching out.")
+    return render_template("contact.html", subject=request.args.get("subject", ""))
     return render_template("contact.html")
 
 
-@app.route("/store")
-def the_scriptorium():
-    # Bookstore hidden until inventory is ready (STORE_VISIBLE in store.py).
-    if not STORE_VISIBLE:
-        return redirect(url_for("the_hearth"))
-    return render_template("store.html")
+# NOTE: /store is served by the store blueprint (store.store_home in store.py),
+# which renders the storefront with live product data and honors STORE_VISIBLE.
+# (STORE_VISIBLE itself lives in store.py; the blueprint gates the routes.)
 
 
 @app.route("/merch")
