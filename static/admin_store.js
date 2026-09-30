@@ -26,6 +26,9 @@
           <div class="two"><div><label>ISBN</label><input id="storeIsbn" type="text"></div><div><label>Stock Quantity</label><input id="storeStock" type="number" min="0" step="1" value="0"></div></div>
           <label>Book Photo</label><input id="storePhoto" type="file" accept="image/png,image/jpeg,image/gif,image/webp">
           <img id="storePhotoPreview" alt="Photo preview" style="display:none;max-width:160px;margin-top:6px;border:1px solid #C9B78F;border-radius:4px">
+          <label>More Photos <span class="note">(optional — up to 6; customers swipe through them like eBay)</span></label><input id="storePhotos" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp">
+          <div id="storePhotosPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+          <div id="storeGalleryExisting" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
           <label>Cover Image URL <span class="note">(optional — paste a link instead of uploading)</span></label><input id="storeCover" type="url" placeholder="https://...">
           <label>Category</label><input id="storeCategory" type="text" value="Books">
           <label>Status</label><select id="storeStatus"><option value="draft">Draft</option><option value="active">Active — show on the store</option><option value="archived">Archived</option></select>
@@ -43,6 +46,16 @@
       if(f){prev.src=URL.createObjectURL(f);prev.style.display='block';}
       else{prev.src='';prev.style.display='none';}
     });
+    const multiInput=document.getElementById('storePhotos');
+    multiInput.addEventListener('change',()=>{
+      const wrap=document.getElementById('storePhotosPreview'); wrap.innerHTML='';
+      [...multiInput.files].forEach(f=>{
+        const img=document.createElement('img');
+        img.src=URL.createObjectURL(f); img.alt='New photo preview';
+        img.style.cssText='width:72px;height:72px;object-fit:cover;border:1px solid #C9B78F;border-radius:4px';
+        wrap.appendChild(img);
+      });
+    });
   }
   function clearForm(){
     editingId=null;
@@ -51,6 +64,9 @@
     ['storeTitle','storeDescription','storeIsbn','storeCover'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('storePhoto').value='';
     const prev0=document.getElementById('storePhotoPreview'); prev0.src=''; prev0.style.display='none';
+    document.getElementById('storePhotos').value='';
+    document.getElementById('storePhotosPreview').innerHTML='';
+    document.getElementById('storeGalleryExisting').innerHTML='';
     document.getElementById('storeAuthor').value='K. W. Snyder';
     document.getElementById('storePrice').value='';
     document.getElementById('storeStock').value='0';
@@ -74,6 +90,21 @@
     const prev=document.getElementById('storePhotoPreview');
     if(p.cover_image_url){prev.src=p.cover_image_url;prev.style.display='block';}
     else{prev.src='';prev.style.display='none';}
+    const ex=document.getElementById('storeGalleryExisting'); ex.innerHTML='';
+    (p.images||[]).forEach(img=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:relative;width:72px;height:72px';
+      const thumb=document.createElement('img');
+      thumb.src=img.image_url; thumb.alt='Gallery photo';
+      thumb.style.cssText='width:72px;height:72px;object-fit:cover;border:1px solid #C9B78F;border-radius:4px';
+      const x=document.createElement('button');
+      x.type='button'; x.textContent='×'; x.title='Remove this photo';
+      x.style.cssText='position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:1px solid #8a6d3b;background:#fff;color:#8a6d3b;font-weight:bold;cursor:pointer;line-height:1';
+      x.addEventListener('click',()=>window.deleteStoreImage(img.id));
+      d.appendChild(thumb); d.appendChild(x); ex.appendChild(d);
+    });
+    document.getElementById('storePhotos').value='';
+    document.getElementById('storePhotosPreview').innerHTML='';
     document.getElementById('storeCategory').value=p.category||'Books';
     document.getElementById('storeStatus').value=p.status||'draft';
     document.getElementById('storeTitle').focus();
@@ -126,6 +157,8 @@
     fd.append('status',document.getElementById('storeStatus').value);
     const f=document.getElementById('storePhoto').files[0];
     if(f)fd.append('photo',await fileToUpload(f));
+    const extras=[...document.getElementById('storePhotos').files];
+    for(const g of extras){fd.append('photos',await fileToUpload(g));}
     try{
       const r=await fetch(editingId?`/api/store/admin/products/${editingId}`:'/api/store/admin/products',{method:editingId?'PUT':'POST',credentials:'same-origin',body:fd});
       const ct=r.headers.get('content-type')||'';
@@ -140,6 +173,7 @@
   async function edit(id){try{fill(await api(`/api/store/admin/products/${id}`));}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
   async function archive(id){if(!confirm('Archive this book? It will no longer appear on the public store.'))return;try{await api(`/api/store/admin/products/${id}`,{method:'DELETE'});await load();window.showStatus&&window.showStatus('Book archived.');}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
   async function del(id){if(!confirm('Delete this book permanently? This cannot be undone.'))return;try{await api(`/api/store/admin/products/${id}?permanent=1`,{method:'DELETE'});await load();window.showStatus&&window.showStatus('Book deleted.');}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
+  async function deleteImage(id){if(!confirm('Remove this photo?'))return;try{await api(`/api/store/admin/product-images/${id}`,{method:'DELETE'});if(editingId)await edit(editingId);window.showStatus&&window.showStatus('Photo removed.');}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
   function view(slug){window.open('/store/book/'+encodeURIComponent(slug),'_blank','noopener');}
   window.initStoreAdmin=mount;
   window.loadStoreAdmin=load;
@@ -148,5 +182,6 @@
   window.editStoreProduct=edit;
   window.archiveStoreProduct=archive;
   window.deleteStoreProduct=del;
+  window.deleteStoreImage=deleteImage;
   window.viewStoreProduct=view;
 })();

@@ -4,7 +4,19 @@
 
 {% block head %}
 <style>
-.store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.5rem;font-weight:600;color:#5C4033}.store-book-stock{color:#6F6257;font-size:.95rem}.store-book-condition{margin-top:20px;padding:14px 16px;background:#F5EEE3;border:1px solid #D9C79E;border-radius:6px}.store-book-condition h3{margin:0 0 6px;color:#5C4033;font-size:1.05rem;font-weight:600}.store-book-condition p{margin:0;white-space:pre-wrap}.store-inquire{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-inquire .store-button{display:inline-block;margin-top:10px;padding:10px 18px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-buy{margin-top:25px;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-buy-price{font-size:1.25rem;font-weight:600;color:#5C4033}#paypal-button-container{margin-top:12px;max-width:420px}.store-buy-note{color:#6F6257;font-size:.9rem;min-height:1.2em}.store-buy-success{color:#3F6B3F;font-weight:600}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}@media(max-width:750px){.store-book-layout{grid-template-columns:1fr}.store-book-cover{max-width:360px}}
+.store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.5rem;font-weight:600;color:#5C4033}.store-book-stock{color:#6F6257;font-size:.95rem}.store-book-condition{margin-top:20px;padding:14px 16px;background:#F5EEE3;border:1px solid #D9C79E;border-radius:6px}.store-book-condition h3{margin:0 0 6px;color:#5C4033;font-size:1.05rem;font-weight:600}.store-book-condition p{margin:0;white-space:pre-wrap}.store-inquire{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-inquire .store-button{display:inline-block;margin-top:10px;padding:10px 18px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-buy{margin-top:25px;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-buy-price{font-size:1.25rem;font-weight:600;color:#5C4033}#paypal-button-container{margin-top:12px;max-width:420px}.store-buy-note{color:#6F6257;font-size:.9rem;min-height:1.2em}.store-buy-success{color:#3F6B3F;font-weight:600}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}
+.store-gallery-main{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border:1px solid #D9C79E;border-radius:5px;background:#EFE7D8;scrollbar-width:none}
+.store-gallery-main::-webkit-scrollbar{display:none}
+.store-gallery-slide{flex:0 0 100%;scroll-snap-align:center;display:grid;place-items:center;min-height:320px}
+.store-gallery-slide img{max-width:100%;max-height:480px;object-fit:contain;display:block}
+.store-gallery-dots{display:flex;gap:8px;justify-content:center;margin:10px 0 4px}
+.store-gallery-dots button{width:10px;height:10px;border-radius:50%;border:1px solid #8a6d3b;background:transparent;padding:0;cursor:pointer}
+.store-gallery-dots button.on{background:#8a6d3b}
+.store-gallery-thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.store-gallery-thumbs button{border:1px solid #D9C79E;border-radius:4px;padding:0;background:none;cursor:pointer;opacity:.6}
+.store-gallery-thumbs button.on{opacity:1;border-color:#8a6d3b}
+.store-gallery-thumbs img{width:56px;height:56px;object-fit:cover;border-radius:3px;display:block}
+@media(max-width:750px){.store-book-layout{grid-template-columns:1fr}.store-book-cover{max-width:360px}}
 </style>
 {% endblock %}
 
@@ -16,8 +28,43 @@
         <a class="store-back" href="{{ url_for('store.store_home') }}">← Back to the Book Store</a>
     {% endif %}
     <div class="store-book-layout">
-        {% if product.cover_image_url %}
-            <img class="store-book-cover" src="{{ product.cover_image_url }}" alt="Photograph of {{ product.title }}">
+        {% set gallery = [] %}
+        {% if product.cover_image_url %}{% set gallery = gallery + [product.cover_image_url] %}{% endif %}
+        {% for img in product.images or [] %}{% set _ = gallery.append(img.image_url) %}{% endfor %}
+        {% if gallery|length > 1 %}
+            <div>
+                <div class="store-gallery-main" id="storeGalleryMain">
+                    {% for url in gallery %}
+                    <div class="store-gallery-slide"><img src="{{ url }}" alt="Photograph of {{ product.title }} ({{ loop.index }} of {{ gallery|length }})"></div>
+                    {% endfor %}
+                </div>
+                <div class="store-gallery-dots" id="storeGalleryDots">
+                    {% for url in gallery %}
+                    <button type="button" data-i="{{ loop.index0 }}" aria-label="Show photo {{ loop.index }}"></button>
+                    {% endfor %}
+                </div>
+                <div class="store-gallery-thumbs" id="storeGalleryThumbs">
+                    {% for url in gallery %}
+                    <button type="button" data-i="{{ loop.index0 }}"><img src="{{ url }}" alt="Thumbnail {{ loop.index }}"></button>
+                    {% endfor %}
+                </div>
+                <script>
+                (function(){
+                  var main=document.getElementById('storeGalleryMain'); if(!main)return;
+                  var dots=Array.prototype.slice.call(document.querySelectorAll('#storeGalleryDots button'));
+                  var thumbs=Array.prototype.slice.call(document.querySelectorAll('#storeGalleryThumbs button'));
+                  function go(i){main.scrollTo({left:main.clientWidth*i,behavior:'smooth'});}
+                  function sync(){var i=Math.round(main.scrollLeft/Math.max(1,main.clientWidth));dots.forEach(function(d,j){d.classList.toggle('on',j===i);});thumbs.forEach(function(t,j){t.classList.toggle('on',j===i);});}
+                  dots.forEach(function(d){d.addEventListener('click',function(){go(+d.dataset.i);});});
+                  thumbs.forEach(function(t){t.addEventListener('click',function(){go(+t.dataset.i);});});
+                  var ticking=false;
+                  main.addEventListener('scroll',function(){if(!ticking){ticking=true;window.requestAnimationFrame(function(){sync();ticking=false;});}},{passive:true});
+                  sync();
+                })();
+                </script>
+            </div>
+        {% elif gallery|length == 1 %}
+            <img class="store-book-cover" src="{{ gallery[0] }}" alt="Photograph of {{ product.title }}">
         {% else %}
             <div class="store-book-cover placeholder" aria-label="No photo available">✦</div>
         {% endif %}

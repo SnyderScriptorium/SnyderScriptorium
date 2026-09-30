@@ -2,6 +2,7 @@ import glob
 import os
 import re
 import time
+import uuid
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -59,6 +60,7 @@ def ensure_store_tables():
                 "CREATE TABLE IF NOT EXISTS store_products (id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', language TEXT NOT NULL DEFAULT 'English', fulfillment_source TEXT NOT NULL DEFAULT 'Ingram Content Group', fulfillment_method TEXT NOT NULL DEFAULT 'Direct to Home', stock_quantity INTEGER NOT NULL DEFAULT 0, availability_status TEXT NOT NULL DEFAULT 'automatic', condition TEXT NOT NULL DEFAULT 'new', is_new_release INTEGER NOT NULL DEFAULT 0, is_kw_snyder INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_orders (id BIGSERIAL PRIMARY KEY, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id BIGINT NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
+                "CREATE TABLE IF NOT EXISTS store_product_images (id BIGSERIAL PRIMARY KEY, product_id BIGINT NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
             ]
         else:
             statements = [
@@ -66,6 +68,7 @@ def ensure_store_tables():
                 "CREATE TABLE IF NOT EXISTS store_products (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', language TEXT NOT NULL DEFAULT 'English', fulfillment_source TEXT NOT NULL DEFAULT 'Ingram Content Group', fulfillment_method TEXT NOT NULL DEFAULT 'Direct to Home', stock_quantity INTEGER NOT NULL DEFAULT 0, availability_status TEXT NOT NULL DEFAULT 'automatic', condition TEXT NOT NULL DEFAULT 'new', is_new_release INTEGER NOT NULL DEFAULT 0, is_kw_snyder INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id INTEGER NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
+                "CREATE TABLE IF NOT EXISTS store_product_images (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
             ]
         for statement in statements:
             conn.execute(statement)
@@ -226,6 +229,76 @@ def save_product_photo(product_id, slug, storage):
     return "/static/store_images/" + out_name
 
 
+MAX_GALLERY_IMAGES = 6
+
+
+def save_gallery_photo(product_id, slug, storage):
+    """Validate and store one gallery photo. Returns the public URL.
+
+    Unlike the cover photo, gallery files get unique names so several can
+    coexist per product.
+    """
+    filename = (storage.filename or "").strip()
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise ValueError("Photo must be a PNG, JPG, GIF, or WebP file.")
+    data = storage.read(MAX_IMAGE_BYTES + 1)
+    if not data:
+        raise ValueError("The uploaded photo was empty.")
+    if len(data) > MAX_IMAGE_BYTES:
+        raise ValueError("Photo must be smaller than 5 MB.")
+    real_ext = image_extension_for(data)
+    if not real_ext:
+        raise ValueError("That file does not look like a real image.")
+    safe_slug = slugify(slug)[:60]
+    os.makedirs(STORE_IMAGE_DIR, exist_ok=True)
+    out_name = f"{safe_slug}-{product_id}-{uuid.uuid4().hex[:8]}{real_ext}"
+    with open(os.path.join(STORE_IMAGE_DIR, out_name), "wb") as handle:
+        handle.write(data)
+    return "/static/store_images/" + out_name
+
+
+def get_product_images(conn, product_id):
+    """Gallery images for a product, oldest first. Returns [{id, image_url}]."""
+    rows = conn.execute(
+        "SELECT id, image_url FROM store_product_images WHERE product_id = ? ORDER BY position, id",
+        (product_id,),
+    ).fetchall()
+    return [{"id": row["id"], "image_url": row["image_url"]} for row in rows]
+
+
+def _request_gallery_photos():
+    """Uploaded gallery files from a multipart form (empty list if none)."""
+    if request.is_json:
+        return []
+    photos = request.files.getlist("photos")
+    return [p for p in photos if p and (p.filename or "").strip()]
+
+
+def add_gallery_photos(conn, product_id, slug):
+    """Save uploaded gallery photos; returns a list of warning strings."""
+    warnings = []
+    existing = conn.execute(
+        "SELECT COUNT(*) AS c FROM store_product_images WHERE product_id = ?", (product_id,)
+    ).fetchone()["c"]
+    position = existing
+    for storage in _request_gallery_photos():
+        if position >= MAX_GALLERY_IMAGES:
+            warnings.append(f"Only {MAX_GALLERY_IMAGES} gallery photos per book are kept.")
+            break
+        try:
+            url = save_gallery_photo(product_id, slug, storage)
+        except ValueError as exc:
+            warnings.append(str(exc))
+            continue
+        conn.execute(
+            "INSERT INTO store_product_images(product_id, image_url, position, date_created) VALUES (?, ?, ?, ?)",
+            (product_id, url, position, now_string()),
+        )
+        position += 1
+    return warnings
+
+
 def row_to_dict(row):
     item = dict(row)
     item["price"] = f"{item['price_cents'] / 100:.2f}"
@@ -302,10 +375,13 @@ def store_book(slug):
         "SELECT * FROM store_products WHERE slug = ? AND status = 'active'",
         (slug,),
     ).fetchone()
+    images = get_product_images(conn, product["id"]) if product else []
     conn.close()
     if not product:
         abort(404)
-    return render_template("store_book.html", product=public_dict(product))
+    item = public_dict(product)
+    item["images"] = images
+    return render_template("store_book.html", product=item)
 
 
 @store_bp.route("/admin/store/preview")
@@ -331,10 +407,13 @@ def admin_store_preview_book(slug):
         "SELECT * FROM store_products WHERE slug = ? AND status = 'active'",
         (slug,),
     ).fetchone()
+    images = get_product_images(conn, product["id"]) if product else []
     conn.close()
     if not product:
         abort(404)
-    return render_template("store_book.html", product=public_dict(product), preview=True)
+    item = public_dict(product)
+    item["images"] = images
+    return render_template("store_book.html", product=item, preview=True)
 
 
 @store_bp.route("/api/store/products")
@@ -358,10 +437,13 @@ def public_product(product_id):
         "SELECT * FROM store_products WHERE id = ? AND status = 'active'",
         (product_id,),
     ).fetchone()
+    images = get_product_images(conn, row["id"]) if row else []
     conn.close()
     if not row:
         return jsonify({"error": "Book not found."}), 404
-    return jsonify(public_dict(row))
+    item = public_dict(row)
+    item["images"] = images
+    return jsonify(item)
 
 
 @store_bp.route("/admin/store")
@@ -411,14 +493,21 @@ def admin_create_product():
                 )
             except ValueError as exc:
                 photo_warning = str(exc)
+        gallery_warnings = add_gallery_photos(conn, new_id, product["slug"])
+        if gallery_warnings and not photo_warning:
+            photo_warning = "; ".join(gallery_warnings)
+        elif gallery_warnings:
+            photo_warning = photo_warning + "; " + "; ".join(gallery_warnings)
         conn.commit()
         row = conn.execute("SELECT * FROM store_products WHERE id = ?", (new_id,)).fetchone()
+        images = get_product_images(conn, new_id)
     except IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify({"error": "A bookstore product with that slug already exists."}), 409
     conn.close()
     payload = {"success": True, "product": row_to_dict(row)}
+    payload["product"]["images"] = images
     if photo_warning:
         payload["photo_warning"] = photo_warning
     return jsonify(payload), 201
@@ -431,10 +520,33 @@ def admin_get_product(product_id):
         return blocked
     conn = get_db()
     row = conn.execute("SELECT * FROM store_products WHERE id = ?", (product_id,)).fetchone()
-    conn.close()
     if not row:
+        conn.close()
         return jsonify({"error": "Book not found."}), 404
-    return jsonify(row_to_dict(row))
+    item = row_to_dict(row)
+    item["images"] = get_product_images(conn, product_id)
+    conn.close()
+    return jsonify(item)
+
+
+@store_bp.route("/api/store/admin/product-images/<int:image_id>", methods=["DELETE"])
+def admin_delete_product_image(image_id):
+    """Remove one gallery photo (row + local file). The cover photo is separate."""
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id, image_url FROM store_product_images WHERE id = ?", (image_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Photo not found."}), 404
+    conn.execute("DELETE FROM store_product_images WHERE id = ?", (image_id,))
+    conn.commit()
+    conn.close()
+    _delete_local_cover_image(row["image_url"])
+    return jsonify({"success": True, "deleted": True})
 
 
 @store_bp.route("/api/store/admin/products/<int:product_id>", methods=["PUT"])
@@ -473,14 +585,21 @@ def admin_update_product(product_id):
                 )
             except ValueError as exc:
                 photo_warning = str(exc)
+        gallery_warnings = add_gallery_photos(conn, product_id, product["slug"])
+        if gallery_warnings and not photo_warning:
+            photo_warning = "; ".join(gallery_warnings)
+        elif gallery_warnings:
+            photo_warning = photo_warning + "; " + "; ".join(gallery_warnings)
         conn.commit()
         row = conn.execute("SELECT * FROM store_products WHERE id = ?", (product_id,)).fetchone()
+        images = get_product_images(conn, product_id)
     except IntegrityError:
         conn.rollback()
         conn.close()
         return jsonify({"error": "A bookstore product with that slug already exists."}), 409
     conn.close()
     payload = {"success": True, "product": row_to_dict(row)}
+    payload["product"]["images"] = images
     if photo_warning:
         payload["photo_warning"] = photo_warning
     return jsonify(payload)
@@ -518,6 +637,12 @@ def admin_delete_product(product_id):
         conn.close()
         return jsonify({"error": "Book not found."}), 404
     if permanent:
+        gallery_urls = [
+            row["image_url"]
+            for row in conn.execute(
+                "SELECT image_url FROM store_product_images WHERE product_id = ?", (product_id,)
+            ).fetchall()
+        ]
         try:
             # Order line items reference the product without ON DELETE CASCADE.
             conn.execute("DELETE FROM store_order_items WHERE product_id = ?", (product_id,))
@@ -532,6 +657,8 @@ def admin_delete_product(product_id):
             return jsonify({"error": "Could not delete the book. (%s)" % exc}), 500
         conn.close()
         _delete_local_cover_image(row["cover_image_url"])
+        for url in gallery_urls:
+            _delete_local_cover_image(url)
         return jsonify({"success": True, "deleted": True})
     conn.execute("UPDATE store_products SET status = 'archived', date_updated = ? WHERE id = ?", (now_string(), product_id))
     conn.commit()
