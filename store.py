@@ -3,6 +3,7 @@ import re
 import time
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from xml.sax.saxutils import escape as xml_escape
 
 import requests
 from flask import Blueprint, jsonify, make_response, redirect, render_template, request, session, url_for, abort
@@ -483,6 +484,42 @@ def store_book(slug):
     item = public_dict(product)
     item["images"] = images
     return render_template("store_book.html", product=item, shipping_cents=shipping_cents(1))
+
+
+@store_bp.route("/sitemap.xml")
+def sitemap():
+    """Search-engine sitemap: static pages plus every active book for sale."""
+    conn = get_db()
+    rows = active_products(conn)
+    conn.close()
+    urls = []
+    for endpoint in ("the_hearth", "about", "contact"):
+        urls.append(url_for(endpoint, _external=True))
+    urls.append(url_for("store.store_home", _external=True))
+    for row in rows:
+        item = public_dict(row)
+        if item.get("slug"):
+            urls.append(url_for("store.store_book", slug=item["slug"], _external=True))
+    seen = set()
+    unique = [u for u in urls if not (u in seen or seen.add(u))]
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u in unique:
+        lines.append("  <url><loc>%s</loc></url>" % xml_escape(u))
+    lines.append("</urlset>")
+    resp = make_response("\n".join(lines))
+    resp.headers["Content-Type"] = "application/xml"
+    return resp
+
+
+@store_bp.route("/robots.txt")
+def robots():
+    resp = make_response(
+        "User-agent: *\nAllow: /\n\nSitemap: %s\n"
+        % url_for("store.sitemap", _external=True)
+    )
+    resp.headers["Content-Type"] = "text/plain"
+    return resp
 
 
 @store_bp.route("/admin/store/preview")
