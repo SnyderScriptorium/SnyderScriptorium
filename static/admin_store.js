@@ -1,6 +1,8 @@
 (function(){
   'use strict';
   let editingId=null;
+  let allProducts=[];
+  const filters={q:'',genre:'all',letter:'all'};
   const esc=v=>{const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML;};
   async function api(url,options={}){
     const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
@@ -37,6 +39,12 @@
         <div class="preview">
           <h3 class="section-title">Books in the Store</h3>
           <p class="note">Drafts stay hidden from customers. Active books appear on The Scriptorium shelves.</p>
+          <div id="storeFilterBar" style="margin-bottom:10px">
+            <input id="storeSearch" type="search" placeholder="Search title, author, ISBN…" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+            <div id="storeGenrePills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+            <div id="storeLetterRow" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div>
+            <p class="note" id="storeFilterCount" style="margin:0"></p>
+          </div>
           <div id="storeProductList" class="list"><p class="note">Loading...</p></div>
         </div>
       </div>`;
@@ -56,6 +64,8 @@
         wrap.appendChild(img);
       });
     });
+    const searchInput=document.getElementById('storeSearch');
+    searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();renderList();});
   }
   function clearForm(){
     editingId=null;
@@ -116,24 +126,69 @@
     document.getElementById('storeStatus').value=p.status||'draft';
     document.getElementById('storeTitle').focus();
   }
+  function pillButton(label,active){
+    const b=document.createElement('button');
+    b.type='button'; b.textContent=label;
+    b.style.cssText='padding:4px 10px;border-radius:999px;border:1px solid #C9B78F;background:'+(active?'#8a6d3b':'#fff')+';color:'+(active?'#fff':'#5C4033')+';cursor:pointer;font-size:.85rem';
+    return b;
+  }
+  function buildFilterControls(){
+    const genreWrap=document.getElementById('storeGenrePills');
+    if(genreWrap){
+      genreWrap.innerHTML='';
+      const genres=[...new Set(allProducts.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+      [['all','All']].concat(genres.map(g=>[g,g])).forEach(pair=>{
+        const b=pillButton(pair[1],filters.genre===pair[0]);
+        b.addEventListener('click',()=>{filters.genre=pair[0];buildFilterControls();renderList();});
+        genreWrap.appendChild(b);
+      });
+    }
+    const letterWrap=document.getElementById('storeLetterRow');
+    if(letterWrap){
+      letterWrap.innerHTML='';
+      const letters=[...new Set(allProducts.map(p=>{const c=(p.title||'').trim().toUpperCase().charAt(0);return (c>='A'&&c<='Z')?c:'';}).filter(Boolean))].sort();
+      [['all','All']].concat(letters.map(l=>[l,l])).forEach(pair=>{
+        const b=pillButton(pair[1],filters.letter===pair[0]);
+        b.addEventListener('click',()=>{filters.letter=pair[0];buildFilterControls();renderList();});
+        letterWrap.appendChild(b);
+      });
+    }
+  }
+  function renderList(){
+    const list=document.getElementById('storeProductList'); if(!list)return;
+    const q=filters.q;
+    const items=allProducts.filter(p=>{
+      if(filters.genre!=='all'&&(p.genre||'').trim()!==filters.genre)return false;
+      if(filters.letter!=='all'&&(p.title||'').trim().toUpperCase().charAt(0)!==filters.letter)return false;
+      if(q){
+        const hay=((p.title||'')+' '+(p.author||'')+' '+(p.isbn||'')).toLowerCase();
+        if(hay.indexOf(q)<0)return false;
+      }
+      return true;
+    });
+    const count=document.getElementById('storeFilterCount');
+    if(count)count.textContent=allProducts.length?(items.length+' of '+allProducts.length+' books'):'';
+    list.innerHTML=items.length?'':'<p class="note">'+(allProducts.length?'No books match these filters.':'No books have been added to the store yet. Add your first finished book on the left.')+'</p>';
+    items.forEach(p=>{
+      const card=document.createElement('div'); card.className='card';
+      const status=p.status||'draft';
+      card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
+      list.appendChild(card);
+    });
+  }
   async function load(){
     mount();
     const list=document.getElementById('storeProductList'); if(!list)return;
     list.innerHTML='<p class="note">Loading books...</p>';
     try{
-      const products=await api('/api/store/admin/products');
+      allProducts=await api('/api/store/admin/products');
       const dl=document.getElementById('storeGenreList');
       if(dl){
-        const genres=[...new Set(products.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+        const genres=[...new Set(allProducts.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
         dl.innerHTML=genres.map(g=>`<option value="${esc(g)}">`).join('');
       }
-      list.innerHTML=products.length?'':'<p class="note">No books have been added to the store yet. Add your first finished book on the left.</p>';
-      products.forEach(p=>{
-        const card=document.createElement('div'); card.className='card';
-        const status=p.status||'draft';
-        card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
-        list.appendChild(card);
-      });
+      buildFilterControls();
+      renderList();
     }catch(e){list.innerHTML=`<p class="note">${esc(e.message)}</p>`;}
   }
   async function fileToUpload(file){
