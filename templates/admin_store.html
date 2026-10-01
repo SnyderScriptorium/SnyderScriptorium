@@ -12,14 +12,14 @@
 </head>
 <body>
 <div class="shell"><div class="panel">
-<div class="top"><div><h1>Scriptorium Book Store</h1><div class="note">Antique &amp; vintage books. Everything below is typed in by hand — no lookups, no fetching.</div></div><div class="actions"><a class="button light" href="/store" target="_blank">View Store</a><a class="button light" href="/admin">Back to Admin</a></div></div>
+<div class="top"><div><h1>Scriptorium Book Store</h1><div class="note">Antique, vintage, used &amp; new books. Everything below is typed in by hand — no lookups, no fetching.</div></div><div class="actions"><a class="button light" href="/store" target="_blank">View Store</a><a class="button light" href="/admin">Back to Admin</a></div></div>
 <div id="status" class="status"></div>
 <div class="grid">
 <section class="card"><h2>Bookshelf</h2><p class="note">Add, edit, publish, and archive books. Only books marked “Published to Store” appear on the storefront.</p><div id="productList" class="list"></div></section>
 <section class="card"><h2 id="formHeading">Add a Book</h2>
 <form id="productForm" enctype="multipart/form-data"><input id="productId" type="hidden">
 <div class="two"><div><label for="title">Title <span class="req">*</span></label><input id="title" required></div><div><label for="author">Author</label><input id="author"></div></div>
-<div class="two"><div><label for="category">Section <span class="req">*</span></label><select id="category"><option value="Antique">Antique</option><option value="Vintage">Vintage</option><option value="New">New</option></select></div><div><label for="genre">Genre <span class="help" style="display:inline">— used under New</span></label><input id="genre" placeholder="e.g. Mystery"></div></div>
+<div class="two"><div><label for="category">Section <span class="req">*</span></label><select id="category"><option value="Antique">Antique</option><option value="Vintage">Vintage</option><option value="Used">Used</option><option value="New">New</option></select></div><div><label for="genre">Genre <span class="help" style="display:inline">— used under New</span></label><input id="genre" placeholder="e.g. Mystery"></div></div>
 <div class="two"><div><label for="price">Price (USD) <span class="req">*</span></label><input id="price" type="number" min="0" step="0.01" placeholder="0.00" required></div><div><label for="publisher">Publisher</label><input id="publisher" placeholder="e.g. Grosset &amp; Dunlap"></div></div>
 <div class="two"><div><label for="publication_year">Publication Year</label><input id="publication_year" placeholder="e.g. 1913 or c. 1913"></div><div><label for="edition">Edition / Printing</label><input id="edition" placeholder="e.g. First edition, 3rd printing"></div></div>
 <div class="two"><div><label for="format">Binding</label><input id="format" value="Hardcover" placeholder="Hardcover"></div><div></div></div>
