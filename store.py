@@ -955,9 +955,25 @@ def _capture_paypal_order(conn, local_order_id, paypal_order_id):
         resp = paypal_request("POST", "/v2/checkout/orders/%s/capture" % paypal_order_id)
     except Exception as exc:
         return False, "Could not capture payment. (%s)" % exc
-    if resp.status_code not in (200, 201):
-        return False, "The payment was not completed."
     capture = resp.json() or {}
+    already_captured = (
+        resp.status_code == 422
+        and any((d or {}).get("issue") == "ORDER_ALREADY_CAPTURED"
+                for d in capture.get("details", []))
+    )
+    if already_captured:
+        # The money already moved (e.g. the buyer reloaded the return page
+        # after an earlier crash). Verify via the order itself, then record
+        # it locally exactly like a fresh capture.
+        try:
+            detail = paypal_request("GET", "/v2/checkout/orders/%s" % paypal_order_id)
+        except Exception as exc:
+            return False, "Could not verify payment. (%s)" % exc
+        if detail.status_code != 200:
+            return False, "The payment was not completed."
+        capture = detail.json() or {}
+    elif resp.status_code not in (200, 201):
+        return False, "The payment was not completed."
     if capture.get("status") != "COMPLETED":
         return False, "The payment was not completed."
     captured_cents = 0
@@ -1023,23 +1039,31 @@ def paypal_checkout_return():
     item_count = 0
     message = "We couldn't find that order. If you were charged, contact us and we'll sort it out."
     if order:
-        ok, err = _capture_paypal_order(conn, order["id"], token)
-        rows = conn.execute(
-            "SELECT p.title FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
-            " WHERE oi.order_id = ?",
-            (order["id"],),
-        ).fetchall()
-        titles = [r[0] for r in rows if r[0]]
-        item_count = len(rows)
-        if len(titles) == 1:
-            title = titles[0]
-        elif titles:
-            title = "%d books" % len(titles)
-        if ok:
-            status = "success"
-            message = ""
-        else:
-            message = err or "The payment was not completed."
+        try:
+            ok, err = _capture_paypal_order(conn, order["id"], token)
+            rows = conn.execute(
+                "SELECT p.title FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
+                " WHERE oi.order_id = ?",
+                (order["id"],),
+            ).fetchall()
+            # NOTE: rows are dicts on PostgreSQL and sqlite3.Row locally --
+            # always index by column name, never by position.
+            titles = [r["title"] for r in rows if r["title"]]
+            item_count = len(rows)
+            if len(titles) == 1:
+                title = titles[0]
+            elif titles:
+                title = "%d books" % len(titles)
+            if ok:
+                status = "success"
+                message = ""
+            else:
+                message = err or "The payment was not completed."
+        except Exception as exc:
+            print("[store] checkout return failed: %r" % (exc,), flush=True)
+            status = "error"
+            message = ("Something went wrong while confirming your payment. "
+                       "If you were charged, contact us and we'll sort it out.")
     conn.close()
     return render_template("store_checkout_result.html", status=status, title=title, message=message, item_count=item_count)
 

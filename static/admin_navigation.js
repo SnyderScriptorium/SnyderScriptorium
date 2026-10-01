@@ -2,6 +2,15 @@
 (function(){
   'use strict';
   const TABS=['write','drafts','published','manuscripts','about','kwpreview','store','stats','inbox'];
+  /* The active tab lives in the URL hash (#tab-store), so a refresh keeps
+     you exactly where you were instead of resetting to Write & Publish. */
+  function tabFromHash(){
+    try{
+      const m=(location.hash||'').match(/^#tab-([a-z]+)$/);
+      if(m&&TABS.includes(m[1]))return m[1];
+    }catch(e){}
+    return null;
+  }
   function installStoreTab(){
     const tabs=document.querySelector('.tabs');
     const dashboard=document.getElementById('dashboard');
@@ -54,6 +63,7 @@
     if(name==='store'&&typeof window.loadStoreAdmin==='function')window.loadStoreAdmin();
     if(name==='stats'&&typeof window.loadStats==='function')window.loadStats(window.analyticsPeriod||'30');
     if(name==='inbox'&&typeof window.loadInbox==='function')window.loadInbox();
+    try{if(tabFromHash()!==name)history.replaceState(null,'','#tab-'+name);}catch(e){}
   }
   function install(){
     const tabs=document.querySelector('.tabs'); if(!tabs||tabs.dataset.navigationInstalled==='1')return;
@@ -65,7 +75,10 @@
       const name=button.id.slice(4); if(!TABS.includes(name))return;
       event.preventDefault(); showTab(name);
     });
-    window.adminShowTab=showTab; window.switchTab=showTab; showTab('write');
+    window.addEventListener('hashchange',function(){
+      const name=tabFromHash(); if(name)showTab(name);
+    });
+    window.adminShowTab=showTab; window.switchTab=showTab; showTab(tabFromHash()||'write');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
