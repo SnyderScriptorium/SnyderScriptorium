@@ -482,7 +482,7 @@ def store_book(slug):
         abort(404)
     item = public_dict(product)
     item["images"] = images
-    return render_template("store_book.html", product=item)
+    return render_template("store_book.html", product=item, shipping_cents=shipping_cents(1))
 
 
 @store_bp.route("/admin/store/preview")
@@ -514,7 +514,7 @@ def admin_store_preview_book(slug):
         abort(404)
     item = public_dict(product)
     item["images"] = images
-    return render_template("store_book.html", product=item, preview=True)
+    return render_template("store_book.html", product=item, preview=True, shipping_cents=shipping_cents(1))
 
 
 @store_bp.route("/api/store/products")
@@ -773,6 +773,24 @@ def admin_delete_product(product_id):
     return jsonify({"success": True})
 
 
+# Media Mail shipping, in cents: $4.47 for the first book, $0.75 for each
+# additional book. Charged by quantity, not weight — one shared helper used
+# by both the Buy Now and cart checkout flows.
+SHIPPING_FIRST_BOOK_CENTS = 447
+SHIPPING_EXTRA_BOOK_CENTS = 75
+
+
+def shipping_cents(total_qty):
+    """Media Mail shipping for an order holding total_qty books."""
+    try:
+        qty = int(total_qty or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    if qty < 1:
+        return 0
+    return SHIPPING_FIRST_BOOK_CENTS + SHIPPING_EXTRA_BOOK_CENTS * (qty - 1)
+
+
 # --- PayPal checkout ------------------------------------------------------
 # Single-entry checkout: books are entered once in the store admin. When a
 # customer buys, the backend builds the PayPal order from the database row —
@@ -870,10 +888,12 @@ def paypal_start_checkout():
     if int(product.get("stock_quantity") or 0) < 1:
         conn.close()
         return jsonify({"error": "That book is out of stock."}), 409
-    total_cents = int(product.get("price_cents") or 0)
-    if total_cents < 1:
+    price_cents = int(product.get("price_cents") or 0)
+    if price_cents < 1:
         conn.close()
         return jsonify({"error": "That book has no price set."}), 409
+    ship_cents = shipping_cents(1)
+    total_cents = price_cents + ship_cents
     now = now_string()
     cursor = conn.execute(
         "INSERT INTO store_orders (customer_name, customer_email, total_cents, payment_status, order_status, provider, provider_order_id, date_created, date_updated)"
@@ -883,7 +903,7 @@ def paypal_start_checkout():
     local_order_id = cursor.lastrowid
     conn.execute(
         "INSERT INTO store_order_items (order_id, product_id, quantity, unit_price_cents) VALUES (?, ?, 1, ?)",
-        (local_order_id, product_id, total_cents),
+        (local_order_id, product_id, price_cents),
     )
     conn.commit()
     base = request.host_url.rstrip("/")
@@ -896,6 +916,16 @@ def paypal_start_checkout():
                 "amount": {
                     "currency_code": "USD",
                     "value": f"{total_cents / 100:.2f}",
+                    "breakdown": {
+                        "item_total": {
+                            "currency_code": "USD",
+                            "value": f"{price_cents / 100:.2f}",
+                        },
+                        "shipping": {
+                            "currency_code": "USD",
+                            "value": f"{ship_cents / 100:.2f}",
+                        },
+                    },
                 },
             }],
             "application_context": {
@@ -1161,7 +1191,7 @@ def store_cart_page():
 
 @store_bp.route("/api/store/cart")
 def api_cart():
-    """Current cart: line items, subtotal, and total item count."""
+    """Current cart: line items, subtotal, shipping, and total item count."""
     if not STORE_VISIBLE:
         return jsonify({"error": "The store is not available."}), 404
     conn = get_db()
@@ -1172,10 +1202,14 @@ def api_cart():
             _save_cart(usable)
     finally:
         conn.close()
+    count = sum(usable.values())
+    ship_cents = shipping_cents(count)
     return jsonify({
         "items": lines,
         "subtotal_cents": subtotal_cents,
-        "count": sum(usable.values()),
+        "shipping_cents": ship_cents,
+        "total_cents": subtotal_cents + ship_cents,
+        "count": count,
     })
 
 
@@ -1262,11 +1296,14 @@ def api_cart_checkout():
     if subtotal_cents < 1:
         conn.close()
         return jsonify({"error": "Your cart has no priced items."}), 409
+    total_qty = sum(line["qty"] for line in lines)
+    ship_cents = shipping_cents(total_qty)
+    total_cents = subtotal_cents + ship_cents
     now = now_string()
     cursor = conn.execute(
         "INSERT INTO store_orders (customer_name, customer_email, total_cents, payment_status, order_status, provider, provider_order_id, date_created, date_updated)"
         " VALUES (?, ?, ?, 'unpaid', 'pending', 'paypal', '', ?, ?)",
-        ("", "", subtotal_cents, now, now),
+        ("", "", total_cents, now, now),
     )
     local_order_id = cursor.lastrowid
     for line in lines:
@@ -1288,11 +1325,15 @@ def api_cart_checkout():
                 "description": description[:120],
                 "amount": {
                     "currency_code": "USD",
-                    "value": f"{subtotal_cents / 100:.2f}",
+                    "value": f"{total_cents / 100:.2f}",
                     "breakdown": {
                         "item_total": {
                             "currency_code": "USD",
                             "value": f"{subtotal_cents / 100:.2f}",
+                        },
+                        "shipping": {
+                            "currency_code": "USD",
+                            "value": f"{ship_cents / 100:.2f}",
                         },
                     },
                 },

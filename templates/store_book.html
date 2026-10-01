@@ -6,7 +6,7 @@
 <style>
 .store-book-page{max-width:1000px;margin:0 auto;padding:35px 20px 60px}.store-book-layout{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:45px;align-items:start}.store-book-cover{width:100%;aspect-ratio:2/3;object-fit:cover;background:#EFE7D8;border:1px solid #D9C79E;border-radius:5px}.store-book-cover.placeholder{display:grid;place-items:center;font:3rem Georgia,serif;color:#75695D}.store-book-details h1{margin-top:0;color:#5C4033}.store-book-author{font-size:1.1rem;color:#6F6257}.store-book-description{margin-top:24px;white-space:pre-wrap}.store-book-facts{margin:25px 0;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px}.store-book-facts div{padding:5px 0}.store-book-price{font-size:1.5rem;font-weight:600;color:#5C4033}.store-book-stock{color:#6F6257;font-size:.95rem}.store-book-condition{margin-top:20px;padding:14px 16px;background:#F5EEE3;border:1px solid #D9C79E;border-radius:6px}.store-book-condition h3{margin:0 0 6px;color:#5C4033;font-size:1.05rem;font-weight:600}.store-book-condition p{margin:0;white-space:pre-wrap}.store-inquire{margin-top:25px;padding:16px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-inquire .store-button{display:inline-block;margin-top:10px;padding:10px 18px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;text-decoration:none}.store-buy{margin-top:25px;padding:16px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:6px;color:#5C4033}.store-buy-price{font-size:1.25rem;font-weight:600;color:#5C4033}.store-buy-button{display:block;width:100%;max-width:420px;margin-top:12px;padding:13px 14px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;font-size:1.05rem;cursor:pointer}.store-buy-button:hover{filter:brightness(.94)}.store-buy-button:disabled{opacity:.55;cursor:default}
 .store-cart-button{background:#FFFDF8;color:#5C4033}
-.store-cart-button:hover{filter:none;background:#F5EEE3}.store-buy-note{color:#6F6257;font-size:.9rem;min-height:1.2em;margin:10px 0 0}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}
+.store-cart-button:hover{filter:none;background:#F5EEE3}.store-buy-note{color:#6F6257;font-size:.9rem;min-height:1.2em;margin:10px 0 0}.store-buy-shipping{color:#6F6257;font-size:.9rem;margin:8px 0 0}.store-back{display:inline-block;margin-bottom:25px;color:#5C4033}
 .store-gallery-main{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border:1px solid #D9C79E;border-radius:5px;background:#EFE7D8;scrollbar-width:none}
 .store-gallery-main::-webkit-scrollbar{display:none}
 .store-gallery-slide{flex:0 0 100%;scroll-snap-align:center;display:grid;place-items:center;min-height:320px}
@@ -95,6 +95,7 @@
             <div class="store-buy" id="storeBuy" hidden>
                 <strong>Buy this book now</strong><br>
                 <span class="store-buy-price">${{ product.price }}</span> — secure checkout
+                <p class="store-buy-shipping">+ ${{ "%.2f"|format(shipping_cents / 100) }} shipping (US Media Mail)</p>
                 <button class="store-buy-button" id="storeBuyNow" type="button">Buy Now</button>
                 <button class="store-buy-button store-cart-button" id="storeAddToCart" type="button">Add to Cart</button>
                 <p class="store-buy-note" id="storeBuyNote"></p>

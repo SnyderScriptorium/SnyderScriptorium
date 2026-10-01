@@ -19,8 +19,11 @@
 .store-cart-remove:hover{border-color:#5C4033;color:#5C4033}
 .store-cart-remove:disabled{opacity:.5;cursor:default}
 .store-cart-summary{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;margin-top:18px;text-align:right}
-.store-cart-subtotal{font-size:1.25rem;color:#5C4033;margin-bottom:14px}
+.store-cart-subtotal{font-size:1.05rem;color:#6F6257;margin-bottom:6px}
 .store-cart-subtotal strong{font-weight:600}
+.store-cart-shipping{font-size:1.05rem;color:#6F6257;margin-bottom:10px}
+.store-cart-total{font-size:1.25rem;color:#5C4033;margin-bottom:14px}
+.store-cart-total strong{font-weight:600}
 .store-cart-actions{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
 .store-cart-checkout{padding:13px 26px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;font-size:1.02rem;cursor:pointer}
 .store-cart-checkout:hover{filter:brightness(.94)}
@@ -47,6 +50,8 @@
         <div id="cartLines"></div>
         <div class="store-cart-summary">
             <div class="store-cart-subtotal">Subtotal: <strong id="cartSubtotal">$0.00</strong></div>
+            <div class="store-cart-shipping">Shipping (US Media Mail): <strong id="cartShipping">$0.00</strong></div>
+            <div class="store-cart-total">Total: <strong id="cartTotal">$0.00</strong></div>
             <div class="store-cart-actions">
                 <a class="store-cart-continue" href="{{ url_for('store.store_home') }}">Continue shopping</a>
                 <button class="store-cart-checkout" id="cartCheckoutBtn" type="button">Check Out with PayPal</button>
@@ -62,6 +67,8 @@
   var content = document.getElementById('cartContent');
   var linesBox = document.getElementById('cartLines');
   var subtotalEl = document.getElementById('cartSubtotal');
+  var shippingEl = document.getElementById('cartShipping');
+  var totalEl = document.getElementById('cartTotal');
   var checkoutBtn = document.getElementById('cartCheckoutBtn');
   var note = document.getElementById('cartNote');
 
@@ -98,6 +105,8 @@
       linesBox.appendChild(row);
     });
     subtotalEl.textContent = money(cart.subtotal_cents || 0);
+    shippingEl.textContent = money(cart.shipping_cents || 0);
+    totalEl.textContent = money(cart.total_cents || 0);
     linesBox.querySelectorAll('.store-cart-remove').forEach(function(btn){
       btn.addEventListener('click', function(){ removeLine(btn); });
     });
