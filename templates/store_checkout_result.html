@@ -16,8 +16,7 @@
     <div class="checkout-result">
         {% if status == 'success' %}
         <h1>Thank you!</h1>
-        <p>Your payment for <strong>{{ title }}</strong> was received.</p>
-        <p>We'll be in touch about shipping. {% if item_count|int > 1 %}Your books are one of a kind — they're now off the shelf.{% else %}Your book is one of a kind — it's now off the shelf.{% endif %}</p>
+        <p>Your payment for <strong>{{ title }}</strong> was received. Shipping is included — your order goes out USPS Media Mail. {% if item_count|int > 1 %}Your books are one of a kind — they're now off the shelf.{% else %}Your book is one of a kind — it's now off the shelf.{% endif %}</p>
         {% elif status == 'cancelled' %}
         <h1>Checkout cancelled</h1>
         <p>No charge was made. {% if item_count|int > 1 %}The books are still on the shelf if you'd like to come back to them.{% else %}The book is still on the shelf if you'd like to come back to it.{% endif %}</p>
