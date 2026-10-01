@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Your Cart — The Scriptorium Book Store{% endblock %}
+
+{% block head %}
+<style>
+.store-cart-page{max-width:900px;margin:0 auto;padding:35px 20px 70px}
+.store-cart-page h1{color:#5C4033;font-weight:400;margin:0 0 20px}
+.store-cart-line{display:flex;gap:16px;align-items:center;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:14px;margin-bottom:12px}
+.store-cart-thumb{width:64px;height:96px;object-fit:cover;border:1px solid #D9C79E;border-radius:4px;background:#EFE7D8;flex:0 0 auto}
+.store-cart-thumb.placeholder{display:grid;place-items:center;font:1.4rem Georgia,serif;color:#75695D}
+.store-cart-info{flex:1;min-width:0}
+.store-cart-info h2{margin:0 0 4px;font-size:1.05rem;color:#5C4033;font-weight:600}
+.store-cart-info h2 a{color:inherit;text-decoration:none}
+.store-cart-info h2 a:hover{text-decoration:underline}
+.store-cart-meta{color:#6F6257;font-size:.9rem}
+.store-cart-line-total{font-weight:600;color:#5C4033;white-space:nowrap}
+.store-cart-remove{background:none;border:1px solid #C9B78F;border-radius:5px;color:#8a6d3b;font:inherit;font-size:.85rem;padding:7px 12px;cursor:pointer}
+.store-cart-remove:hover{border-color:#5C4033;color:#5C4033}
+.store-cart-remove:disabled{opacity:.5;cursor:default}
+.store-cart-summary{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px;margin-top:18px;text-align:right}
+.store-cart-subtotal{font-size:1.25rem;color:#5C4033;margin-bottom:14px}
+.store-cart-subtotal strong{font-weight:600}
+.store-cart-actions{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
+.store-cart-checkout{padding:13px 26px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;font-size:1.02rem;cursor:pointer}
+.store-cart-checkout:hover{filter:brightness(.94)}
+.store-cart-checkout:disabled{opacity:.55;cursor:default}
+.store-cart-continue{display:inline-block;padding:13px 22px;border:1px solid #5C4033;border-radius:5px;background:#FFFDF8;color:#5C4033;font:inherit;font-size:1.02rem;text-decoration:none}
+.store-cart-note{color:#6F6257;font-size:.9rem;min-height:1.2em;margin:12px 0 0;text-align:right}
+.store-cart-empty{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:40px 24px;text-align:center;color:#6F6257}
+.store-cart-empty h2{color:#5C4033;font-weight:400;margin:0 0 10px}
+.store-cart-empty .store-cart-continue{margin-top:14px}
+@media(max-width:600px){.store-cart-line{flex-wrap:wrap}.store-cart-line-total{width:100%;text-align:right}.store-cart-summary{text-align:center}.store-cart-actions{justify-content:center}.store-cart-note{text-align:center}}
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-section store-cart-page">
+    <h1>Your Cart</h1>
+    <div id="cartLoading"><p style="color:#6F6257">Loading your cart&hellip;</p></div>
+    <div id="cartEmpty" class="store-cart-empty" hidden>
+        <h2>Your cart is empty.</h2>
+        <p>Every book on the shelf is one of a kind — go find yours.</p>
+        <a class="store-cart-continue" href="{{ url_for('store.store_home') }}">Continue shopping</a>
+    </div>
+    <div id="cartContent" hidden>
+        <div id="cartLines"></div>
+        <div class="store-cart-summary">
+            <div class="store-cart-subtotal">Subtotal: <strong id="cartSubtotal">$0.00</strong></div>
+            <div class="store-cart-actions">
+                <a class="store-cart-continue" href="{{ url_for('store.store_home') }}">Continue shopping</a>
+                <button class="store-cart-checkout" id="cartCheckoutBtn" type="button">Check Out with PayPal</button>
+            </div>
+            <p class="store-cart-note" id="cartNote"></p>
+        </div>
+    </div>
+</section>
+<script>
+(function(){
+  var loading = document.getElementById('cartLoading');
+  var emptyBox = document.getElementById('cartEmpty');
+  var content = document.getElementById('cartContent');
+  var linesBox = document.getElementById('cartLines');
+  var subtotalEl = document.getElementById('cartSubtotal');
+  var checkoutBtn = document.getElementById('cartCheckoutBtn');
+  var note = document.getElementById('cartNote');
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  function money(cents){ return '$' + (cents / 100).toFixed(2); }
+
+  function render(cart){
+    loading.hidden = true;
+    var items = cart.items || [];
+    if(!items.length){
+      emptyBox.hidden = false;
+      content.hidden = true;
+      return;
+    }
+    emptyBox.hidden = true;
+    content.hidden = false;
+    linesBox.innerHTML = '';
+    items.forEach(function(it){
+      var row = document.createElement('div');
+      row.className = 'store-cart-line';
+      var thumb = it.cover_image_url
+        ? '<img class="store-cart-thumb" src="' + esc(it.cover_image_url) + '" alt="">'
+        : '<div class="store-cart-thumb placeholder" aria-hidden="true">✦</div>';
+      row.innerHTML =
+        thumb +
+        '<div class="store-cart-info">' +
+          '<h2>' + esc(it.title) + '</h2>' +
+          '<div class="store-cart-meta">' + money(it.price_cents) + ' each &times; ' + it.qty + '</div>' +
+        '</div>' +
+        '<div class="store-cart-line-total">' + money(it.line_total_cents) + '</div>' +
+        '<button class="store-cart-remove" type="button" data-id="' + it.id + '">Remove</button>';
+      linesBox.appendChild(row);
+    });
+    subtotalEl.textContent = money(cart.subtotal_cents || 0);
+    linesBox.querySelectorAll('.store-cart-remove').forEach(function(btn){
+      btn.addEventListener('click', function(){ removeLine(btn); });
+    });
+  }
+
+  function load(){
+    fetch('/api/store/cart').then(function(r){ return r.json(); }).then(render).catch(function(){
+      loading.innerHTML = '<p style="color:#6F6257">Could not load your cart. Please refresh the page.</p>';
+    });
+  }
+
+  function removeLine(btn){
+    btn.disabled = true;
+    fetch('/api/store/cart/remove', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ product_id: btn.getAttribute('data-id') })
+    }).then(function(r){ return r.json(); }).then(function(){
+      if(window.updateStoreCartBadge) window.updateStoreCartBadge();
+      load();
+    }).catch(function(){ btn.disabled = false; });
+  }
+
+  checkoutBtn.addEventListener('click', function(){
+    checkoutBtn.disabled = true;
+    note.textContent = 'Starting secure checkout\u2026';
+    fetch('/api/store/cart/checkout', {method: 'POST'})
+      .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); })
+      .then(function(res){
+        if(res.d && res.d.approval_url){
+          window.location.href = res.d.approval_url;
+        } else {
+          throw new Error((res.d && res.d.error) || 'Could not start checkout.');
+        }
+      })
+      .catch(function(err){
+        note.textContent = 'Something went wrong: ' + (err && err.message ? err.message : 'checkout error');
+        checkoutBtn.disabled = false;
+        load(); /* the cart may have been pruned — refresh the view */
+      });
+  });
+
+  load();
+})();
+</script>
+{% endblock %}

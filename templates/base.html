@@ -52,6 +52,21 @@
             align-items: center !important;
             flex-wrap: wrap !important;
         }
+        /* Storefront cart count badge. */
+        .store-cart-badge {
+            display: inline-block;
+            min-width: 20px;
+            padding: 1px 6px;
+            margin-left: 4px;
+            border-radius: 999px;
+            background: #5C4033;
+            color: #fff;
+            font-size: .78rem;
+            line-height: 1.5;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .store-cart-badge[hidden] { display: none !important; }
         @media (max-width: 700px) {
             .site-header { width: 100% !important; padding: 18px 10px 0 !important; }
             .site-navigation { width: 100% !important; }
@@ -74,6 +89,7 @@
             <li><a href="{{ url_for('the_blog') }}">The Blog</a></li>
             <li><a href="{{ url_for('kwsnyderwriting_membership') }}">K. W. Snyder Writing</a></li>
             <li><a href="{{ url_for('store.store_home') }}">The Scriptorium</a></li>
+            <li><a href="{{ url_for('store.store_cart_page') }}">Cart <span class="store-cart-badge" id="storeCartCount" hidden></span></a></li>
             <li><a href="{{ url_for('find_us') }}">Find Us</a></li>
             <li><a href="{{ url_for('merch_shop') }}">Merch Shop</a></li>
         </ul>
@@ -90,6 +106,30 @@
     <p><a href="{{ url_for('admin_login_page') }}">Admin Login</a></p>
 </footer>
 
+<script>
+/* Keep the nav cart badge in sync with the session cart. */
+(function(){
+  function updateStoreCartBadge(){
+    var badge = document.getElementById('storeCartCount');
+    if(!badge) return;
+    fetch('/api/store/cart', {headers: {'Accept': 'application/json'}})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if(!d) return;
+        var n = d.count || 0;
+        badge.hidden = n < 1;
+        badge.textContent = n;
+      })
+      .catch(function(){ /* badge stays as-is */ });
+  }
+  window.updateStoreCartBadge = updateStoreCartBadge;
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', updateStoreCartBadge);
+  } else {
+    updateStoreCartBadge();
+  }
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1020,23 +1020,28 @@ def paypal_checkout_return():
         order = dict(row) if row else None
     title = "your book"
     status = "error"
+    item_count = 0
     message = "We couldn't find that order. If you were charged, contact us and we'll sort it out."
     if order:
         ok, err = _capture_paypal_order(conn, order["id"], token)
-        item = conn.execute(
+        rows = conn.execute(
             "SELECT p.title FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
-            " WHERE oi.order_id = ? LIMIT 1",
+            " WHERE oi.order_id = ?",
             (order["id"],),
-        ).fetchone()
-        if item:
-            title = item[0]
+        ).fetchall()
+        titles = [r[0] for r in rows if r[0]]
+        item_count = len(rows)
+        if len(titles) == 1:
+            title = titles[0]
+        elif titles:
+            title = "%d books" % len(titles)
         if ok:
             status = "success"
             message = ""
         else:
             message = err or "The payment was not completed."
     conn.close()
-    return render_template("store_checkout_result.html", status=status, title=title, message=message)
+    return render_template("store_checkout_result.html", status=status, title=title, message=message, item_count=item_count)
 
 
 @store_bp.route("/store/checkout/cancel")
@@ -1054,4 +1059,269 @@ def paypal_checkout_cancel():
         )
         conn.commit()
         conn.close()
-    return render_template("store_checkout_result.html", status="cancelled", title="", message="")
+    return render_template("store_checkout_result.html", status="cancelled", title="", message="", item_count=0)
+
+
+# ---------------------------------------------------------------------------
+# Shopping cart (session-based). Buy Now stays the instant single-book
+# checkout; Add to Cart is the parallel option for buying several books.
+# ---------------------------------------------------------------------------
+
+def _get_cart():
+    """The cart from the Flask session: {str(product_id): qty}, sanitized."""
+    cart = session.get("store_cart")
+    if not isinstance(cart, dict):
+        return {}
+    clean = {}
+    for key, value in cart.items():
+        try:
+            pid = str(int(key))
+            qty = int(value)
+        except (TypeError, ValueError):
+            continue
+        if qty > 0:
+            clean[pid] = qty
+    return clean
+
+
+def _save_cart(cart):
+    session["store_cart"] = cart
+
+
+def _cart_line_items(conn, cart):
+    """Build priced line items for a cart dict.
+
+    Returns (lines, subtotal_cents, usable_cart). Lines are dicts with
+    id/title/price_cents/qty/cover_image_url/line_total_cents. Products that
+    vanished, went inactive, or hit zero stock are dropped from usable_cart
+    (and quantities are capped at stock). Callers re-save usable_cart.
+    """
+    lines = []
+    usable = {}
+    subtotal_cents = 0
+    for pid, qty in cart.items():
+        row = conn.execute(
+            "SELECT * FROM store_products WHERE id = ?", (int(pid),)
+        ).fetchone()
+        if not row:
+            continue
+        product = row_to_dict(row)
+        if product.get("status") != "active":
+            continue
+        stock = int(product.get("stock_quantity") or 0)
+        if stock < 1:
+            continue
+        qty = min(int(qty), stock)
+        usable[pid] = qty
+        line_total = int(product.get("price_cents") or 0) * qty
+        subtotal_cents += line_total
+        lines.append({
+            "id": product["id"],
+            "title": product.get("title") or "",
+            "price_cents": int(product.get("price_cents") or 0),
+            "price": product.get("price") or "0.00",
+            "qty": qty,
+            "line_total_cents": line_total,
+            "cover_image_url": product.get("cover_image_url") or "",
+        })
+    return lines, subtotal_cents, usable
+
+
+@store_bp.route("/store/cart")
+def store_cart_page():
+    """The cart page itself; line items load from the cart API."""
+    if not STORE_VISIBLE:
+        abort(404)
+    return render_template("store_cart.html")
+
+
+@store_bp.route("/api/store/cart")
+def api_cart():
+    """Current cart: line items, subtotal, and total item count."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    conn = get_db()
+    try:
+        cart = _get_cart()
+        lines, subtotal_cents, usable = _cart_line_items(conn, cart)
+        if usable != cart:
+            _save_cart(usable)
+    finally:
+        conn.close()
+    return jsonify({
+        "items": lines,
+        "subtotal_cents": subtotal_cents,
+        "count": sum(usable.values()),
+    })
+
+
+@store_bp.route("/api/store/cart/add", methods=["POST"])
+def api_cart_add():
+    """Add a book to the session cart, capping quantity at stock."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    data = _request_data()
+    try:
+        product_id = int(data.get("product_id") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid book."}), 400
+    try:
+        quantity = int(data.get("quantity") or 1)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid quantity."}), 400
+    if quantity < 1:
+        return jsonify({"error": "Quantity must be at least 1."}), 400
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM store_products WHERE id = ? AND status = 'active'",
+            (product_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return jsonify({"error": "That book is no longer available."}), 404
+    product = row_to_dict(row)
+    stock = int(product.get("stock_quantity") or 0)
+    if stock < 1:
+        return jsonify({"error": "That book is out of stock."}), 409
+    if int(product.get("price_cents") or 0) < 1:
+        return jsonify({"error": "That book has no price set."}), 409
+    cart = _get_cart()
+    pid = str(product_id)
+    requested = cart.get(pid, 0) + quantity
+    new_qty = min(requested, stock)
+    cart[pid] = new_qty
+    _save_cart(cart)
+    return jsonify({
+        "count": sum(cart.values()),
+        "quantity": new_qty,
+        "capped": new_qty < requested,
+    })
+
+
+@store_bp.route("/api/store/cart/remove", methods=["POST"])
+def api_cart_remove():
+    """Remove a book from the session cart entirely."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    data = _request_data()
+    try:
+        pid = str(int(data.get("product_id") or 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid book."}), 400
+    cart = _get_cart()
+    cart.pop(pid, None)
+    _save_cart(cart)
+    return jsonify({"count": sum(cart.values())})
+
+
+@store_bp.route("/api/store/cart/checkout", methods=["POST"])
+def api_cart_checkout():
+    """Start checkout for the whole cart: one local order, one order-item row
+    per line, one PayPal order with an itemized breakdown. The cart is cleared
+    only after PayPal returns an order. Prices are always read server-side."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    if not paypal_configured():
+        return jsonify({"error": "Checkout is not set up yet."}), 503
+    cart = _get_cart()
+    if not cart:
+        return jsonify({"error": "Your cart is empty."}), 400
+    conn = get_db()
+    lines, subtotal_cents, usable = _cart_line_items(conn, cart)
+    if usable != cart:
+        # Something changed under the buyer (sold out, archived, removed).
+        _save_cart(usable)
+        conn.close()
+        return jsonify({"error": "A book in your cart is no longer available. Your cart has been updated — please review it."}), 409
+    if subtotal_cents < 1:
+        conn.close()
+        return jsonify({"error": "Your cart has no priced items."}), 409
+    now = now_string()
+    cursor = conn.execute(
+        "INSERT INTO store_orders (customer_name, customer_email, total_cents, payment_status, order_status, provider, provider_order_id, date_created, date_updated)"
+        " VALUES (?, ?, ?, 'unpaid', 'pending', 'paypal', '', ?, ?)",
+        ("", "", subtotal_cents, now, now),
+    )
+    local_order_id = cursor.lastrowid
+    for line in lines:
+        conn.execute(
+            "INSERT INTO store_order_items (order_id, product_id, quantity, unit_price_cents) VALUES (?, ?, ?, ?)",
+            (local_order_id, line["id"], line["qty"], line["price_cents"]),
+        )
+    conn.commit()
+    if len(lines) == 1:
+        description = lines[0]["title"]
+    else:
+        description = "%s +%d more" % (lines[0]["title"], len(lines) - 1)
+    base = request.host_url.rstrip("/")
+    try:
+        resp = paypal_request("POST", "/v2/checkout/orders", {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": str(local_order_id),
+                "description": description[:120],
+                "amount": {
+                    "currency_code": "USD",
+                    "value": f"{subtotal_cents / 100:.2f}",
+                    "breakdown": {
+                        "item_total": {
+                            "currency_code": "USD",
+                            "value": f"{subtotal_cents / 100:.2f}",
+                        },
+                    },
+                },
+                "items": [
+                    {
+                        "name": (line["title"] or "Book")[:127],
+                        "unit_amount": {
+                            "currency_code": "USD",
+                            "value": f"{line['price_cents'] / 100:.2f}",
+                        },
+                        "quantity": str(line["qty"]),
+                    }
+                    for line in lines
+                ],
+            }],
+            "application_context": {
+                "brand_name": "Snyder Scriptorium",
+                "return_url": base + "/store/checkout/return",
+                "cancel_url": base + "/store/checkout/cancel",
+                "user_action": "PAY_NOW",
+            },
+        })
+        body = resp.json()
+    except Exception as exc:
+        conn.close()
+        return jsonify({"error": "Could not start checkout. (%s)" % exc}), 502
+    if resp.status_code not in (200, 201):
+        detail = ""
+        try:
+            err = (body.get("details") or body.get("message")) if isinstance(body, dict) else ""
+            detail = (" — %s" % err) if err else ""
+        except Exception:
+            pass
+        conn.close()
+        return jsonify({"error": "Checkout was declined by PayPal (status %d%s)." % (resp.status_code, detail)}), 502
+    paypal_order_id = body.get("id", "") if isinstance(body, dict) else ""
+    approval_url = ""
+    try:
+        for link in body.get("links", []):
+            if link.get("rel") == "approve" and link.get("href"):
+                approval_url = link["href"]
+                break
+    except Exception:
+        approval_url = ""
+    if not paypal_order_id or not approval_url:
+        conn.close()
+        return jsonify({"error": "PayPal did not return an approval link. Please try again."}), 502
+    conn.execute(
+        "UPDATE store_orders SET provider_order_id = ?, date_updated = ? WHERE id = ?",
+        (paypal_order_id, now_string(), local_order_id),
+    )
+    conn.commit()
+    conn.close()
+    # Only clear the cart once the PayPal order exists.
+    _save_cart({})
+    return jsonify({"approval_url": approval_url})
