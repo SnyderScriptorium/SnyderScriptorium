@@ -32,7 +32,7 @@
           <div id="storePhotosPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
           <div id="storeGalleryExisting" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
           <label>Cover Image URL <span class="note">(optional — paste a link instead of uploading)</span></label><input id="storeCover" type="url" placeholder="https://...">
-          <div class="two"><div><label>Section</label><select id="storeCategory"><option>Antique</option><option selected>Vintage</option><option>New</option></select></div><div><label>Genre <span class="note">(used under New — e.g. Mystery)</span></label><input id="storeGenre" type="text" list="storeGenreList" placeholder="e.g. Mystery"><datalist id="storeGenreList"></datalist></div></div>
+          <div class="two"><div><label>Section</label><select id="storeCategory"><option>Antique</option><option selected>Vintage</option><option>Used</option><option>New</option></select></div><div><label>Genre <span class="note">(used under New — e.g. Mystery)</span></label><input id="storeGenre" type="text" list="storeGenreList" placeholder="e.g. Mystery"><datalist id="storeGenreList"></datalist></div></div>
           <label>Status</label><select id="storeStatus"><option value="draft">Draft</option><option value="active">Active — show on the store</option><option value="archived">Archived</option></select>
           <div class="actions"><button type="button" id="storeSaveButton" onclick="window.saveStoreProduct()">Add Book</button><button type="button" class="light" onclick="window.clearStoreForm()">Clear</button></div>
         </div>

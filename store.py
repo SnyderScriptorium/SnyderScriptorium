@@ -21,11 +21,11 @@ STORE_VISIBLE = True
 
 ALLOWED_STATUS = {"draft", "active", "archived"}
 ALLOWED_CONDITIONS = {"new", "used"}
-ALLOWED_SECTIONS = {"Antique", "Vintage", "New"}
+ALLOWED_SECTIONS = {"Antique", "Vintage", "Used", "New"}
 
 
 def canonical_section(value):
-    """Strict section for a category string: Antique, Vintage, New, or None.
+    """Strict section for a category string: Antique, Vintage, Used, New, or None.
 
     A book belongs to exactly one section tab. Anything else (legacy
     values like "Books") shows only under All Books.
@@ -128,7 +128,7 @@ def ensure_store_tables():
 
         _migrate_local_store_images(conn)
 
-        for seed_category in ("Books", "Antique", "Vintage", "New"):
+        for seed_category in ("Books", "Antique", "Vintage", "Used", "New"):
             conn.execute(
                 "INSERT INTO store_categories(name, date_created) VALUES (?, ?) ON CONFLICT(name) DO NOTHING",
                 (seed_category, now_string()),
@@ -404,7 +404,7 @@ def row_to_dict(row):
     item["is_new_release"] = bool(item.get("is_new_release"))
     item["is_kw_snyder"] = bool(item.get("is_kw_snyder"))
     item["genre"] = item.get("genre") or ""
-    # Strict storefront section: Antique, Vintage, New, or None (All Books only).
+    # Strict storefront section: Antique, Vintage, Used, New, or None (All Books only).
     item["section"] = canonical_section(item.get("category"))
     return item
 
