@@ -36,9 +36,11 @@
             <g class="view-point">
               <circle cx="{{ item.chart_x|round(2) }}" cy="{{ item.chart_y|round(2) }}" r="4"></circle>
 
+            {% if item.show_label %}
               <text x="{{ item.chart_x|round(2) }}"
                     y="{{ [item.chart_y - 12, 14]|max|round(2) }}"
                     text-anchor="middle">{{ item.views }}</text>
+            {% endif %}
 
               {% if item.show_label %}
                 <text class="x-label"

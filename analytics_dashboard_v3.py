@@ -64,6 +64,19 @@ def start_for(period):
     return None
 
 
+def _parse_loose_date(value):
+    """Parse the TEXT dates the admin stores (now_string or browser locale date)."""
+    s = str(value or "").strip()
+    if not s:
+        return None
+    for fmt in ("%m/%d/%Y %I:%M %p", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=EASTERN)
+        except ValueError:
+            continue
+    return None
+
+
 def rowval(row, index, key=None):
     if key is not None:
         try: return row[key]
@@ -350,9 +363,24 @@ def report(period, content_page=1, source_page=1, drill_path=None):
         cancelled = int(rowval(conn.execute(f"SELECT COUNT(*) AS count FROM subscriptions{cancel_where}", cancel_params).fetchone(), 0, "count") or 0)
         all_time = int(rowval(conn.execute("SELECT COUNT(*) AS total FROM page_views").fetchone(), 0, "total"))
 
+        published_in_period = 0
+        chapters_in_period = 0
+        try:
+            for row in conn.execute("SELECT date_published FROM published_posts").fetchall():
+                dt = _parse_loose_date(rowval(row, 0, "date_published"))
+                if dt and (start is None or dt >= start):
+                    published_in_period += 1
+            for row in conn.execute("SELECT date_created FROM manuscript_chapters").fetchall():
+                dt = _parse_loose_date(rowval(row, 0, "date_created"))
+                if dt and (start is None or dt >= start):
+                    chapters_in_period += 1
+        except Exception:
+            pass
+
         return {
             "period": period, "total_views": total, "total_views_today": total if period == "day" else None,
             "unique_visitors": unique, "all_time_views": all_time, "daily_views": daily,
+            "published_in_period": published_in_period, "chapters_in_period": chapters_in_period,
             "chart_max": chart_max, "chart_ticks": chart_ticks, "drilldown": drilldown, "content_views": content_page_items,
             "content_pagination": {"page": content_page, "pages": content_pages, "total": content_total},
             "traffic_sources": traffic_sources, "source_details": source_page_items,
