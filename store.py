@@ -70,7 +70,7 @@ def ensure_store_tables():
             statements = [
                 "CREATE TABLE IF NOT EXISTS store_categories (id BIGSERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL, date_created TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_products (id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', language TEXT NOT NULL DEFAULT 'English', fulfillment_source TEXT NOT NULL DEFAULT 'Ingram Content Group', fulfillment_method TEXT NOT NULL DEFAULT 'Direct to Home', stock_quantity INTEGER NOT NULL DEFAULT 0, availability_status TEXT NOT NULL DEFAULT 'automatic', condition TEXT NOT NULL DEFAULT 'new', is_new_release INTEGER NOT NULL DEFAULT 0, is_kw_snyder INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
-                "CREATE TABLE IF NOT EXISTS store_orders (id BIGSERIAL PRIMARY KEY, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_orders (id BIGSERIAL PRIMARY KEY, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', ship_name TEXT NOT NULL DEFAULT '', ship_line1 TEXT NOT NULL DEFAULT '', ship_line2 TEXT NOT NULL DEFAULT '', ship_city TEXT NOT NULL DEFAULT '', ship_state TEXT NOT NULL DEFAULT '', ship_postal TEXT NOT NULL DEFAULT '', ship_country TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id BIGINT NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS store_product_images (id BIGSERIAL PRIMARY KEY, product_id BIGINT NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_images (id BIGSERIAL PRIMARY KEY, data BYTEA NOT NULL, mime TEXT NOT NULL DEFAULT 'image/jpeg', date_created TEXT NOT NULL)",
@@ -79,7 +79,7 @@ def ensure_store_tables():
             statements = [
                 "CREATE TABLE IF NOT EXISTS store_categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, date_created TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_products (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, slug TEXT UNIQUE NOT NULL, author TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', price_cents INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'Paperback', isbn TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Books', language TEXT NOT NULL DEFAULT 'English', fulfillment_source TEXT NOT NULL DEFAULT 'Ingram Content Group', fulfillment_method TEXT NOT NULL DEFAULT 'Direct to Home', stock_quantity INTEGER NOT NULL DEFAULT 0, availability_status TEXT NOT NULL DEFAULT 'automatic', condition TEXT NOT NULL DEFAULT 'new', is_new_release INTEGER NOT NULL DEFAULT 0, is_kw_snyder INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'draft', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
-                "CREATE TABLE IF NOT EXISTS store_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_name TEXT NOT NULL DEFAULT '', customer_email TEXT NOT NULL DEFAULT '', total_cents INTEGER NOT NULL DEFAULT 0, payment_status TEXT NOT NULL DEFAULT 'unpaid', order_status TEXT NOT NULL DEFAULT 'pending', provider TEXT NOT NULL DEFAULT '', provider_order_id TEXT NOT NULL DEFAULT '', ship_name TEXT NOT NULL DEFAULT '', ship_line1 TEXT NOT NULL DEFAULT '', ship_line2 TEXT NOT NULL DEFAULT '', ship_city TEXT NOT NULL DEFAULT '', ship_state TEXT NOT NULL DEFAULT '', ship_postal TEXT NOT NULL DEFAULT '', ship_country TEXT NOT NULL DEFAULT '', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id INTEGER NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS store_product_images (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_images (id INTEGER PRIMARY KEY AUTOINCREMENT, data BLOB NOT NULL, mime TEXT NOT NULL DEFAULT 'image/jpeg', date_created TEXT NOT NULL)",
@@ -102,6 +102,13 @@ def ensure_store_tables():
                 "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS condition_notes TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE store_products ADD COLUMN IF NOT EXISTS genre TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_name TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_line1 TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_line2 TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_city TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_state TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_postal TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_country TEXT NOT NULL DEFAULT ''",
             ]
         else:
             existing = {row["name"] for row in conn.execute("PRAGMA table_info(store_products)").fetchall()}
@@ -123,6 +130,11 @@ def ensure_store_tables():
             ]:
                 if name not in existing:
                     migrations.append(f"ALTER TABLE store_products ADD COLUMN {name} {definition}")
+            existing_orders = {row["name"] for row in conn.execute("PRAGMA table_info(store_orders)").fetchall()}
+            for name in ("ship_name", "ship_line1", "ship_line2", "ship_city",
+                         "ship_state", "ship_postal", "ship_country"):
+                if name not in existing_orders:
+                    migrations.append(f"ALTER TABLE store_orders ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
         for statement in migrations:
             conn.execute(statement)
 
@@ -970,6 +982,7 @@ def paypal_start_checkout():
                 "return_url": base + "/store/checkout/return",
                 "cancel_url": base + "/store/checkout/cancel",
                 "user_action": "PAY_NOW",
+                "shipping_preference": "GET_FROM_FILE",
             },
         })
         body = resp.json()
@@ -1004,6 +1017,108 @@ def paypal_start_checkout():
     conn.commit()
     conn.close()
     return jsonify({"approval_url": approval_url})
+
+
+def _notify_money(cents):
+    return "$%.2f" % (int(cents or 0) / 100)
+
+
+def _send_order_notification(conn, local_order_id):
+    """Email the owner a packing slip the moment an order is captured.
+
+    Never raises: a failed or unconfigured notification must not break
+    checkout. Returns True if an email was actually sent.
+    """
+    try:
+        smtp_host = (os.environ.get("SMTP_HOST") or "").strip()
+        notify_to = (os.environ.get("NOTIFY_EMAIL_TO") or "").strip()
+        if not smtp_host or not notify_to:
+            print("[store] order notification skipped: SMTP_HOST/NOTIFY_EMAIL_TO not set", flush=True)
+            return False
+        try:
+            smtp_port = int((os.environ.get("SMTP_PORT") or "587").strip())
+        except (TypeError, ValueError):
+            smtp_port = 587
+        smtp_user = (os.environ.get("SMTP_USER") or "").strip()
+        smtp_pass = os.environ.get("SMTP_PASS") or ""
+        notify_from = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or smtp_user
+
+        row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
+        if not row:
+            print("[store] order notification skipped: order %s not found" % local_order_id, flush=True)
+            return False
+        order = dict(row)
+        items = conn.execute(
+            "SELECT p.title, oi.quantity, oi.unit_price_cents"
+            " FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
+            " WHERE oi.order_id = ? ORDER BY oi.id",
+            (local_order_id,),
+        ).fetchall()
+
+        item_lines = []
+        subtotal = 0
+        for item in items:
+            item = dict(item)
+            qty = int(item.get("quantity") or 1)
+            unit = int(item.get("unit_price_cents") or 0)
+            subtotal += qty * unit
+            item_lines.append("  %s x%d @ %s = %s" % (
+                item.get("title") or "Book", qty, _notify_money(unit), _notify_money(qty * unit)))
+        total = int(order.get("total_cents") or 0)
+        shipping = total - subtotal
+
+        addr_lines = [
+            order.get("ship_name") or "",
+            order.get("ship_line1") or "",
+            order.get("ship_line2") or "",
+        ]
+        city_state = ", ".join(p for p in [order.get("ship_city") or "", order.get("ship_state") or ""] if p)
+        postal = order.get("ship_postal") or ""
+        if city_state and postal:
+            addr_lines.append("%s %s" % (city_state, postal))
+        elif city_state or postal:
+            addr_lines.append(city_state or postal)
+        if order.get("ship_country"):
+            addr_lines.append(order.get("ship_country"))
+        addr_lines = [line for line in addr_lines if line.strip()]
+
+        body = "\n".join([
+            "New book order #%s — %s" % (local_order_id, _notify_money(total)),
+            "Snyder Scriptorium",
+            "",
+            "Order #%s — %s" % (local_order_id, order.get("date_created") or ""),
+            "",
+            "Items:",
+        ] + item_lines + [
+            "",
+            "Subtotal: %s" % _notify_money(subtotal),
+            "Shipping (US Media Mail): %s" % _notify_money(shipping),
+            "Total captured: %s" % _notify_money(total),
+            "",
+            "Buyer:",
+            "  %s" % (order.get("customer_name") or ""),
+            "  %s" % (order.get("customer_email") or ""),
+            "",
+            "Ship to:",
+        ] + ["  %s" % line for line in addr_lines])
+
+        import smtplib
+        from email.message import EmailMessage
+        msg = EmailMessage()
+        msg["Subject"] = "New book order #%s — %s" % (local_order_id, _notify_money(total))
+        msg["From"] = notify_from
+        msg["To"] = notify_to
+        msg.set_content(body)
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+            server.starttls()
+            if smtp_user:
+                server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        print("[store] order notification sent for order %s" % local_order_id, flush=True)
+        return True
+    except Exception as exc:
+        print("[store] order notification failed for order %s: %r" % (local_order_id, exc), flush=True)
+        return False
 
 
 def _capture_paypal_order(conn, local_order_id, paypal_order_id):
@@ -1057,11 +1172,31 @@ def _capture_paypal_order(conn, local_order_id, paypal_order_id):
     payer = capture.get("payer") or {}
     payer_name = payer.get("name") or {}
     full_name = (str(payer_name.get("given_name", "")) + " " + str(payer_name.get("surname", ""))).strip()
+    # Shipping address comes back on the purchase unit when the order was
+    # created with shipping_preference GET_FROM_FILE.
+    shipping = {}
+    try:
+        shipping = (capture.get("purchase_units") or [{}])[0].get("shipping") or {}
+    except (IndexError, AttributeError, TypeError):
+        shipping = {}
+    ship_addr = shipping.get("address") or {}
+    ship_name = str((shipping.get("name") or {}).get("full_name", "") or "").strip()
     now = now_string()
     conn.execute(
         "UPDATE store_orders SET payment_status = 'paid', order_status = 'processing',"
-        " customer_name = ?, customer_email = ?, date_updated = ? WHERE id = ?",
-        (full_name, payer.get("email_address", ""), now, local_order_id),
+        " customer_name = ?, customer_email = ?,"
+        " ship_name = ?, ship_line1 = ?, ship_line2 = ?, ship_city = ?,"
+        " ship_state = ?, ship_postal = ?, ship_country = ?,"
+        " date_updated = ? WHERE id = ?",
+        (full_name, payer.get("email_address", ""),
+         ship_name,
+         str(ship_addr.get("address_line_1", "") or ""),
+         str(ship_addr.get("address_line_2", "") or ""),
+         str(ship_addr.get("admin_area_2", "") or ""),
+         str(ship_addr.get("admin_area_1", "") or ""),
+         str(ship_addr.get("postal_code", "") or ""),
+         str(ship_addr.get("country_code", "") or ""),
+         now, local_order_id),
     )
     items = conn.execute(
         "SELECT product_id, quantity FROM store_order_items WHERE order_id = ?",
@@ -1083,6 +1218,12 @@ def _capture_paypal_order(conn, local_order_id, paypal_order_id):
         (now, local_order_id),
     )
     conn.commit()
+    try:
+        _send_order_notification(conn, local_order_id)
+    except Exception as exc:
+        # The sale is already recorded; a notification failure must not
+        # undo or break checkout.
+        print("[store] order notification failed: %r" % (exc,), flush=True)
     return True, None
 
 
@@ -1391,6 +1532,7 @@ def api_cart_checkout():
                 "return_url": base + "/store/checkout/return",
                 "cancel_url": base + "/store/checkout/cancel",
                 "user_action": "PAY_NOW",
+                "shipping_preference": "GET_FROM_FILE",
             },
         })
         body = resp.json()
