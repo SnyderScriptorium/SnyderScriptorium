@@ -352,6 +352,9 @@ def submit_reader_feedback(book_id, chapter_id):
         conn.close()
         abort(404)
     subject = f"Reader Feedback — {book['title']} — Chapter {chapter['chapter_number']}: {chapter['title']}"
+    if _is_email_blocked(conn, member["email"]):
+        conn.close()
+        return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_sent="1"))
     conn.execute("INSERT INTO inbox_messages(message_type, name, email, subject, message, post_id, book_id, chapter_id, member_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", ("reader_feedback", "Subscriber Reader", member["email"], subject, feedback, None, book_id, chapter_id, member_id))
     conn.commit()
     conn.close()
@@ -368,6 +371,9 @@ def contact():
         if not name or not email or not message:
             return render_template("contact.html", error="Please provide your name, email, and message.", name=name, email=email, subject=subject, message=message)
         conn = get_db()
+        if _is_email_blocked(conn, email):
+            conn.close()
+            return render_template("contact.html", success="Your message has been sent. Thank you for reaching out.")
         conn.execute("INSERT INTO inbox_messages(message_type, name, email, subject, message) VALUES (?, ?, ?, ?, ?)", ("contact", name, email, subject, message))
         conn.commit()
         conn.close()
@@ -469,6 +475,55 @@ def inbox_unread_count():
     total = conn.execute("SELECT COUNT(*) FROM inbox_messages").fetchone()[0]
     conn.close()
     return jsonify({"unread": int(unread or 0), "total": int(total or 0)})
+
+
+def _is_email_blocked(conn, email):
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    try:
+        row = conn.execute("SELECT 1 FROM blocked_senders WHERE email = ?", (email,)).fetchone()
+    except Exception:
+        return False
+    return bool(row)
+
+
+@app.route("/api/inbox/<int:message_id>/block-email", methods=["POST"])
+@admin_required
+def block_inbox_email(message_id):
+    conn = get_db()
+    msg = conn.execute("SELECT id, email FROM inbox_messages WHERE id = ?", (message_id,)).fetchone()
+    if not msg:
+        conn.close()
+        return jsonify({"error": "Inbox message not found."}), 404
+    email = (msg["email"] or "").strip().lower()
+    if not email:
+        conn.close()
+        return jsonify({"error": "This message has no email address to block."}), 400
+    if not conn.execute("SELECT 1 FROM blocked_senders WHERE email = ?", (email,)).fetchone():
+        conn.execute("INSERT INTO blocked_senders (email) VALUES (?)", (email,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "email": email})
+
+
+@app.route("/api/blocked-senders")
+@admin_required
+def list_blocked_senders():
+    conn = get_db()
+    rows = conn.execute("SELECT email, created_at FROM blocked_senders ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/blocked-senders/<path:email>", methods=["DELETE"])
+@admin_required
+def unblock_sender(email):
+    conn = get_db()
+    conn.execute("DELETE FROM blocked_senders WHERE email = ?", ((email or "").strip().lower(),))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
 
 
 @app.route("/api/drafts", methods=["GET"])
