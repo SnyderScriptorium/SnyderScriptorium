@@ -461,23 +461,9 @@ def update_inbox_message(message_id):
     return jsonify({"success": True})
 
 
-@app.route("/api/inbox/<int:message_id>", methods=["DELETE"])
-@admin_required
-def delete_inbox_message(message_id):
-    conn = get_db()
-    row = conn.execute("SELECT id FROM inbox_messages WHERE id = ?", (message_id,)).fetchone()
-    if not row:
-        conn.close()
-        return jsonify({"error": "Inbox message not found."}), 404
-    conn.execute("DELETE FROM inbox_messages WHERE id = ?", (message_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
-
-
 @app.route("/api/inbox/count")
 @admin_required
-def inbox_count():
+def inbox_unread_count():
     conn = get_db()
     unread = conn.execute("SELECT COUNT(*) FROM inbox_messages WHERE is_read = 0").fetchone()[0]
     total = conn.execute("SELECT COUNT(*) FROM inbox_messages").fetchone()[0]
