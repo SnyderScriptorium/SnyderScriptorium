@@ -1121,6 +1121,53 @@ def _send_order_notification(conn, local_order_id):
         return False
 
 
+def _notify_inbox_order(conn, local_order_id):
+    """Drop a 'new order' message into the admin inbox when an order is captured.
+
+    Credential-free companion to the email packing slip: the admin inbox's
+    unread badge fires the moment this lands, no SMTP setup needed.
+    Never raises: a notification failure must not break checkout.
+    """
+    try:
+        row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
+        if not row:
+            return False
+        order = dict(row)
+        items = conn.execute(
+            "SELECT p.title, oi.quantity, oi.unit_price_cents"
+            " FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
+            " WHERE oi.order_id = ? ORDER BY oi.id",
+            (local_order_id,),
+        ).fetchall()
+        lines = []
+        for item in items:
+            item = dict(item)
+            qty = int(item.get("quantity") or 1)
+            lines.append("%s x%d — %s" % (item.get("title") or "Book", qty, _notify_money(item.get("unit_price_cents"))))
+        total = _notify_money(order.get("total_cents"))
+        ship = " ".join(p for p in [
+            order.get("ship_name") or order.get("customer_name") or "",
+            order.get("ship_line1") or "",
+            order.get("ship_line2") or "",
+            order.get("ship_city") or "",
+            order.get("ship_state") or "",
+            order.get("ship_postal") or "",
+        ] if p).strip()
+        buyer_name = order.get("customer_name") or "Buyer"
+        buyer_email = order.get("customer_email") or ""
+        body = "New order #%s\n%s\nTotal: %s\nShip to: %s\nBuyer: %s <%s>" % (
+            local_order_id, "\n".join(lines), total, ship or "—", buyer_name, buyer_email)
+        conn.execute(
+            "INSERT INTO inbox_messages(message_type, name, email, subject, message) VALUES (?, ?, ?, ?, ?)",
+            ("order", buyer_name, buyer_email, "New order #%s — %s" % (local_order_id, total), body),
+        )
+        conn.commit()
+        return True
+    except Exception as exc:
+        print("[store] inbox order notification failed: %r" % (exc,), flush=True)
+        return False
+
+
 def _capture_paypal_order(conn, local_order_id, paypal_order_id):
     """Capture an approved PayPal order, verify the amount server-side, then
     record payment and decrement stock. Idempotent: already-paid orders just
@@ -1224,6 +1271,10 @@ def _capture_paypal_order(conn, local_order_id, paypal_order_id):
         # The sale is already recorded; a notification failure must not
         # undo or break checkout.
         print("[store] order notification failed: %r" % (exc,), flush=True)
+    try:
+        _notify_inbox_order(conn, local_order_id)
+    except Exception as exc:
+        print("[store] inbox order notification failed: %r" % (exc,), flush=True)
     return True, None
 
 
