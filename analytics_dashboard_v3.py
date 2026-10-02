@@ -323,12 +323,13 @@ def report(period, content_page=1, source_page=1, drill_path=None):
                 "unique_visitors": int(rowval(row, 6, "unique_visitors") or 0),
                 "path": path,
             })
-        # One row per individual page: merge rows that resolve to the same page+title
-        # (e.g. "/" tracked under different page types used to show as three "Home" rows).
+        # One row per displayed title: merge rows that show the same title
+        # (e.g. "/" vs "/home", or legacy reclassifications, used to repeat "Home").
+        # The highest-traffic row's path is kept so per-post drilldown still works.
         _merged = []
         _seen = {}
         for item in content:
-            _key = (item["path"], item["title"])
+            _key = str(item["title"]).strip().lower()
             if _key in _seen:
                 _m = _merged[_seen[_key]]
                 _m["views"] += item["views"]
