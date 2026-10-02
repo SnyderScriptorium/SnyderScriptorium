@@ -363,6 +363,30 @@ def report(period, content_page=1, source_page=1, drill_path=None):
         cancelled = int(rowval(conn.execute(f"SELECT COUNT(*) AS count FROM subscriptions{cancel_where}", cancel_params).fetchone(), 0, "count") or 0)
         all_time = int(rowval(conn.execute("SELECT COUNT(*) AS total FROM page_views").fetchone(), 0, "total"))
 
+        # Blogger-style overview rows (Eastern day/month boundaries, converted to UTC for the query)
+        _now_e = datetime.now(EASTERN)
+        _day_start = _now_e.replace(hour=0, minute=0, second=0, microsecond=0)
+        _month_start = _day_start.replace(day=1)
+        _yday_start = _day_start - timedelta(days=1)
+        _last_month_start = (_month_start - timedelta(days=1)).replace(day=1)
+        _utc = lambda dt: dt.astimezone(ZoneInfo("UTC")).isoformat()
+        views_today = views_yesterday = views_this_month = views_last_month = 0
+        try:
+            views_today = int(rowval(conn.execute(
+                "SELECT COUNT(*) AS c FROM page_views WHERE viewed_at >= ?",
+                [_utc(_day_start)]).fetchone(), 0, "c") or 0)
+            views_yesterday = int(rowval(conn.execute(
+                "SELECT COUNT(*) AS c FROM page_views WHERE viewed_at >= ? AND viewed_at < ?",
+                [_utc(_yday_start), _utc(_day_start)]).fetchone(), 0, "c") or 0)
+            views_this_month = int(rowval(conn.execute(
+                "SELECT COUNT(*) AS c FROM page_views WHERE viewed_at >= ?",
+                [_utc(_month_start)]).fetchone(), 0, "c") or 0)
+            views_last_month = int(rowval(conn.execute(
+                "SELECT COUNT(*) AS c FROM page_views WHERE viewed_at >= ? AND viewed_at < ?",
+                [_utc(_last_month_start), _utc(_month_start)]).fetchone(), 0, "c") or 0)
+        except Exception:
+            pass
+
         published_in_period = 0
         chapters_in_period = 0
         try:
@@ -380,6 +404,8 @@ def report(period, content_page=1, source_page=1, drill_path=None):
         return {
             "period": period, "total_views": total, "total_views_today": total if period == "day" else None,
             "unique_visitors": unique, "all_time_views": all_time, "daily_views": daily,
+            "views_today": views_today, "views_yesterday": views_yesterday,
+            "views_this_month": views_this_month, "views_last_month": views_last_month,
             "published_in_period": published_in_period, "chapters_in_period": chapters_in_period,
             "chart_max": chart_max, "chart_ticks": chart_ticks, "drilldown": drilldown, "content_views": content_page_items,
             "content_pagination": {"page": content_page, "pages": content_pages, "total": content_total},
