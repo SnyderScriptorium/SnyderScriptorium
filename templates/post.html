@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ post['title'] }} — Snyder Scriptorium{% endblock %}
+{% block meta_description %}{{ post['content']|striptags|truncate(160)|trim }}{% endblock %}
 {% block content %}
 <article class="content-section" style="max-width:780px;margin:0 auto;">
   <p>
