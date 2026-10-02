@@ -39,43 +39,161 @@ The Hearth — Snyder Scriptorium
         margin-right: auto !important;
         text-align: center !important;
     }
-    body:has(.hearth-page) .home-image-container {
+
+    /* --- Hero: shrunken image beside the words, no buttons --- */
+    body:has(.hearth-page) .hearth-hero {
         display: flex !important;
-        justify-content: center !important;
+        gap: 40px !important;
         align-items: center !important;
+        background: #FFFDF8 !important;
+        border: 1px solid #C9B78F !important;
+        border-radius: 12px !important;
+        padding: 36px 40px !important;
         margin: 28px auto !important;
+        text-align: left !important;
     }
-    body:has(.hearth-page) .full-width-image {
-        display: block !important;
-        width: min(100%, 850px) !important;
+    body:has(.hearth-page) .hearth-hero img {
+        width: 340px !important;
+        max-width: 100% !important;
         height: auto !important;
+        border-radius: 10px !important;
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+    }
+    body:has(.hearth-page) .hearth-hero-text {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    body:has(.hearth-page) .hearth-kicker {
+        font-size: 0.95rem !important;
+        letter-spacing: 0.35em !important;
+        text-transform: uppercase !important;
+        color: #8A6A4A !important;
+        font-weight: 600 !important;
+        margin: 0 0 12px !important;
+        text-align: left !important;
+        width: 100% !important;
+    }
+    body:has(.hearth-page) .hearth-hero h2 {
+        font-family: "Cormorant Garamond", "Times New Roman", Times, Georgia, serif !important;
+        font-size: 2.3rem !important;
+        line-height: 1.15 !important;
+        color: #24333B !important;
+        font-weight: 600 !important;
+        margin: 0 0 16px !important;
+        text-align: left !important;
+        width: 100% !important;
+    }
+    body:has(.hearth-page) .hearth-hero-text p.hearth-sub {
+        font-size: 1.15rem !important;
+        line-height: 1.6 !important;
+        color: #3D4C54 !important;
+        margin: 0 !important;
+        text-align: left !important;
+        width: 100% !important;
+    }
+
+    /* --- Ornament divider --- */
+    .hearth-divider {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 14px !important;
+        margin: 10px auto 6px !important;
+        color: #8A6A4A !important;
+        font-size: 1.3rem !important;
+    }
+    .hearth-divider span {
+        display: inline-block !important;
+        width: 130px !important;
+        border-top: 1px solid #C9B78F !important;
+    }
+
+    /* --- Contents: chapter titles are the doors --- */
+    body:has(.hearth-page) .hearth-contents-heading {
+        font-size: 0.95rem !important;
+        letter-spacing: 0.35em !important;
+        text-transform: uppercase !important;
+        color: #8A6A4A !important;
+        font-weight: 600 !important;
+        margin: 18px 0 6px !important;
+    }
+    body:has(.hearth-page) .hearth-entry {
+        margin: 30px 0 !important;
+    }
+    body:has(.hearth-page) .hearth-entry h3 {
+        font-family: "Cormorant Garamond", "Times New Roman", Times, Georgia, serif !important;
+        font-size: 1.75rem !important;
+        font-weight: 600 !important;
+        margin: 0 0 8px !important;
+    }
+    body:has(.hearth-page) .hearth-entry h3 a {
+        color: #5C4033 !important;
+        text-decoration: none !important;
+    }
+    body:has(.hearth-page) .hearth-entry h3 a:hover {
+        text-decoration: underline !important;
+    }
+    body:has(.hearth-page) .hearth-entry p {
+        font-size: 1.12rem !important;
+        color: #3D4C54 !important;
         margin: 0 auto !important;
+    }
+    body:has(.hearth-page) .hearth-events {
+        margin: 34px auto 10px !important;
+        font-size: 1.12rem !important;
+    }
+    body:has(.hearth-page) .hearth-events a {
+        color: #5C4033 !important;
+    }
+
+    @media (max-width: 760px) {
+        body:has(.hearth-page) .hearth-hero {
+            flex-direction: column !important;
+            text-align: center !important;
+            padding: 28px 24px !important;
+            gap: 24px !important;
+        }
+        body:has(.hearth-page) .hearth-hero img {
+            width: min(100%, 380px) !important;
+        }
+        body:has(.hearth-page) .hearth-kicker,
+        body:has(.hearth-page) .hearth-hero h2,
+        body:has(.hearth-page) .hearth-hero-text p.hearth-sub {
+            text-align: center !important;
+        }
     }
 </style>
 
 <section class="hearth-page">
-    <div class="hearth-intro">
-        <p>
-            Welcome to the Hearth of the Snyder Scriptorium —
-            a quiet corner for books, stories, curiosity, and
-            the work of writing.
-        </p>
-    </div>
-
-    <div class="home-image-container">
+    <div class="hearth-hero">
         <img src="{{ url_for('static', filename='Home_library_PIc.png') }}"
-             alt="A cozy library representing the Snyder Scriptorium"
-             class="full-width-image">
+             alt="A cozy library representing the Snyder Scriptorium">
+        <div class="hearth-hero-text">
+            <p class="hearth-kicker">The Hearth</p>
+            <h2>An old-soul bookstore, run by a working writer.</h2>
+            <p class="hearth-sub">Antique, vintage &amp; new books, each one photographed and described by hand. Plus the blog, and original fiction from the writing desk.</p>
+        </div>
     </div>
 
-    <section class="content-section">
-       
-        <p>
-            This is a place built around books, writing, thoughtful
-            conversation, and the endless things worth being
-            curious about.
-        </p>
-      
-    </section>
+    <div class="hearth-divider" aria-hidden="true"><span></span>&#10086;<span></span></div>
+
+    <nav class="hearth-contents" aria-label="Contents">
+        <p class="hearth-contents-heading">Contents</p>
+        <div class="hearth-entry">
+            <h3><a href="{{ url_for('store.store_home') }}">The Book Store</a></h3>
+            <p>Antique, vintage &amp; new books &mdash; one-of-a-kind copies; when a book sells, it&rsquo;s gone.</p>
+        </div>
+        <div class="hearth-entry">
+            <h3><a href="{{ url_for('the_blog') }}">The Blog</a></h3>
+            <p>The Curiosity Cabinet, book reviews, and notes from behind the counter.</p>
+        </div>
+        <div class="hearth-entry">
+            <h3><a href="{{ url_for('kwsnyderwriting_membership') }}">K.W. Snyder Writing</a></h3>
+            <p>Original fiction, including the Room With No Doors project.</p>
+        </div>
+    </nav>
+
+    <p class="hearth-events">Catching us in person? <a href="{{ url_for('find_us') }}">See where we&rsquo;ll be next</a></p>
 </section>
 {% endblock %}
