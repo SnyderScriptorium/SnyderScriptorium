@@ -2,3 +2,4 @@ Flask==3.0.2
 gunicorn==21.2.0
 psycopg[binary]==3.2.10
 requests==2.32.4
+pywebpush==1.14.0

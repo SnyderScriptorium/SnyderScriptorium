@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, g
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, g, Response, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import get_db as database_get_db, init_db as database_init_db, IntegrityError
@@ -358,6 +358,12 @@ def submit_reader_feedback(book_id, chapter_id):
     conn.execute("INSERT INTO inbox_messages(message_type, name, email, subject, message, post_id, book_id, chapter_id, member_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", ("reader_feedback", "Subscriber Reader", member["email"], subject, feedback, None, book_id, chapter_id, member_id))
     conn.commit()
     conn.close()
+    try:
+        from push_notifications import send_push
+        send_push("New reader feedback", subject[:90],
+                  url="/admin#tab-inbox", tag="inbox-feedback")
+    except Exception:
+        pass
     return redirect(url_for("view_chapter", book_id=book_id, chapter_id=chapter_id, feedback_sent="1"))
 
 
@@ -377,6 +383,13 @@ def contact():
         conn.execute("INSERT INTO inbox_messages(message_type, name, email, subject, message) VALUES (?, ?, ?, ?, ?)", ("contact", name, email, subject, message))
         conn.commit()
         conn.close()
+        try:
+            from push_notifications import send_push
+            send_push("New message — %s" % (name or "website"),
+                      subject or (message or "")[:80],
+                      url="/admin#tab-inbox", tag="inbox-contact")
+        except Exception:
+            pass
         return render_template("contact.html", success="Your message has been sent. Thank you for reaching out.")
     return render_template("contact.html", subject=request.args.get("subject", ""), message=request.args.get("message", ""))
     return render_template("contact.html")
@@ -523,6 +536,89 @@ def unblock_sender(email):
     conn.execute("DELETE FROM blocked_senders WHERE email = ?", ((email or "").strip().lower(),))
     conn.commit()
     conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/manifest.webmanifest")
+def pwa_manifest():
+    import json as _json
+    manifest = {
+        "name": "Snyder Scriptorium Admin",
+        "short_name": "Scriptorium Admin",
+        "description": "Snyder Scriptorium bookstore admin: inbox, orders, and analytics.",
+        "start_url": "/admin",
+        "scope": "/",
+        "display": "standalone",
+        "orientation": "portrait",
+        "background_color": "#F7F1E6",
+        "theme_color": "#5C4033",
+        "icons": [
+            {"src": "/static/pwa/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/pwa/icon-512.png", "sizes": "512x512", "type": "image/png"},
+            {"src": "/static/pwa/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+    }
+    return Response(_json.dumps(manifest), mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def pwa_service_worker():
+    return send_from_directory(os.path.join(basedir, "static", "pwa"), "sw.js",
+                               mimetype="application/javascript")
+
+
+@app.route("/api/push/vapid-public-key")
+@admin_required
+def push_vapid_public_key():
+    from push_notifications import vapid_public_key
+    key = vapid_public_key()
+    if not key:
+        return jsonify({"error": "Push notifications are not configured on the server."}), 503
+    return jsonify({"publicKey": key})
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+@admin_required
+def push_subscribe():
+    data = request.get_json() or {}
+    endpoint = (data.get("endpoint") or "").strip()
+    keys = data.get("keys") or {}
+    p256dh = (keys.get("p256dh") or "").strip()
+    auth = (keys.get("auth") or "").strip()
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"error": "Invalid push subscription."}), 400
+    conn = get_db()
+    conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+    conn.execute(
+        "INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES (?, ?, ?)",
+        (endpoint, p256dh, auth),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+@admin_required
+def push_unsubscribe():
+    data = request.get_json() or {}
+    endpoint = (data.get("endpoint") or "").strip()
+    conn = get_db()
+    if endpoint:
+        conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/push/test", methods=["POST"])
+@admin_required
+def push_test():
+    from push_notifications import send_push
+    ok = send_push("Snyder Scriptorium", "Push notifications are working on this device.",
+                   url="/admin#tab-inbox", tag="push-test")
+    if not ok:
+        return jsonify({"error": "No push subscriptions found or push is not configured."}), 400
     return jsonify({"success": True})
 
 

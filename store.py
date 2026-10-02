@@ -1162,6 +1162,13 @@ def _notify_inbox_order(conn, local_order_id):
             ("order", buyer_name, buyer_email, "New order #%s — %s" % (local_order_id, total), body),
         )
         conn.commit()
+        try:
+            from push_notifications import send_push
+            send_push("New book order — %s" % total,
+                      "%s — %s" % (buyer_name, ", ".join(l.split(" — ")[0] for l in lines) or "book order"),
+                      url="/admin#tab-inbox", tag="order-%s" % local_order_id)
+        except Exception as exc:
+            print("[store] order push failed: %r" % (exc,), flush=True)
         return True
     except Exception as exc:
         print("[store] inbox order notification failed: %r" % (exc,), flush=True)
