@@ -29,6 +29,7 @@
 .store-cover.placeholder{display:grid;place-items:center;font-family:Georgia,serif;color:#75695D;font-size:2rem}
 .store-card h2{font-size:1.1rem;margin:0 0 4px;color:#5C4033}.store-author{margin:0 0 8px;color:#6F6257}
 .store-publine{font-size:.9rem;color:#75695D;margin-bottom:8px}
+.store-section{font-size:.82rem;color:#8A6D3B;letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px}
 .store-condition{font-size:.88rem;color:#6F6257;font-style:italic;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .store-price{font-size:1.15rem;color:#5C4033;font-weight:600;margin-top:auto;padding-top:10px}
 .store-stock{font-size:.85rem;color:#75695D}
@@ -45,7 +46,7 @@
 .store-request-row input{padding:10px 12px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924;min-width:200px}
 .store-request-btn{padding:10px 20px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;cursor:pointer}
 .store-request-btn:hover{filter:brightness(.94)}
-@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}.store-grid{grid-template-columns:repeat(3,1fr);gap:10px}.store-card{padding:10px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
+@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}.store-grid{grid-template-columns:repeat(3,1fr);gap:10px}.store-card{padding:10px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-section{font-size:.7rem;margin-bottom:4px}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
 </style>
 {% endblock %}
 
@@ -100,6 +101,7 @@
             {% endif %}
             <h2>{{ p.title }}</h2>
             <p class="store-author">{{ p.author or 'The Scriptorium' }}</p>
+            {% if p.section %}<div class="store-section">{{ p.section }}</div>{% endif %}
             <div class="store-publine">{% if p.publisher %}{{ p.publisher }}{% endif %}{% if p.publisher and p.publication_year %}, {% endif %}{% if p.publication_year %}{{ p.publication_year }}{% endif %}{% if p.edition %} · {{ p.edition }}{% endif %}</div>
             {% if p.condition_notes %}<div class="store-condition">{{ p.condition_notes }}</div>{% endif %}
             <div class="store-price">${{ p.price }}</div>
