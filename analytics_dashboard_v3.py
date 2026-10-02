@@ -323,6 +323,21 @@ def report(period, content_page=1, source_page=1, drill_path=None):
                 "unique_visitors": int(rowval(row, 6, "unique_visitors") or 0),
                 "path": path,
             })
+        # One row per individual page: merge rows that resolve to the same page+title
+        # (e.g. "/" tracked under different page types used to show as three "Home" rows).
+        _merged = []
+        _seen = {}
+        for item in content:
+            _key = (item["path"], item["title"])
+            if _key in _seen:
+                _m = _merged[_seen[_key]]
+                _m["views"] += item["views"]
+                _m["unique_visitors"] = max(_m["unique_visitors"], item["unique_visitors"])
+            else:
+                _seen[_key] = len(_merged)
+                _merged.append(item)
+        _merged.sort(key=lambda x: (-x["views"], x["path"]))
+        content = _merged
         content_page_items, content_page, content_pages, content_total = paginate(content, content_page)
 
         if drilldown is not None:
