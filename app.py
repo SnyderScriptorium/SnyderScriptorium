@@ -449,13 +449,40 @@ def update_inbox_message(message_id):
     if status and status not in allowed:
         conn.close()
         return jsonify({"error": "Invalid inbox status."}), 400
+    is_read = data.get("is_read", None)
     if status:
         conn.execute("UPDATE inbox_messages SET status = ?, is_read = 1 WHERE id = ?", (status, message_id))
+    elif is_read is not None:
+        conn.execute("UPDATE inbox_messages SET is_read = ? WHERE id = ?", (1 if is_read else 0, message_id))
     else:
         conn.execute("UPDATE inbox_messages SET is_read = 1 WHERE id = ?", (message_id,))
     conn.commit()
     conn.close()
     return jsonify({"success": True})
+
+
+@app.route("/api/inbox/<int:message_id>", methods=["DELETE"])
+@admin_required
+def delete_inbox_message(message_id):
+    conn = get_db()
+    row = conn.execute("SELECT id FROM inbox_messages WHERE id = ?", (message_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Inbox message not found."}), 404
+    conn.execute("DELETE FROM inbox_messages WHERE id = ?", (message_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/inbox/count")
+@admin_required
+def inbox_count():
+    conn = get_db()
+    unread = conn.execute("SELECT COUNT(*) FROM inbox_messages WHERE is_read = 0").fetchone()[0]
+    total = conn.execute("SELECT COUNT(*) FROM inbox_messages").fetchone()[0]
+    conn.close()
+    return jsonify({"unread": int(unread or 0), "total": int(total or 0)})
 
 
 @app.route("/api/drafts", methods=["GET"])
