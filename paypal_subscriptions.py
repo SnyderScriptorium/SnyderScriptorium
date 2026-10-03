@@ -12,6 +12,7 @@ PRODUCT_NAME = "K. W. Snyder Writing Membership"
 PRODUCT_DESCRIPTION = "Monthly membership providing access to the private K. W. Snyder Writing library."
 
 PLAN_CONFIG = {
+    "intro_1": {"price": "1.00", "currency": "USD", "label": "Member — $1/month"},
     "founding_3": {"price": "3.00", "currency": "USD", "label": "Founding Member — $3/month"},
     "standard_4": {"price": "4.00", "currency": "USD", "label": "Member — $4/month"},
     "standard_5": {"price": "5.00", "currency": "USD", "label": "Member — $5/month"},
@@ -107,7 +108,7 @@ def create_monthly_plan(product_id, plan_key):
 
 
 def plan_id(plan_key):
-    env_name = {"founding_3": "PAYPAL_PLAN_FOUNDING_3", "standard_4": "PAYPAL_PLAN_STANDARD_4", "standard_5": "PAYPAL_PLAN_STANDARD_5"}.get(plan_key)
+    env_name = {"intro_1": "PAYPAL_PLAN_INTRO_1", "founding_3": "PAYPAL_PLAN_FOUNDING_3", "standard_4": "PAYPAL_PLAN_STANDARD_4", "standard_5": "PAYPAL_PLAN_STANDARD_5"}.get(plan_key)
     if not env_name:
         raise ValueError(f"Unknown plan key: {plan_key}")
     return os.environ.get(env_name, "").strip()

@@ -5,9 +5,9 @@ from database import get_db
 from paypal_subscriptions import create_monthly_plan, create_product, paypal_request
 
 logger = logging.getLogger(__name__)
-PLAN_KEY = "founding_3"
-PLAN_ENV = "PAYPAL_PLAN_FOUNDING_3"
-PLAN_DB_KEY = "paypal_founding_plan_id"
+PLAN_KEY = "intro_1"
+PLAN_ENV = "PAYPAL_PLAN_INTRO_1"
+PLAN_DB_KEY = "paypal_intro_plan_id"
 PRODUCT_DB_KEY = "paypal_membership_product_id"
 
 
