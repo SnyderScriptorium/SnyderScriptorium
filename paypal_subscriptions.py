@@ -20,7 +20,10 @@ PLAN_CONFIG = {
 
 
 def paypal_base_url():
-    return "https://api-m.sandbox.paypal.com" if os.environ.get("PAYPAL_ENV", "sandbox").strip().lower() != "live" else "https://api-m.paypal.com"
+    # PAYPAL_MODE is the site-wide convention (see store.py); PAYPAL_ENV is
+    # honored as a fallback for older configurations.
+    mode = os.environ.get("PAYPAL_MODE", os.environ.get("PAYPAL_ENV", "sandbox"))
+    return "https://api-m.sandbox.paypal.com" if mode.strip().lower() != "live" else "https://api-m.paypal.com"
 
 
 def paypal_credentials_present():
