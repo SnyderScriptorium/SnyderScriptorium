@@ -58,6 +58,46 @@ def admin_required():
     return None
 
 
+# --- Storefront maintenance curtain -------------------------------------
+# Shows a friendly "under maintenance" page in front of the public store
+# while the shop is being worked on. Lifts itself Sunday evening; override
+# anytime with the STORE_MAINTENANCE env var ("1" = on, "0" = off).
+STORE_MAINTENANCE_UNTIL = "2026-10-05T00:00:00+00:00"  # Sun Oct 4, 8pm EDT
+
+
+def _store_under_maintenance():
+    override = (os.environ.get("STORE_MAINTENANCE") or "").strip().lower()
+    if override in ("0", "false", "off", "no"):
+        return False
+    if override in ("1", "true", "on", "yes"):
+        return True
+    try:
+        from datetime import timezone
+        until = datetime.fromisoformat(
+            (os.environ.get("STORE_MAINTENANCE_UNTIL") or STORE_MAINTENANCE_UNTIL).strip())
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) < until
+    except Exception:
+        return False
+
+
+@store_bp.before_request
+def _store_maintenance_curtain():
+    path = request.path or ""
+    is_storefront = path == "/store" or path.startswith(("/store/", "/api/store/paypal", "/api/store/products"))
+    if not is_storefront:
+        return None
+    if require_admin():
+        return None  # the admin can peek behind the curtain
+    if not _store_under_maintenance():
+        return None
+    resp = make_response(render_template("store_maintenance.html"), 503)
+    resp.headers["Retry-After"] = "172800"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 def slugify(value):
     value = re.sub(r"[^a-zA-Z0-9]+", "-", str(value or "").strip().lower()).strip("-")
     return value or "book"
