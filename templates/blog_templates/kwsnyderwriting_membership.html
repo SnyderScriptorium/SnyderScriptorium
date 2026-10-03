@@ -21,11 +21,14 @@
           <a class="member-auth-link" href="{{ url_for('member_logout') }}">Sign Out</a>
         </div>
       {% else %}
-        <p>Your account is not currently active. If you have already subscribed, please allow the payment provider a moment to confirm your membership.</p>
-        <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
-          <a class="member-auth-button member-auth-link-button" href="{{ url_for('member_login') }}">Sign In</a>
-          <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Account</a>
+        <div id="subscribe-box" style="margin-top:18px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);">
+          <h3 style="margin-top:0;">Subscribe — $1/month</h3>
+          <p id="subscribe-msg" style="margin-bottom:10px;"></p>
+          <p style="margin-bottom:12px;">Checkout is handled securely by PayPal. You can cancel anytime.</p>
+          <button id="subscribe-btn" class="member-auth-button" type="button">Subscribe with PayPal</button>
+          <p id="subscribe-error" style="color:#8a1f1f;margin-top:10px;" role="alert"></p>
         </div>
+        <p style="margin-top:12px;">If you have already subscribed, please allow the payment provider a moment to confirm your membership.</p>
       {% endif %}
     {% else %}
       <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
@@ -46,6 +49,37 @@
 {{ super() }}
 <script>
 (function(){
+  function param(name){
+    try{ return new URLSearchParams(window.location.search).get(name); }
+    catch(e){ return null; }
+  }
+  var msg=document.getElementById('subscribe-msg');
+  var errBox=document.getElementById('subscribe-error');
+  function showError(t){ if(errBox){ errBox.textContent=t; } }
+  if(msg){
+    if(param('subscribed')==='1'){
+      msg.textContent='Thank you \u2014 your membership is now active. Welcome to the private library.';
+    }else if(param('cancelled')==='1'){
+      msg.textContent='You left PayPal before completing the subscription. No charge was made \u2014 you can try again whenever you like.';
+    }else if(param('error')){
+      showError('Something went wrong confirming your subscription. Please try again.');
+    }
+  }
+  var btn=document.getElementById('subscribe-btn');
+  if(btn){
+    btn.addEventListener('click',function(){
+      btn.disabled=true;
+      showError('');
+      fetch('/api/paypal/create-subscription',{method:'POST',credentials:'same-origin'})
+        .then(function(r){ return r.json().then(function(d){ return {status:r.status,body:d}; }); })
+        .then(function(res){
+          if(res.body && res.body.approval_url){ window.location.href=res.body.approval_url; return; }
+          showError((res.body && res.body.error) || 'Could not start checkout. Please try again.');
+          btn.disabled=false;
+        })
+        .catch(function(){ showError('Could not start checkout. Please try again.'); btn.disabled=false; });
+    });
+  }
   var box=document.getElementById('paypal-status');
   if(box && !box.textContent.trim()) box.textContent='PayPal checkout is not configured on the server yet.';
 })();
