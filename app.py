@@ -543,10 +543,10 @@ def unblock_sender(email):
 def pwa_manifest():
     import json as _json
     manifest = {
-        "name": "Snyder Scriptorium Admin",
-        "short_name": "Scriptorium Admin",
-        "description": "Snyder Scriptorium bookstore admin: inbox, orders, and analytics.",
-        "start_url": "/admin",
+        "name": "K.W. Snyder Writing",
+        "short_name": "Snyder Writing",
+        "description": "K.W. Snyder Writing: the private writing library. Sign in to read.",
+        "start_url": "/kwsnyderwriting/login",
         "scope": "/",
         "display": "standalone",
         "orientation": "portrait",

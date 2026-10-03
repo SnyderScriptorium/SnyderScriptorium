@@ -157,3 +157,18 @@
 .member-auth-terms a {
   color: #46657c;
 }
+
+.member-auth-admin-link {
+  margin-top: 2rem;
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.member-auth-admin-link a {
+  color: #8a8a8a;
+  text-decoration: none;
+}
+
+.member-auth-admin-link a:hover {
+  text-decoration: underline;
+}
