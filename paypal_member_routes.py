@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, redirect, request, session
 
 from database import get_db
 from paypal_subscriptions import get_subscription, paypal_request, verify_webhook
@@ -62,6 +62,148 @@ def _save_subscription(member_id, subscription_id, status, started=None, ends=No
         raise
     finally:
         conn.close()
+
+
+def _verified_intro_plan_id():
+    """Fail-closed resolution of the $1 intro membership plan.
+
+    Only the intro_1 plan is ever acceptable here. The candidate plan ID is
+    fetched live from PayPal's API and its REGULAR billing cycle must price
+    at exactly 1.00 USD. Returns the plan ID, or None when anything does not
+    check out. The legacy $3/$4/$5 plans are never consulted, so a stale or
+    missing $1 plan can never silently fall back to charging $3.
+    """
+    candidates = []
+    env_plan = os.environ.get("PAYPAL_PLAN_INTRO_1", "").strip()
+    if env_plan:
+        candidates.append(env_plan)
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute("SELECT value FROM site_content WHERE key = 'paypal_intro_plan_id'").fetchone()
+            if row and str(row["value"] or "").strip():
+                candidates.append(str(row["value"]).strip())
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("Could not read stored intro plan ID")
+
+    seen = set()
+    for plan_id in candidates:
+        if not plan_id or plan_id in seen:
+            continue
+        seen.add(plan_id)
+        try:
+            plan = paypal_request("GET", f"/v1/billing/plans/{plan_id}")
+        except Exception:
+            logger.warning("Intro plan %s could not be retrieved from PayPal", plan_id)
+            continue
+        if str(plan.get("status", "")).upper() != "ACTIVE":
+            logger.warning("Intro plan %s is not ACTIVE (status=%s); refusing.", plan_id, plan.get("status"))
+            continue
+        price_ok = False
+        for cycle in plan.get("billing_cycles") or []:
+            if str(cycle.get("tenure_type", "")).upper() != "REGULAR":
+                continue
+            fixed = ((cycle.get("pricing_scheme") or {}).get("fixed_price") or {})
+            if str(fixed.get("value", "")).strip() == "1.00" and str(fixed.get("currency_code", "")).upper() == "USD":
+                price_ok = True
+                break
+        if not price_ok:
+            logger.warning("Intro plan %s does not bill $1.00 USD monthly; refusing.", plan_id)
+            continue
+        return plan_id
+    return None
+
+
+@paypal_member.post("/api/paypal/create-subscription")
+def create_subscription():
+    """Create a PayPal subscription on the $1 intro plan; return the approval URL.
+
+    Fail-closed: refuses with 503 unless the intro_1 plan is verified live
+    against PayPal's API at exactly $1.00 USD/month. The legacy $3/$4/$5
+    plans are never used here, so the terms page can never promise $1 while
+    PayPal charges $3. The buyer approves on PayPal's site and returns to
+    /kwsnyderwriting/membership/return.
+    """
+    member_id = session.get("member_id")
+    if not session.get("member_logged_in") or not member_id:
+        return jsonify({"ok": False, "error": "Please sign in to your K. W. Snyder Writing account first."}), 401
+
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
+        if row and row["subscription_status"] == "active":
+            return jsonify({"ok": False, "error": "This account already has an active membership."}), 409
+    finally:
+        conn.close()
+
+    plan_id = _verified_intro_plan_id()
+    if not plan_id:
+        return jsonify({"ok": False, "error": "The $1 membership plan is not verified with PayPal right now. Please try again later."}), 503
+
+    base = request.host_url.rstrip("/")
+    try:
+        subscription = paypal_request("POST", "/v1/billing/subscriptions", {
+            "plan_id": plan_id,
+            "application_context": {
+                "brand_name": "Snyder Scriptorium",
+                "return_url": base + "/kwsnyderwriting/membership/return",
+                "cancel_url": base + "/kwsnyderwriting/membership/cancel",
+                "user_action": "SUBSCRIBE_NOW",
+                "shipping_preference": "NO_SHIPPING",
+            },
+        })
+    except Exception as exc:
+        logger.exception("PayPal subscription creation failed")
+        return jsonify({"ok": False, "error": f"PayPal could not start the subscription: {exc}"}), 502
+
+    approval_url = ""
+    for link in subscription.get("links", []) or []:
+        if link.get("rel") == "approve" and link.get("href"):
+            approval_url = link["href"]
+            break
+    subscription_id = str(subscription.get("id") or "").strip()
+    if not approval_url or not subscription_id:
+        logger.warning("PayPal subscription creation returned no approval link: %s", subscription)
+        return jsonify({"ok": False, "error": "PayPal did not return an approval link. Please try again."}), 502
+    return jsonify({"ok": True, "approval_url": approval_url, "subscription_id": subscription_id})
+
+
+@paypal_member.get("/kwsnyderwriting/membership/return")
+def membership_return():
+    """PayPal sends the buyer back here after approving the subscription."""
+    if not session.get("member_logged_in") or not session.get("member_id"):
+        return redirect("/kwsnyderwriting/login")
+    subscription_id = request.args.get("subscription_id", "").strip()
+    if not subscription_id:
+        return redirect("/kwsnyderwriting/membership?error=missing_subscription")
+    plan_id = _verified_intro_plan_id()
+    if not plan_id:
+        return redirect("/kwsnyderwriting/membership?error=plan_unverified")
+    try:
+        subscription = get_subscription(subscription_id)
+    except Exception:
+        logger.exception("Could not verify subscription after PayPal return")
+        return redirect("/kwsnyderwriting/membership?error=verify_failed")
+    if subscription.get("plan_id") != plan_id:
+        logger.warning("Subscription %s is not on the verified $1 plan; not attaching.", subscription_id)
+        return redirect("/kwsnyderwriting/membership?error=wrong_plan")
+    status = _status_for_member(str(subscription.get("status") or "").upper())
+    started = subscription.get("start_time") or subscription.get("create_time") or _iso_or_now()
+    ends = (subscription.get("billing_info") or {}).get("next_billing_time")
+    try:
+        _save_subscription(session["member_id"], subscription_id, status, started, ends)
+    except Exception:
+        logger.exception("Could not save subscription after PayPal return")
+        return redirect("/kwsnyderwriting/membership?error=save_failed")
+    return redirect("/kwsnyderwriting/membership?subscribed=1")
+
+
+@paypal_member.get("/kwsnyderwriting/membership/cancel")
+def membership_cancel():
+    """PayPal sends the buyer back here when they cancel before approving."""
+    return redirect("/kwsnyderwriting/membership?cancelled=1")
 
 
 @paypal_member.post("/api/paypal/attach-subscription")
