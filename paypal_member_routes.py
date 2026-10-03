@@ -29,7 +29,7 @@ def configured_plan_id(app=None):
         if runtime_plan:
             return runtime_plan
 
-    for name in ("PAYPAL_PLAN_FOUNDING_3", "PAYPAL_PLAN_STANDARD_4", "PAYPAL_PLAN_STANDARD_5", "PAYPAL_PLAN_ID"):
+    for name in ("PAYPAL_PLAN_INTRO_1", "PAYPAL_PLAN_FOUNDING_3", "PAYPAL_PLAN_STANDARD_4", "PAYPAL_PLAN_STANDARD_5", "PAYPAL_PLAN_ID"):
         value = os.environ.get(name, "").strip()
         if value:
             return value
