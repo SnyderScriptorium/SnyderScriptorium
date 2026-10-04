@@ -16,7 +16,7 @@
       <p><strong>Status:</strong> {{ member_status|default('inactive')|replace('_',' ')|title }}</p>
 
       {% if member_status == 'active' %}
-        <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
+        <div class="member-auth-actions" style="justify-content:center;margin-top:14px;display:flex;flex-direction:column;align-items:center;gap:10px;">
           <a class="member-auth-button" href="{{ url_for('kwsnyderwriting_entry') }}">Enter the Private Library</a>
           <a class="member-auth-link" href="{{ url_for('member_logout') }}">Sign Out</a>
         </div>
