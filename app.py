@@ -982,3 +982,39 @@ def diag_paypal():
         except Exception as e:
             plan_info["db_plan_status"] = f"error_{str(e)[:50]}"
     return jsonify({"status": "ok", "mode": mode, "plan": plan_info})
+
+# TEMPORARY EMAIL DIAGNOSTIC - remove after debugging
+@app.route("/diag-email-x7k2m9", methods=["GET"])
+def diag_email():
+    import os, smtplib
+    from email.message import EmailMessage
+    result = {}
+    result["smtp_host"] = bool(os.environ.get("SMTP_HOST"))
+    result["smtp_port"] = os.environ.get("SMTP_PORT", "587 (default)")
+    result["smtp_user"] = bool(os.environ.get("SMTP_USER"))
+    result["smtp_pass"] = bool(os.environ.get("SMTP_PASS"))
+    result["notify_to"] = bool(os.environ.get("NOTIFY_EMAIL_TO"))
+    if not os.environ.get("SMTP_HOST") or not os.environ.get("NOTIFY_EMAIL_TO"):
+        result["status"] = "skipped: missing SMTP_HOST or NOTIFY_EMAIL_TO"
+        return jsonify(result)
+    try:
+        host = os.environ.get("SMTP_HOST").strip()
+        port = int((os.environ.get("SMTP_PORT") or "587").strip())
+        user = (os.environ.get("SMTP_USER") or "").strip()
+        pw = os.environ.get("SMTP_PASS") or ""
+        to = os.environ.get("NOTIFY_EMAIL_TO").strip()
+        msg = EmailMessage()
+        msg["Subject"] = "Scriptorium email test"
+        msg["From"] = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or user
+        msg["To"] = to
+        msg.set_content("This is a test from the Scriptorium email diagnostic.")
+        with smtplib.SMTP(host, port, timeout=20) as server:
+            server.starttls()
+            if user:
+                server.login(user, pw)
+            server.send_message(msg)
+        result["status"] = "sent"
+    except Exception as e:
+        result["status"] = "failed"
+        result["error"] = repr(e)[:500]
+    return jsonify(result)
