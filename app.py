@@ -957,6 +957,11 @@ def diag_paypal():
             row = conn.execute("SELECT value FROM site_content WHERE key = 'paypal_intro_plan_id'").fetchone()
             plan_info["db_plan_id_len"] = len(str(row["value"]).strip()) if row and row["value"] else 0
             db_plan = str(row["value"]).strip() if row and row["value"] else ""
+            # Check member posts by category/access
+            for cat in ['kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes']:
+                for acc in ['members', 'public']:
+                    r2 = conn.execute("SELECT COUNT(*) AS n FROM published_posts WHERE category = ? AND access_level = ?", (cat, acc)).fetchone()
+                    plan_info[f"posts_{cat}_{acc}"] = r2["n"] if r2 else 0
         finally:
             conn.close()
     except Exception as e:
