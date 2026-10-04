@@ -1000,7 +1000,8 @@ def diag_email():
     try:
         key = os.environ.get("RESEND_API_KEY").strip()
         to = os.environ.get("NOTIFY_EMAIL_TO").strip()
-        frm = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+        # Use Resend's onboarding address for the first test (no domain verification needed)
+        frm = "onboarding@resend.dev"
         payload = _json.dumps({
             "from": frm,
             "to": [to],
