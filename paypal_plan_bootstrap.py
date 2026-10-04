@@ -40,6 +40,8 @@ def ensure_paypal_plan(app):
     if not os.environ.get("PAYPAL_CLIENT_ID", "").strip() or not os.environ.get("PAYPAL_CLIENT_SECRET", "").strip():
         logger.warning("PayPal plan bootstrap skipped: credentials are incomplete.")
         return ""
+    logger.warning("PayPal bootstrap starting: credentials present, mode=%s",
+                   os.environ.get("PAYPAL_MODE", "sandbox"))
 
     conn = get_db()
     try:
@@ -63,7 +65,7 @@ def ensure_paypal_plan(app):
                     app.config["PAYPAL_PLAN_ID"] = candidate
                     _save_site_value(conn, PLAN_DB_KEY, candidate)
                     conn.commit()
-                    logger.info("PayPal membership plan verified: plan_id=%s", candidate)
+                    logger.warning("PayPal membership plan verified: plan_id=%s", candidate)
                     return candidate
             except Exception:
                 logger.warning("Configured PayPal plan %s is unavailable; provisioning a replacement Sandbox plan.", candidate)
@@ -96,7 +98,7 @@ def ensure_paypal_plan(app):
         conn.commit()
         os.environ[PLAN_ENV] = plan_id
         app.config["PAYPAL_PLAN_ID"] = plan_id
-        logger.info("Created PayPal Sandbox membership plan: plan_id=%s product_id=%s", plan_id, product_id)
+        logger.warning("Created PayPal Sandbox membership plan: plan_id=%s product_id=%s", plan_id, product_id)
         return plan_id
     except Exception:
         conn.rollback()
