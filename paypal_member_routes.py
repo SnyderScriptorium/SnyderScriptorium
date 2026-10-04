@@ -106,7 +106,11 @@ def _verified_intro_plan_id():
             if str(cycle.get("tenure_type", "")).upper() != "REGULAR":
                 continue
             fixed = ((cycle.get("pricing_scheme") or {}).get("fixed_price") or {})
-            if str(fixed.get("value", "")).strip() == "1.00" and str(fixed.get("currency_code", "")).upper() == "USD":
+            try:
+                price_val = float(str(fixed.get("value", "")).strip())
+            except (ValueError, TypeError):
+                price_val = None
+            if price_val == 1.0 and str(fixed.get("currency_code", "")).upper() == "USD":
                 price_ok = True
                 break
         if not price_ok:
