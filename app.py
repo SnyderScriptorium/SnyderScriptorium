@@ -932,8 +932,10 @@ def diag_paypal():
     cid = os.environ.get("PAYPAL_CLIENT_ID", "").strip()
     sec = os.environ.get("PAYPAL_CLIENT_SECRET", "").strip()
     mode = os.environ.get("PAYPAL_MODE", "sandbox").strip()
+    # List all PAYPAL_ var names (not values) to catch typos
+    paypal_vars = sorted([k for k in os.environ.keys() if k.startswith("PAYPAL_")])
     if not cid or not sec:
-        return jsonify({"status": "missing_credentials", "has_id": bool(cid), "has_secret": bool(sec), "mode": mode})
+        return jsonify({"status": "missing_credentials", "has_id": bool(cid), "has_secret": bool(sec), "mode": mode, "paypal_vars_seen": paypal_vars})
     base = "https://api-m.sandbox.paypal.com" if mode.lower() != "live" else "https://api-m.paypal.com"
     try:
         r = requests.post(f"{base}/v1/oauth2/token", auth=(cid, sec),
