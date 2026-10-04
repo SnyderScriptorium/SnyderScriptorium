@@ -1077,18 +1077,10 @@ def _send_order_notification(conn, local_order_id):
     checkout. Returns True if an email was actually sent.
     """
     try:
-        smtp_host = (os.environ.get("SMTP_HOST") or "").strip()
         notify_to = (os.environ.get("NOTIFY_EMAIL_TO") or "").strip()
-        if not smtp_host or not notify_to:
-            print("[store] order notification skipped: SMTP_HOST/NOTIFY_EMAIL_TO not set", flush=True)
+        if not notify_to:
+            print("[store] order notification skipped: NOTIFY_EMAIL_TO not set", flush=True)
             return False
-        try:
-            smtp_port = int((os.environ.get("SMTP_PORT") or "587").strip())
-        except (TypeError, ValueError):
-            smtp_port = 587
-        smtp_user = (os.environ.get("SMTP_USER") or "").strip()
-        smtp_pass = os.environ.get("SMTP_PASS") or ""
-        notify_from = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or smtp_user
 
         row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
         if not row:
@@ -1149,18 +1141,30 @@ def _send_order_notification(conn, local_order_id):
             "Ship to:",
         ] + ["  %s" % line for line in addr_lines])
 
-        import smtplib
-        from email.message import EmailMessage
-        msg = EmailMessage()
-        msg["Subject"] = "New book order #%s — %s" % (local_order_id, _notify_money(total))
-        msg["From"] = notify_from
-        msg["To"] = notify_to
-        msg.set_content(body)
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-            server.starttls()
-            if smtp_user:
-                server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
+        import json as _json
+        import urllib.request as _urlreq
+        resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+        if not resend_key:
+            print("[store] order notification skipped: RESEND_API_KEY not set", flush=True)
+            return False
+        resend_from = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+        payload = _json.dumps({
+            "from": resend_from,
+            "to": [notify_to],
+            "subject": "New book order #%s — %s" % (local_order_id, _notify_money(total)),
+            "text": body,
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": "Bearer " + resend_key,
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=20) as resp:
+            resp_body = resp.read()[:200]
         print("[store] order notification sent for order %s" % local_order_id, flush=True)
         return True
     except Exception as exc:
