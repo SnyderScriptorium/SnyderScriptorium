@@ -253,10 +253,6 @@ def membership_terms():
 
 @app.route("/kwsnyderwriting")
 def kwsnyderwriting_entry():
-    if session.get("member_reauth_ok") is not True:
-        session.clear()
-        return redirect(url_for("member_login"))
-    session.pop("member_reauth_ok", None)
     if not member_has_access():
         return redirect(url_for("kwsnyderwriting_membership"))
     return kwsnyderwriting_content()
