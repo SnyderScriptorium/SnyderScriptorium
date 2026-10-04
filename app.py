@@ -932,7 +932,6 @@ def diag_paypal():
     cid = os.environ.get("PAYPAL_CLIENT_ID", "").strip()
     sec = os.environ.get("PAYPAL_CLIENT_SECRET", "").strip()
     mode = os.environ.get("PAYPAL_MODE", "sandbox").strip()
-    # List all PAYPAL_ var names with value lengths (not values) to diagnose
     paypal_vars = {}
     for k in sorted(os.environ.keys()):
         if k.startswith("PAYPAL_"):
@@ -945,9 +944,40 @@ def diag_paypal():
         r = requests.post(f"{base}/v1/oauth2/token", auth=(cid, sec),
                           data={"grant_type": "client_credentials"},
                           headers={"Accept": "application/json"}, timeout=15)
-        if r.status_code == 200:
-            return jsonify({"status": "ok", "mode": mode})
-        else:
+        if r.status_code != 200:
             return jsonify({"status": "auth_failed", "code": r.status_code, "mode": mode})
     except Exception as e:
         return jsonify({"status": "error", "detail": str(e)[:100], "mode": mode})
+    # Auth OK — now check the $1 plan
+    plan_info = {}
+    try:
+        from database import get_db
+        conn = get_db()
+        try:
+            row = conn.execute("SELECT value FROM site_content WHERE key = 'paypal_intro_plan_id'").fetchone()
+            plan_info["db_plan_id_len"] = len(str(row["value"]).strip()) if row and row["value"] else 0
+            db_plan = str(row["value"]).strip() if row and row["value"] else ""
+        finally:
+            conn.close()
+    except Exception as e:
+        plan_info["db_error"] = str(e)[:80]
+        db_plan = ""
+    plan_info["env_plan_id_len"] = len(os.environ.get("PAYPAL_PLAN_INTRO_1", "").strip())
+    # Try verifying the DB plan with PayPal
+    if db_plan:
+        try:
+            tok = r.json().get("access_token", "")
+            pr = requests.get(f"{base}/v1/billing/plans/{db_plan}",
+                              headers={"Authorization": f"Bearer {tok}", "Accept": "application/json"}, timeout=15)
+            if pr.status_code == 200:
+                pj = pr.json()
+                plan_info["db_plan_status"] = pj.get("status")
+                for cycle in pj.get("billing_cycles") or []:
+                    if str(cycle.get("tenure_type", "")).upper() == "REGULAR":
+                        fixed = (cycle.get("pricing_scheme") or {}).get("fixed_price") or {}
+                        plan_info["db_plan_price"] = f"{fixed.get('value')} {fixed.get('currency_code')}"
+            else:
+                plan_info["db_plan_status"] = f"http_{pr.status_code}"
+        except Exception as e:
+            plan_info["db_plan_status"] = f"error_{str(e)[:50]}"
+    return jsonify({"status": "ok", "mode": mode, "plan": plan_info})
