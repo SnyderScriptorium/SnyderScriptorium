@@ -265,7 +265,7 @@ def kwsnyderwriting_entry():
 def kwsnyderwriting_content():
     conn = get_db()
     posts = conn.execute("SELECT * FROM published_posts WHERE category IN ('kwsnyderwriting', 'kw_short_stories', 'kw_poems', 'kw_vignettes') AND access_level = 'members' ORDER BY id DESC").fetchall()
-    books = conn.execute("SELECT b.*, COUNT(c.id) AS chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id AND c.published = 1 GROUP BY b.id ORDER BY b.id DESC").fetchall()
+    books = conn.execute("SELECT b.*, (SELECT COUNT(*) FROM manuscript_chapters c WHERE c.book_id = b.id AND c.published = 1) AS chapter_count FROM manuscript_books b ORDER BY b.id DESC").fetchall()
     conn.close()
     return render_template("blog_templates/kwsnyderwriting.html", posts=posts, books=books, member_logged_in=True, member_preview=session.get("member_preview") is True)
 
@@ -774,7 +774,7 @@ def unpublish_post(post_id):
 @admin_required
 def get_manuscripts():
     conn = get_db()
-    books = conn.execute("SELECT b.id, b.title, b.description, COUNT(c.id) AS chapter_count, SUM(CASE WHEN c.published = 1 THEN 1 ELSE 0 END) AS published_chapter_count FROM manuscript_books b LEFT JOIN manuscript_chapters c ON c.book_id = b.id GROUP BY b.id ORDER BY b.id DESC").fetchall()
+    books = conn.execute("SELECT b.id, b.title, b.description, (SELECT COUNT(*) FROM manuscript_chapters c WHERE c.book_id = b.id) AS chapter_count, (SELECT COUNT(*) FROM manuscript_chapters c WHERE c.book_id = b.id AND c.published = 1) AS published_chapter_count FROM manuscript_books b ORDER BY b.id DESC").fetchall()
     conn.close()
     return jsonify({"books": [dict(row) for row in books]})
 
