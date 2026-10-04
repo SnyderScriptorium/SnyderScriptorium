@@ -484,10 +484,12 @@ def update_inbox_message(message_id):
 @admin_required
 def inbox_unread_count():
     conn = get_db()
-    unread = conn.execute("SELECT COUNT(*) FROM inbox_messages WHERE is_read = 0").fetchone()[0]
-    total = conn.execute("SELECT COUNT(*) FROM inbox_messages").fetchone()[0]
+    # Aliased column + key access: production Postgres returns dict rows,
+    # where fetchone()[0] raises KeyError. (Worked on SQLite by accident.)
+    unread = conn.execute("SELECT COUNT(*) AS n FROM inbox_messages WHERE is_read = 0").fetchone()
+    total = conn.execute("SELECT COUNT(*) AS n FROM inbox_messages").fetchone()
     conn.close()
-    return jsonify({"unread": int(unread or 0), "total": int(total or 0)})
+    return jsonify({"unread": int(unread["n"] or 0), "total": int(total["n"] or 0)})
 
 
 def _is_email_blocked(conn, email):

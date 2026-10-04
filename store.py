@@ -886,7 +886,8 @@ def shipping_cents(total_qty):
 # nothing is ever typed into PayPal by hand.
 #
 # Server env vars (set in Render; never committed):
-#   PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE=sandbox|live
+#   PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET (PAYPAL_SECRET also accepted as a
+#   legacy alias), PAYPAL_MODE=sandbox|live
 # The client ID is public by design (it ships in the page JS). The secret
 # stays server-side and is only used for server-to-server API calls.
 
@@ -904,8 +905,14 @@ def paypal_api_base():
     return PAYPAL_LIVE_API if paypal_mode() == "live" else PAYPAL_SANDBOX_API
 
 
+def paypal_secret():
+    # PAYPAL_CLIENT_SECRET is the canonical name (the membership code uses
+    # it); PAYPAL_SECRET is kept as a legacy alias so either one works.
+    return (os.environ.get("PAYPAL_CLIENT_SECRET") or os.environ.get("PAYPAL_SECRET") or "").strip()
+
+
 def paypal_configured():
-    return bool(os.environ.get("PAYPAL_CLIENT_ID") and os.environ.get("PAYPAL_SECRET"))
+    return bool(os.environ.get("PAYPAL_CLIENT_ID") and paypal_secret())
 
 
 def paypal_access_token():
@@ -915,7 +922,7 @@ def paypal_access_token():
         return _paypal_token_cache["token"]
     resp = requests.post(
         paypal_api_base() + "/v1/oauth2/token",
-        auth=(os.environ.get("PAYPAL_CLIENT_ID", ""), os.environ.get("PAYPAL_SECRET", "")),
+        auth=(os.environ.get("PAYPAL_CLIENT_ID", ""), paypal_secret()),
         data={"grant_type": "client_credentials"},
         headers={"Accept": "application/json"},
         timeout=20,
