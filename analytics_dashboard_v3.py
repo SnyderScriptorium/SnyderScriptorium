@@ -247,6 +247,15 @@ def report(period, content_page=1, source_page=1, drill_path=None):
             f"SELECT COUNT(DISTINCT pv.visitor_key) AS unique_visitors FROM page_views pv{where}"
             f"{' AND' if where else ' WHERE'} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''", params
         ).fetchone(), 0, "unique_visitors"))
+        # Returning visitors: distinct visitor_keys in period who visited before the period started
+        returning = 0
+        if start:
+            returning = int(rowval(conn.execute(
+                "SELECT COUNT(DISTINCT pv.visitor_key) AS returning_visitors FROM page_views pv"
+                " WHERE pv.viewed_at >= ? AND pv.visitor_key IS NOT NULL AND pv.visitor_key<>''"
+                " AND EXISTS (SELECT 1 FROM page_views pv2 WHERE pv2.visitor_key = pv.visitor_key AND pv2.viewed_at < ?)",
+                [start.isoformat(), start.isoformat()]
+            ).fetchone(), 0, "returning_visitors"))
 
         rows = conn.execute(f"SELECT pv.viewed_at AS viewed_at,pv.visitor_key AS visitor_key,pv.path AS path FROM page_views pv{where}", params).fetchall()
         drill_path = clean_path(drill_path) if drill_path else None
@@ -395,7 +404,7 @@ def report(period, content_page=1, source_page=1, drill_path=None):
 
         return {
             "period": period, "total_views": total, "total_views_today": total if period == "day" else None,
-            "unique_visitors": unique, "all_time_views": all_time, "daily_views": daily,
+            "unique_visitors": unique, "returning_visitors": returning, "all_time_views": all_time, "daily_views": daily,
             "published_in_period": published_in_period, "chapters_in_period": chapters_in_period,
             "chart_max": chart_max, "chart_ticks": chart_ticks, "drilldown": drilldown, "content_views": content_page_items,
             "content_pagination": {"page": content_page, "pages": content_pages, "total": content_total},
