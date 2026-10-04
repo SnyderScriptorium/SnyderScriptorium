@@ -8,6 +8,6 @@
     <a class="blog-block" href="{{ url_for('view_member_post', post_id=post['id']) }}"><h2>{{ post['title'] }}</h2><p>{{ post['date_published'] }}</p></a>
     {% else %}<p class="private-label">Nothing has been published here yet.</p>{% endfor %}
   </div>
-  <p style="margin-top:25px"><a href="{{ url_for('kwsnyderwriting') }}">Back to K. W. Snyder Writing</a></p>
+  <p style="margin-top:25px"><a href="{{ url_for('kwsnyderwriting_entry') }}">Back to K. W. Snyder Writing</a></p>
 </section>
 {% endblock %}
