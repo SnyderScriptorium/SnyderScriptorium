@@ -986,33 +986,35 @@ def diag_paypal():
 # TEMPORARY EMAIL DIAGNOSTIC - remove after debugging
 @app.route("/diag-email-x7k2m9", methods=["GET"])
 def diag_email():
-    import os, smtplib
-    from email.message import EmailMessage
+    import os, json as _json, urllib.request as _urlreq
     result = {}
-    result["smtp_host"] = bool(os.environ.get("SMTP_HOST"))
-    result["smtp_port"] = os.environ.get("SMTP_PORT", "587 (default)")
-    result["smtp_user"] = bool(os.environ.get("SMTP_USER"))
-    result["smtp_pass"] = bool(os.environ.get("SMTP_PASS"))
+    result["resend_key"] = bool(os.environ.get("RESEND_API_KEY"))
     result["notify_to"] = bool(os.environ.get("NOTIFY_EMAIL_TO"))
-    if not os.environ.get("SMTP_HOST") or not os.environ.get("NOTIFY_EMAIL_TO"):
-        result["status"] = "skipped: missing SMTP_HOST or NOTIFY_EMAIL_TO"
+    result["notify_from"] = (os.environ.get("NOTIFY_EMAIL_FROM") or "orders@snyderscriptorium.com (default)")
+    if not os.environ.get("RESEND_API_KEY"):
+        result["status"] = "skipped: RESEND_API_KEY not set"
+        return jsonify(result)
+    if not os.environ.get("NOTIFY_EMAIL_TO"):
+        result["status"] = "skipped: NOTIFY_EMAIL_TO not set"
         return jsonify(result)
     try:
-        host = os.environ.get("SMTP_HOST").strip()
-        port = int((os.environ.get("SMTP_PORT") or "587").strip())
-        user = (os.environ.get("SMTP_USER") or "").strip()
-        pw = os.environ.get("SMTP_PASS") or ""
+        key = os.environ.get("RESEND_API_KEY").strip()
         to = os.environ.get("NOTIFY_EMAIL_TO").strip()
-        msg = EmailMessage()
-        msg["Subject"] = "Scriptorium email test"
-        msg["From"] = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or user
-        msg["To"] = to
-        msg.set_content("This is a test from the Scriptorium email diagnostic.")
-        with smtplib.SMTP(host, port, timeout=20) as server:
-            server.starttls()
-            if user:
-                server.login(user, pw)
-            server.send_message(msg)
+        frm = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+        payload = _json.dumps({
+            "from": frm,
+            "to": [to],
+            "subject": "Scriptorium email test",
+            "text": "This is a test from the Scriptorium email diagnostic.",
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=20) as resp:
+            result["resend_response"] = resp.read()[:200].decode("utf-8", "replace")
         result["status"] = "sent"
     except Exception as e:
         result["status"] = "failed"
