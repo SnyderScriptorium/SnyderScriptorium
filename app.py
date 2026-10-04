@@ -1019,4 +1019,12 @@ def diag_email():
     except Exception as e:
         result["status"] = "failed"
         result["error"] = repr(e)[:500]
+        # Try to get Resend's error details from the response body
+        try:
+            import urllib.error as _urlerr
+            if isinstance(e, _urlerr.HTTPError):
+                body = e.read()[:500].decode("utf-8", "replace")
+                result["resend_error_body"] = body
+        except Exception:
+            pass
     return jsonify(result)
