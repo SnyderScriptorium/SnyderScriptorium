@@ -923,3 +923,25 @@ def update_about_content():
 if __name__ == "__main__":
     init_db()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+
+# TEMPORARY DIAGNOSTIC - remove after PayPal debugging
+@app.route("/diag-paypal-x7k2m9", methods=["GET"])
+def diag_paypal():
+    import requests
+    cid = os.environ.get("PAYPAL_CLIENT_ID", "").strip()
+    sec = os.environ.get("PAYPAL_CLIENT_SECRET", "").strip()
+    mode = os.environ.get("PAYPAL_MODE", "sandbox").strip()
+    if not cid or not sec:
+        return jsonify({"status": "missing_credentials", "has_id": bool(cid), "has_secret": bool(sec), "mode": mode})
+    base = "https://api-m.sandbox.paypal.com" if mode.lower() != "live" else "https://api-m.paypal.com"
+    try:
+        r = requests.post(f"{base}/v1/oauth2/token", auth=(cid, sec),
+                          data={"grant_type": "client_credentials"},
+                          headers={"Accept": "application/json"}, timeout=15)
+        if r.status_code == 200:
+            return jsonify({"status": "ok", "mode": mode})
+        else:
+            return jsonify({"status": "auth_failed", "code": r.status_code, "mode": mode})
+    except Exception as e:
+        return jsonify({"status": "error", "detail": str(e)[:100], "mode": mode})
