@@ -31,6 +31,20 @@
 <label for="photos">More Photos</label><input id="photos" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp"><p class="help">Up to 6 extra photos — customers swipe through them like eBay.</p>
 <div class="actions"><button type="submit">Save Book</button><button type="button" class="light" onclick="resetForm()">New Book</button></div>
 </form></section>
+<section class="card"><h2>Email list</h2><p class="note">Free “new arrivals” subscribers. The storefront signup form feeds this list; paste the festival paper-sheet emails below, one per line, to add them too.</p>
+<div class="actions" style="margin-top:0"><button type="button" class="light" onclick="loadSubscribers()">Refresh list</button></div>
+<div id="subCount" class="help" style="margin-top:8px">—</div>
+<div id="subList" class="list" style="margin-top:10px;max-height:170px;overflow:auto"></div>
+<label for="bulkEmails">Add emails from the paper signup sheet</label>
+<textarea id="bulkEmails" placeholder="one email per line" style="min-height:70px"></textarea>
+<div class="actions"><button type="button" class="light" onclick="addSubscribers()">Add to list</button></div>
+<label for="digestSubject">Weekly digest — subject</label>
+<input id="digestSubject" placeholder="This week's new arrivals">
+<label for="digestBody">Weekly digest — body</label>
+<textarea id="digestBody" class="tall" placeholder="New books + new posts this week…"></textarea>
+<div class="actions"><button type="button" onclick="sendDigest()">Send digest to all subscribers</button></div>
+<p class="help">Sends one plain-text email per subscriber through Resend, with an unsubscribe link. Needs RESEND_API_KEY set.</p>
+</section>
 </div></div></div>
 <script>
 const $=id=>document.getElementById(id);
@@ -50,6 +64,10 @@ $('photo').addEventListener('change',()=>{const f=$('photo').files[0];if(f){cons
 $('productForm').addEventListener('submit',async e=>{e.preventDefault();const id=$('productId').value;const fd=new FormData();fd.append('title',$('title').value);fd.append('author',$('author').value);fd.append('category',$('category').value);fd.append('genre',$('genre').value.trim());fd.append('price',$('price').value);fd.append('publisher',$('publisher').value);fd.append('publication_year',$('publication_year').value);fd.append('edition',$('edition').value);fd.append('format',$('format').value);fd.append('condition_notes',$('condition_notes').value);fd.append('description',$('description').value);fd.append('notes',$('notes').value);fd.append('stock_quantity',$('stock_quantity').value);fd.append('status',$('statusField').value);const f=$('photo').files[0];if(f)fd.append('photo',f);for(const g of $('photos').files){fd.append('photos',g);}const r=await fetch(id?`/api/store/admin/products/${id}`:'/api/store/admin/products',{method:id?'PUT':'POST',body:fd});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not save the book.',true);return;}showStatus(data.photo_warning?('Book saved, but the photo was not: '+data.photo_warning):'Book saved.');resetForm();loadProducts();});
 async function archiveProduct(id){if(!confirm('Archive this book? It will no longer appear on the storefront.'))return;const r=await fetch(`/api/store/admin/products/${id}`,{method:'DELETE'});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not archive the book.',true);return;}showStatus('Book archived.');loadProducts();}
 async function deleteProduct(id){if(!confirm('Delete this book permanently? This cannot be undone.'))return;const r=await fetch(`/api/store/admin/products/${id}?permanent=1`,{method:'DELETE'});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not delete the book.',true);return;}showStatus('Book deleted.');loadProducts();}
+async function loadSubscribers(){const r=await fetch('/api/store/admin/subscribers');if(!r.ok){showStatus('Could not load the email list.',true);return;}const subs=await r.json();$('subCount').textContent=subs.length+' subscriber'+(subs.length===1?'':'s');$('subList').innerHTML=subs.length?subs.map(s=>'<div class="product"><div><h3>'+esc(s.email)+'</h3><small>since '+esc(s.subscribed_at||'')+'</small></div></div>').join(''):'<div class="product"><div><small>No subscribers yet.</small></div></div>';}
+async function addSubscribers(){const raw=$('bulkEmails').value.trim();if(!raw){showStatus('Paste at least one email address first.',true);return;}const r=await fetch('/api/store/admin/subscribers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails:raw})});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not add emails.',true);return;}showStatus('Added '+data.added+' email'+(data.added===1?'':'s')+' to the list.');$('bulkEmails').value='';loadSubscribers();}
+async function sendDigest(){const subject=$('digestSubject').value.trim();const body=$('digestBody').value.trim();if(!subject||!body){showStatus('Subject and body are both required.',true);return;}if(!confirm('Send this digest to all subscribers now?'))return;const r=await fetch('/api/store/admin/digest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:subject,body:body})});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not send the digest.',true);return;}showStatus('Digest sent: '+data.sent+' sent, '+data.failed+' failed.');}
 loadProducts().catch(()=>showStatus('The bookstore manager could not load its books.',true));
+loadSubscribers().catch(()=>{});
 </script>
 </body></html>

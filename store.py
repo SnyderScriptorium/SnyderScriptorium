@@ -675,12 +675,32 @@ def admin_store():
     return render_template("admin_store.html")
 
 
-@store_bp.route("/api/store/admin/subscribers", methods=["GET"])
+@store_bp.route("/api/store/admin/subscribers", methods=["GET", "POST"])
 def admin_subscribers():
     blocked = admin_required()
     if blocked:
         return blocked
     conn = get_db()
+    if request.method == "POST":
+        import re as _re
+        data = request.get_json(force=True, silent=True) or {}
+        raw = data.get("emails") or ""
+        emails = [
+            _re.sub(r"\s+", "", e).lower()
+            for e in _re.split(r"[\n,;]+", raw)
+        ]
+        emails = [e for e in emails if "@" in e and "." in e.split("@")[-1]]
+        added = 0
+        for e in emails:
+            conn.execute(
+                "INSERT INTO email_subscribers (email, active) VALUES (?, 1) "
+                "ON CONFLICT (email) DO UPDATE SET active = 1",
+                (e,),
+            )
+            added += 1
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "added": added})
     rows = conn.execute(
         "SELECT email, subscribed_at FROM email_subscribers WHERE active = 1 ORDER BY subscribed_at DESC"
     ).fetchall()
