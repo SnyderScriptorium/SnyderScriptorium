@@ -1160,6 +1160,7 @@ def _send_order_notification(conn, local_order_id):
             headers={
                 "Authorization": "Bearer " + resend_key,
                 "Content-Type": "application/json",
+                "User-Agent": "SnyderScriptorium/1.0",
             },
             method="POST",
         )

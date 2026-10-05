@@ -1010,7 +1010,8 @@ def diag_email():
         req = _urlreq.Request(
             "https://api.resend.com/emails",
             data=payload,
-            headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
+            headers={"Authorization": "Bearer " + key, "Content-Type": "application/json",
+                     "User-Agent": "SnyderScriptorium/1.0"},
             method="POST",
         )
         with _urlreq.urlopen(req, timeout=20) as resp:
