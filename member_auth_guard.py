@@ -12,14 +12,13 @@ def register_member_auth_guard(app):
         if not path.startswith("/kwsnyderwriting"):
             return None
 
-        # The membership sales page stays public: it carries the free sample
-        # teaser meant for visitors who have not signed up yet. Everything
-        # behind it (the private library) still requires sign-in.
+        # Only the authentication entry points remain public. The membership
+        # page itself is protected so a visitor must sign in before seeing the
+        # subscription offer.
         public_paths = {
             "/kwsnyderwriting/login",
             "/kwsnyderwriting/signup",
             "/kwsnyderwriting/logout",
-            "/kwsnyderwriting/membership",
         }
         if path in public_paths:
             return None
