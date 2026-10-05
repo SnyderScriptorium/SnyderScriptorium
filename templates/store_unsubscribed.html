@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 600px; margin: 4rem auto; text-align: center; padding: 0 1rem;">
+  <h1>You've been unsubscribed</h1>
+  {% if email %}
+  <p>{{ email }} will no longer receive new-arrival notifications from Snyder Scriptorium.</p>
+  {% else %}
+  <p>You will no longer receive new-arrival notifications from Snyder Scriptorium.</p>
+  {% endif %}
+  <p><a href="/store">Back to the bookstore</a></p>
+</div>
+{% endblock %}

@@ -520,6 +520,37 @@ def store_home():
     return render_template("store.html", products=[public_dict(row) for row in rows])
 
 
+@store_bp.route("/store/subscribe", methods=["POST"])
+def store_subscribe():
+    email = (request.form.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return jsonify({"ok": False, "error": "Please enter a valid email address."}), 400
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO email_subscribers (email, active) VALUES (?, 1) "
+            "ON CONFLICT (email) DO UPDATE SET active = 1",
+            (email,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@store_bp.route("/store/unsubscribe")
+def store_unsubscribe():
+    email = (request.args.get("email") or "").strip().lower()
+    if email:
+        conn = get_db()
+        try:
+            conn.execute("UPDATE email_subscribers SET active = 0 WHERE email = ?", (email,))
+            conn.commit()
+        finally:
+            conn.close()
+    return render_template("store_unsubscribed.html", email=email)
+
+
 @store_bp.route("/store/book/<slug>")
 def store_book(slug):
     if not STORE_VISIBLE:
@@ -642,6 +673,64 @@ def admin_store():
     if blocked:
         return blocked
     return render_template("admin_store.html")
+
+
+@store_bp.route("/api/store/admin/subscribers", methods=["GET"])
+def admin_subscribers():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT email, subscribed_at FROM email_subscribers WHERE active = 1 ORDER BY subscribed_at DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([{"email": r["email"], "subscribed_at": r["subscribed_at"]} for r in rows])
+
+
+@store_bp.route("/api/store/admin/digest", methods=["POST"])
+def admin_send_digest():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    import json as _json
+    import urllib.request as _urlreq
+    data = request.get_json(force=True, silent=True) or {}
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+    if not subject or not body:
+        return jsonify({"ok": False, "error": "Subject and body are required."}), 400
+    resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+    if not resend_key:
+        return jsonify({"ok": False, "error": "RESEND_API_KEY not set."}), 500
+    conn = get_db()
+    rows = conn.execute("SELECT email FROM email_subscribers WHERE active = 1").fetchall()
+    conn.close()
+    emails = [r["email"] for r in rows]
+    if not emails:
+        return jsonify({"ok": False, "error": "No active subscribers."}), 400
+    frm = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+    sent, failed = 0, 0
+    for email in emails:
+        payload = _json.dumps({
+            "from": frm,
+            "to": [email],
+            "subject": subject,
+            "text": body + "\n\n—\nUnsubscribe: https://www.snyderscriptorium.com/store/unsubscribe?email=" + email,
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={"Authorization": "Bearer " + resend_key, "Content-Type": "application/json",
+                     "User-Agent": "SnyderScriptorium/1.0"},
+            method="POST",
+        )
+        try:
+            with _urlreq.urlopen(req, timeout=20):
+                sent += 1
+        except Exception:
+            failed += 1
+    return jsonify({"ok": True, "sent": sent, "failed": failed})
 
 
 @store_bp.route("/api/store/admin/products", methods=["GET"])

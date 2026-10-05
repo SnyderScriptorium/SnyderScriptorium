@@ -130,6 +130,15 @@
             <button id="requestBookBtn" class="store-request-btn" type="button">Request This Book</button>
         </div>
     </div>
+    <div class="store-subscribe" style="margin-top: 2rem; text-align: center;">
+        <h2>Get notified of new arrivals</h2>
+        <p>One email a week — new books and new posts, nothing else.</p>
+        <div class="store-request-row" style="justify-content: center;">
+            <input id="subscribeEmail" type="email" placeholder="Your email" aria-label="Email for new arrival notifications" autocomplete="email">
+            <button id="subscribeBtn" class="store-request-btn" type="button">Notify Me</button>
+        </div>
+        <p id="subscribeMsg" style="margin-top: 0.5rem;"></p>
+    </div>
 </section>
 
 <script>
@@ -249,6 +258,20 @@
   });
   buildGenrePills();
   apply();
+  var subBtn=document.getElementById('subscribeBtn');
+  if(subBtn) subBtn.addEventListener('click',function(){
+    var em=(document.getElementById('subscribeEmail').value||'').trim();
+    var msg=document.getElementById('subscribeMsg');
+    if(!em||em.indexOf('@')<0){msg.textContent='Please enter a valid email.';return;}
+    msg.textContent='Subscribing…';
+    fetch('/store/subscribe',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'email='+encodeURIComponent(em)})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        msg.textContent=d.ok?'You\u2019re on the list — see you Friday.':'Something went wrong, try again.';
+        if(d.ok) document.getElementById('subscribeEmail').value='';
+      })
+      .catch(function(){msg.textContent='Something went wrong, try again.';});
+  });
 })();
 </script>
 {% endblock %}
