@@ -85,6 +85,32 @@ def rowval(row, index, key=None):
     except (KeyError, TypeError, IndexError): return None
 
 
+def count_sessions(view_times, gap_minutes=30):
+    """Count distinct visit sessions from a sorted list of datetimes.
+    A new session starts when gap between consecutive views exceeds gap_minutes."""
+    from datetime import datetime
+    if not view_times:
+        return 0
+    # Parse to datetimes if they're strings
+    times = []
+    for t in view_times:
+        if isinstance(t, str):
+            try:
+                times.append(datetime.fromisoformat(t.replace('Z', '+00:00')))
+            except:
+                continue
+        elif isinstance(t, datetime):
+            times.append(t)
+    if not times:
+        return 0
+    times.sort()
+    sessions = 1
+    for i in range(1, len(times)):
+        gap = (times[i] - times[i-1]).total_seconds() / 60
+        if gap > gap_minutes:
+            sessions += 1
+    return sessions
+
 def clean_path(path):
     value = str(path or "").split("?", 1)[0].rstrip("/")
     return value or "/"
@@ -247,18 +273,23 @@ def report(period, content_page=1, source_page=1, drill_path=None):
             f"SELECT COUNT(DISTINCT pv.visitor_key) AS unique_visitors FROM page_views pv{where}"
             f"{' AND' if where else ' WHERE'} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''", params
         ).fetchone(), 0, "unique_visitors"))
-        # Returning visitors: distinct visitors in the period with more than one page view.
-        # Same definition for every period so the numbers line up.
-        _where = "pv.viewed_at >= ? AND" if start else ""
-        _params = [start.isoformat()] if start else []
-        returning = int(rowval(conn.execute(
-            "SELECT COUNT(*) AS returning_visitors FROM ("
-            "SELECT pv.visitor_key FROM page_views pv"
-            f" WHERE {_where} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''"
-            " GROUP BY pv.visitor_key HAVING COUNT(*) > 1"
-            ") sub",
-            _params
-        ).fetchone(), 0, "returning_visitors"))
+        # Returning visitors: distinct visitors with 2+ separate visit sessions in the period.
+        # A session is a cluster of page views with no more than 30 min gap.
+        # Someone who leaves and comes back later (same day or another) counts as returning.
+        _sess_where = " WHERE pv.viewed_at >= ?" if start else ""
+        _sess_params = [start.isoformat()] if start else []
+        _sess_rows = conn.execute(
+            f"SELECT pv.visitor_key AS vk, pv.viewed_at AS va FROM page_views pv{_sess_where}"
+            f"{' AND' if _sess_where else ' WHERE'} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''",
+            _sess_params
+        ).fetchall()
+        _visitor_times = {}
+        for _r in _sess_rows:
+            _vk = rowval(_r, 0, "vk")
+            _va = rowval(_r, 1, "va")
+            if _vk:
+                _visitor_times.setdefault(_vk, []).append(_va)
+        returning = sum(1 for _times in _visitor_times.values() if count_sessions(_times) > 1)
 
         rows = conn.execute(f"SELECT pv.viewed_at AS viewed_at,pv.visitor_key AS visitor_key,pv.path AS path FROM page_views pv{where}", params).fetchall()
         drill_path = clean_path(drill_path) if drill_path else None
@@ -405,9 +436,27 @@ def report(period, content_page=1, source_page=1, drill_path=None):
         except Exception:
             pass
 
+        # Regulars/Fans: visitors with 4+ separate sessions in the last 30 days.
+        # Always a 30-day rolling window, independent of the selected period.
+        from datetime import timedelta
+        _reg_start = (datetime.now(EASTERN) - timedelta(days=30)).isoformat()
+        _reg_rows = conn.execute(
+            "SELECT pv.visitor_key AS vk, pv.viewed_at AS va FROM page_views pv"
+            " WHERE pv.viewed_at >= ? AND pv.visitor_key IS NOT NULL AND pv.visitor_key<>''",
+            [_reg_start]
+        ).fetchall()
+        _reg_times = {}
+        for _r in _reg_rows:
+            _vk = rowval(_r, 0, "vk")
+            _va = rowval(_r, 1, "va")
+            if _vk:
+                _reg_times.setdefault(_vk, []).append(_va)
+        regulars = sum(1 for _times in _reg_times.values() if count_sessions(_times) >= 4)
+
         return {
             "period": period, "total_views": total, "total_views_today": total if period == "day" else None,
-            "unique_visitors": unique, "returning_visitors": returning, "all_time_views": all_time, "daily_views": daily,
+            "unique_visitors": unique, "returning_visitors": returning, "regulars": regulars,
+            "all_time_views": all_time, "daily_views": daily,
             "published_in_period": published_in_period, "chapters_in_period": chapters_in_period,
             "chart_max": chart_max, "chart_ticks": chart_ticks, "drilldown": drilldown, "content_views": content_page_items,
             "content_pagination": {"page": content_page, "pages": content_pages, "total": content_total},
