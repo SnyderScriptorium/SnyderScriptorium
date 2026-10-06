@@ -686,10 +686,15 @@ def delete_draft(draft_id):
 @app.route("/api/published", methods=["GET"])
 @admin_required
 def get_published():
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = min(1000, max(1, int(request.args.get("per_page", 15))))
+    offset = (page - 1) * per_page
     conn = get_db()
-    rows = conn.execute("SELECT id, title, category, category_name, substr(content, 1, 200) AS content, date_published AS date, access_level FROM published_posts ORDER BY id DESC").fetchall()
+    total = conn.execute("SELECT COUNT(*) AS n FROM published_posts").fetchone()["n"]
+    rows = conn.execute("SELECT id, title, category, category_name, content, date_published AS date, access_level FROM published_posts ORDER BY id DESC LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
     conn.close()
-    return jsonify([dict(row) for row in rows])
+    pages = (total + per_page - 1) // per_page
+    return jsonify({"posts": [dict(row) for row in rows], "page": page, "pages": pages, "total": total, "per_page": per_page})
 
 
 @app.route("/api/published", methods=["POST"])
