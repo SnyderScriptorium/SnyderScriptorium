@@ -247,7 +247,7 @@ def report(period, content_page=1, source_page=1, drill_path=None):
             f"SELECT COUNT(DISTINCT pv.visitor_key) AS unique_visitors FROM page_views pv{where}"
             f"{' AND' if where else ' WHERE'} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''", params
         ).fetchone(), 0, "unique_visitors"))
-        # Returning visitors: visitors in the period who came back on a different day within that period.
+        # Returning visitors: distinct visitors in the period with more than one page view.
         # Same definition for every period so the numbers line up.
         _where = "pv.viewed_at >= ? AND" if start else ""
         _params = [start.isoformat()] if start else []
@@ -255,7 +255,7 @@ def report(period, content_page=1, source_page=1, drill_path=None):
             "SELECT COUNT(*) AS returning_visitors FROM ("
             "SELECT pv.visitor_key FROM page_views pv"
             f" WHERE {_where} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''"
-            " GROUP BY pv.visitor_key HAVING COUNT(DISTINCT DATE(pv.viewed_at)) > 1"
+            " GROUP BY pv.visitor_key HAVING COUNT(*) > 1"
             ") sub",
             _params
         ).fetchone(), 0, "returning_visitors"))
