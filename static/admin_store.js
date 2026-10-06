@@ -139,7 +139,7 @@
       statusWrap.innerHTML='';
       [['all','All'],['draft','Drafts'],['active','Published'],['archived','Archived']].forEach(pair=>{
         const b=pillButton(pair[1],filters.status===pair[0]);
-        b.addEventListener('click',()=>{filters.status=pair[0];buildFilterControls();renderList();});
+        b.addEventListener('click',()=>{filters.status=pair[0];filters.genre='all';filters.letter='all';filters.q='';const si=document.getElementById('storeSearch');if(si)si.value='';buildFilterControls();renderList();});
         statusWrap.appendChild(b);
       });
     }
