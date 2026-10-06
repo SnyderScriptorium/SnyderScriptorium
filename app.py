@@ -687,7 +687,7 @@ def delete_draft(draft_id):
 @admin_required
 def get_published():
     conn = get_db()
-    rows = conn.execute("SELECT id, title, category, category_name, content, date_published AS date, access_level FROM published_posts ORDER BY id DESC").fetchall()
+    rows = conn.execute("SELECT id, title, category, category_name, substr(content, 1, 200) AS content, date_published AS date, access_level FROM published_posts ORDER BY id DESC").fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
 
