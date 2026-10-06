@@ -240,13 +240,18 @@
     return new File([blob],String(file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
   }
   async function save(){
-    const title=document.getElementById('storeTitle').value.trim();
+    const titleEl=document.getElementById('storeTitle');
+    const priceEl=document.getElementById('storePrice');
+    if(!titleEl||!priceEl){return window.showStatus&&window.showStatus('Form not loaded properly — refresh the page and try again.',true);}
+    const title=titleEl.value.trim();
     if(!title){return window.showStatus&&window.showStatus('Give the book a title first.',true);}
+    const priceVal=priceEl.value.trim();
+    if(!priceVal){return window.showStatus&&window.showStatus('Put a price in the Price field first.',true);}
     const fd=new FormData();
     fd.append('title',title);
+    fd.append('price',priceVal);
     fd.append('author',document.getElementById('storeAuthor').value.trim());
     fd.append('description',document.getElementById('storeDescription').value.trim());
-    fd.append('price',document.getElementById('storePrice').value);
     fd.append('format',document.getElementById('storeFormat').value);
     fd.append('isbn',document.getElementById('storeIsbn').value.trim());
     fd.append('stock_quantity',document.getElementById('storeStock').value);
