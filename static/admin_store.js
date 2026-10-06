@@ -68,9 +68,36 @@
     });
     const searchInput=document.getElementById('storeSearch');
     searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();renderList();});
+    // Autosave form draft on every input so refreshes don't lose work
+    ['storeTitle','storeAuthor','storeDescription','storePrice','storeIsbn','storeCover','storeGenre','storeStock'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',saveFormDraft);});
+    ['storeFormat','storeCategory','storeStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',saveFormDraft);});
+    if(restoreFormDraft()&&window.showStatus)window.showStatus('Restored your unsaved book entry.');
   }
+  const FORM_KEY='scriptorium_store_form_draft';
+  function saveFormDraft(){
+    if(editingId)return; // don't autosave when editing existing book
+    try{
+      const d={};
+      ['storeTitle','storeAuthor','storeDescription','storePrice','storeIsbn','storeCover','storeGenre'].forEach(id=>{const el=document.getElementById(id);if(el)d[id]=el.value;});
+      ['storeFormat','storeCategory','storeStatus'].forEach(id=>{const el=document.getElementById(id);if(el)d[id]=el.value;});
+      const sq=document.getElementById('storeStock');if(sq)d['storeStock']=sq.value;
+      localStorage.setItem(FORM_KEY,JSON.stringify(d));
+    }catch(e){}
+  }
+  function restoreFormDraft(){
+    try{
+      const raw=localStorage.getItem(FORM_KEY);
+      if(!raw)return false;
+      const d=JSON.parse(raw);
+      let has=false;
+      Object.keys(d).forEach(id=>{const el=document.getElementById(id);if(el&&d[id]){el.value=d[id];has=true;}});
+      return has;
+    }catch(e){return false;}
+  }
+  function clearFormDraft(){try{localStorage.removeItem(FORM_KEY);}catch(e){}}
   function clearForm(){
     editingId=null;
+    clearFormDraft();
     document.getElementById('storeFormHeading').textContent='Add a Book to the Store';
     document.getElementById('storeSaveButton').textContent='Add Book';
     ['storeTitle','storeDescription','storeIsbn','storeCover'].forEach(id=>document.getElementById(id).value='');
