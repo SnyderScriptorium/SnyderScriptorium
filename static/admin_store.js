@@ -2,7 +2,7 @@
   'use strict';
   let editingId=null;
   let allProducts=[];
-  const filters={q:'',genre:'all',letter:'all'};
+  const filters={q:'',genre:'all',letter:'all',status:'all'};
   const esc=v=>{const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML;};
   async function api(url,options={}){
     const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
@@ -41,6 +41,7 @@
           <p class="note">Drafts stay hidden from customers. Active books appear on The Scriptorium shelves.</p>
           <div id="storeFilterBar" style="margin-bottom:10px">
             <input id="storeSearch" type="search" placeholder="Search title, author, ISBN…" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+            <div id="storeStatusPills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
             <div id="storeGenrePills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
             <div id="storeLetterRow" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div>
             <p class="note" id="storeFilterCount" style="margin:0"></p>
@@ -133,6 +134,15 @@
     return b;
   }
   function buildFilterControls(){
+    const statusWrap=document.getElementById('storeStatusPills');
+    if(statusWrap){
+      statusWrap.innerHTML='';
+      [['all','All'],['draft','Drafts'],['active','Published'],['archived','Archived']].forEach(pair=>{
+        const b=pillButton(pair[1],filters.status===pair[0]);
+        b.addEventListener('click',()=>{filters.status=pair[0];buildFilterControls();renderList();});
+        statusWrap.appendChild(b);
+      });
+    }
     const genreWrap=document.getElementById('storeGenrePills');
     if(genreWrap){
       genreWrap.innerHTML='';
@@ -158,6 +168,7 @@
     const list=document.getElementById('storeProductList'); if(!list)return;
     const q=filters.q;
     const items=allProducts.filter(p=>{
+      if(filters.status!=='all'&&(p.status||'draft')!==filters.status)return false;
       if(filters.genre!=='all'&&(p.genre||'').trim()!==filters.genre)return false;
       if(filters.letter!=='all'&&(p.title||'').trim().toUpperCase().charAt(0)!==filters.letter)return false;
       if(q){
