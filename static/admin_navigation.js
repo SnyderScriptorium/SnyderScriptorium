@@ -30,7 +30,7 @@
     if(!window.__storeAdminScriptLoaded){
       window.__storeAdminScriptLoaded=true;
       const script=document.createElement('script');
-      script.src='/static/admin_store.js';
+      script.src='/static/admin_store.js?v=20261006d';
       script.onload=function(){if(typeof window.initStoreAdmin==='function')window.initStoreAdmin();};
       document.head.appendChild(script);
     }

@@ -6,13 +6,18 @@
   const filters={q:'',genre:'all',letter:'all',status:'all'};
   const esc=v=>{const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML;};
   async function api(url,options={}){
-    const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),15000);
+    try{
+    const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options,signal:ctrl.signal});
     const ct=r.headers.get('content-type')||'';
     if(!ct.includes('application/json'))
       throw new Error('Your admin login expired — refresh the page and log in again, then retry.');
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||`Request failed (${r.status})`);
+    clearTimeout(timer);
     return data;
+    }catch(e){clearTimeout(timer);if(e.name==='AbortError')throw new Error('Request timed out after 15 seconds — check your connection and try again.');throw e;}
   }
   function mount(){
     const mount=document.getElementById('storeAdminMount'); if(!mount||mount.dataset.ready==='1')return;
