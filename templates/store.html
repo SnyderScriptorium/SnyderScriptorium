@@ -168,7 +168,7 @@
     if(section!=='New'){genreNav.hidden=true;return;}
     const genres=[...new Set(cards
       .filter(c=>c.dataset.section==='New')
-      .map(c=>(c.dataset.genre||'').trim())
+      .flatMap(c=>(c.dataset.genre||'').split(',').map(g=>g.trim()))
       .filter(Boolean))].sort((a,b)=>a.localeCompare(b));
     if(!genres.length){genreNav.hidden=true;return;}
     genreNav.hidden=false;
@@ -210,7 +210,7 @@
     cards.forEach(card=>{
       const titleText=card.dataset.title||'', author=card.dataset.author||'', publisher=card.dataset.publisher||'';
       const sectionOK=!section||card.dataset.section===section;
-      const genreOK=section!=='New'||!genre||(card.dataset.genre||'').trim().toLowerCase()===genre.toLowerCase();
+      const cardGenres=(card.dataset.genre||'').split(',').map(g=>g.trim().toLowerCase());const genreOK=section!=='New'||!genre||cardGenres.includes(genre.toLowerCase());
       const letterOK=!letter||titleText.startsWith(letter.toLowerCase());
       const searchOK=!q||titleText.includes(q)||author.includes(q)||publisher.includes(q);
       if(sectionOK&&genreOK&&letterOK&&searchOK) matched.push(card);

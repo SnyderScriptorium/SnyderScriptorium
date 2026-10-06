@@ -2,6 +2,7 @@
   'use strict';
   let editingId=null;
   let allProducts=[];
+  let productPage=1, productPages=1, productTotal=0;
   const filters={q:'',genre:'all',letter:'all',status:'all'};
   const esc=v=>{const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML;};
   async function api(url,options={}){
@@ -139,7 +140,7 @@
       statusWrap.innerHTML='';
       [['all','All'],['draft','Drafts'],['active','Published'],['archived','Archived']].forEach(pair=>{
         const b=pillButton(pair[1],filters.status===pair[0]);
-        b.addEventListener('click',()=>{filters.status=pair[0];filters.genre='all';filters.letter='all';filters.q='';const si=document.getElementById('storeSearch');if(si)si.value='';buildFilterControls();renderList();});
+        b.addEventListener('click',()=>{filters.status=pair[0];filters.genre='all';filters.letter='all';filters.q='';const si=document.getElementById('storeSearch');if(si)si.value='';productPage=1;buildFilterControls();load();});
         statusWrap.appendChild(b);
       });
     }
@@ -178,7 +179,7 @@
       return true;
     });
     const count=document.getElementById('storeFilterCount');
-    if(count)count.textContent=allProducts.length?(items.length+' of '+allProducts.length+' books'):'';
+    if(count)count.textContent=productTotal?(items.length+' of '+productTotal+' books'):'';
     list.innerHTML=items.length?'':'<p class="note">'+(allProducts.length?'No books match these filters.':'No books have been added to the store yet. Add your first finished book on the left.')+'</p>';
     items.forEach(p=>{
       const card=document.createElement('div'); card.className='card';
@@ -186,13 +187,33 @@
       card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
       list.appendChild(card);
     });
+    if(productPages>1){
+      const nav=document.createElement('div');
+      nav.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center';
+      for(let i=1;i<=productPages;i++){
+        const b=pillButton(String(i),productPage===i);
+        b.addEventListener('click',()=>{window.scrollTo({top:0,behavior:'smooth'});load(i);});
+        nav.appendChild(b);
+      }
+      const info=document.createElement('span');
+      info.className='note';
+      info.textContent=productTotal+' books total';
+      info.style.marginLeft='8px';
+      nav.appendChild(info);
+      list.appendChild(nav);
+    }
   }
-  async function load(){
+  async function load(page){
+    if(page)productPage=page;
     mount();
     const list=document.getElementById('storeProductList'); if(!list)return;
     list.innerHTML='<p class="note">Loading books...</p>';
     try{
-      allProducts=await api('/api/store/admin/products');
+      const statusParam=filters.status!=='all'?'&status='+encodeURIComponent(filters.status):'';
+      const res=await api('/api/store/admin/products?page='+productPage+statusParam);
+      allProducts=res.products||res;
+      productPages=res.pages||1;
+      productTotal=res.total||allProducts.length;
       const dl=document.getElementById('storeGenreList');
       if(dl){
         const genres=[...new Set(allProducts.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));

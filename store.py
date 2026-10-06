@@ -758,10 +758,20 @@ def admin_products():
     blocked = admin_required()
     if blocked:
         return blocked
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = min(1000, max(1, int(request.args.get("per_page", 15))))
+    status_filter = (request.args.get("status") or "all").strip().lower()
+    offset = (page - 1) * per_page
     conn = get_db()
-    rows = conn.execute("SELECT * FROM store_products ORDER BY LOWER(title), id").fetchall()
+    if status_filter in ("draft", "active", "archived"):
+        total = conn.execute("SELECT COUNT(*) AS n FROM store_products WHERE status = ?", (status_filter,)).fetchone()["n"]
+        rows = conn.execute("SELECT * FROM store_products WHERE status = ? ORDER BY LOWER(title), id LIMIT ? OFFSET ?", (status_filter, per_page, offset)).fetchall()
+    else:
+        total = conn.execute("SELECT COUNT(*) AS n FROM store_products").fetchone()["n"]
+        rows = conn.execute("SELECT * FROM store_products ORDER BY LOWER(title), id LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
     conn.close()
-    return jsonify([public_dict(row) for row in rows])
+    pages = (total + per_page - 1) // per_page
+    return jsonify({"products": [public_dict(row) for row in rows], "page": page, "pages": pages, "total": total, "per_page": per_page})
 
 
 @store_bp.route("/api/store/admin/products", methods=["POST"])
