@@ -256,15 +256,6 @@ def report(period, content_page=1, source_page=1, drill_path=None):
                 " AND EXISTS (SELECT 1 FROM page_views pv2 WHERE pv2.visitor_key = pv.visitor_key AND pv2.viewed_at < ?)",
                 [start.isoformat(), start.isoformat()]
             ).fetchone(), 0, "returning_visitors"))
-        else:
-            # All time: visitors who came back on a different day
-            returning = int(rowval(conn.execute(
-                "SELECT COUNT(*) AS returning_visitors FROM ("
-                "SELECT pv.visitor_key FROM page_views pv"
-                " WHERE pv.visitor_key IS NOT NULL AND pv.visitor_key<>''"
-                " GROUP BY pv.visitor_key HAVING COUNT(DISTINCT DATE(pv.viewed_at)) > 1"
-                ") sub"
-            ).fetchone(), 0, "returning_visitors"))
 
         rows = conn.execute(f"SELECT pv.viewed_at AS viewed_at,pv.visitor_key AS visitor_key,pv.path AS path FROM page_views pv{where}", params).fetchall()
         drill_path = clean_path(drill_path) if drill_path else None
