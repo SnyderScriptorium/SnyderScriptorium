@@ -25,7 +25,7 @@
           <label>Title</label><input id="storeTitle" type="text">
           <label>Author</label><input id="storeAuthor" type="text" value="K. W. Snyder">
           <label>Description</label><textarea id="storeDescription" style="min-height:180px"></textarea>
-          <div class="two"><div><label>Price (USD)</label><input id="storePrice" type="number" min="0" step="0.01"></div><div><label>Format</label><select id="storeFormat"><option>Paperback</option><option>Hardcover</option><option>eBook</option><option>Other</option></select></div></div>
+          <div class="two"><div><label>Price (USD)</label><input id="storePrice" type="text" inputmode="decimal" placeholder="0.00"></div><div><label>Format</label><select id="storeFormat"><option>Paperback</option><option>Hardcover</option><option>eBook</option><option>Other</option></select></div></div>
           <div class="two"><div><label>ISBN</label><input id="storeIsbn" type="text"></div><div><label>Stock Quantity</label><input id="storeStock" type="number" min="0" step="1" value="0"></div></div>
           <label>Book Photo</label><input id="storePhoto" type="file" accept="image/png,image/jpeg,image/gif,image/webp">
           <img id="storePhotoPreview" alt="Photo preview" style="display:none;max-width:160px;margin-top:6px;border:1px solid #C9B78F;border-radius:4px">
@@ -245,8 +245,9 @@
     if(!titleEl||!priceEl){return window.showStatus&&window.showStatus('Form not loaded properly — refresh the page and try again.',true);}
     const title=titleEl.value.trim();
     if(!title){return window.showStatus&&window.showStatus('Give the book a title first.',true);}
-    const priceVal=priceEl.value.trim();
+    const priceVal=priceEl.value.replace(/[$,\s]/g,'').trim();
     if(!priceVal){return window.showStatus&&window.showStatus('Put a price in the Price field first.',true);}
+    if(isNaN(parseFloat(priceVal))||parseFloat(priceVal)<0){return window.showStatus&&window.showStatus('Price must be a number, like 9.25.',true);}
     const fd=new FormData();
     fd.append('title',title);
     fd.append('price',priceVal);
