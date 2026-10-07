@@ -45,6 +45,10 @@
 <div class="actions"><button type="button" onclick="sendDigest()">Send digest to all subscribers</button></div>
 <p class="help">Sends one plain-text email per subscriber through Resend, with an unsubscribe link. Needs RESEND_API_KEY set.</p>
 </section>
+<section class="card"><h2>Orders</h2><p class="note">Newest first. Paste the USPS tracking number and hit Ship — the customer gets an email with the tracking link.</p>
+<div class="actions" style="margin-top:0"><button type="button" class="light" onclick="loadOrders()">Refresh orders</button></div>
+<div id="orderList" class="list" style="margin-top:10px"></div>
+</section>
 </div></div></div>
 <script>
 const $=id=>document.getElementById(id);
@@ -67,7 +71,10 @@ async function deleteProduct(id){if(!confirm('Delete this book permanently? This
 async function loadSubscribers(){const r=await fetch('/api/store/admin/subscribers');if(!r.ok){showStatus('Could not load the email list.',true);return;}const subs=await r.json();$('subCount').textContent=subs.length+' subscriber'+(subs.length===1?'':'s');$('subList').innerHTML=subs.length?subs.map(s=>'<div class="product"><div><h3>'+esc(s.email)+'</h3><small>since '+esc(s.subscribed_at||'')+'</small></div></div>').join(''):'<div class="product"><div><small>No subscribers yet.</small></div></div>';}
 async function addSubscribers(){const raw=$('bulkEmails').value.trim();if(!raw){showStatus('Paste at least one email address first.',true);return;}const r=await fetch('/api/store/admin/subscribers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emails:raw})});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not add emails.',true);return;}showStatus('Added '+data.added+' email'+(data.added===1?'':'s')+' to the list.');$('bulkEmails').value='';loadSubscribers();}
 async function sendDigest(){const subject=$('digestSubject').value.trim();const body=$('digestBody').value.trim();if(!subject||!body){showStatus('Subject and body are both required.',true);return;}if(!confirm('Send this digest to all subscribers now?'))return;const r=await fetch('/api/store/admin/digest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject:subject,body:body})});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not send the digest.',true);return;}showStatus('Digest sent: '+data.sent+' sent, '+data.failed+' failed.');}
+async function loadOrders(){const r=await fetch('/api/store/admin/orders');if(!r.ok){showStatus('Could not load orders.',true);return;}const orders=await r.json();const el=$('orderList');if(!orders.length){el.innerHTML='<div class="product"><div><small>No orders yet.</small></div></div>';return;}el.innerHTML=orders.map(o=>{const items=(o.items||[]).map(i=>esc(i.title)+(i.quantity>1?' x'+i.quantity:'')).join(', ')||'—';const shipped=o.order_status==='shipped';return `<div class="product"><div><h3>Order #${o.id} — $${money((o.total_cents||0)/100)}</h3><small>${esc(o.customer_name||'')} · ${esc(o.customer_email||'')} · ${esc(o.date_created||'')} · ${esc(o.order_status||'pending')}<br>${items}${o.tracking_number?'<br>Tracking: '+esc(o.tracking_number):''}</small></div>${shipped?'':`<div class="actions" style="margin-top:8px"><input id="track-${o.id}" placeholder="USPS tracking number" style="max-width:260px"><button class="light" onclick="shipOrder(${o.id})">Ship</button></div>`}</div>`;}).join('');}
+async function shipOrder(id){const input=$('track-'+id);const tn=(input.value||'').trim();if(!tn){showStatus('Paste the USPS tracking number first.',true);return;}if(!confirm('Mark order #'+id+' shipped and email the customer the tracking number?'))return;const r=await fetch(`/api/store/admin/orders/${id}/ship`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tracking_number:tn})});const data=await r.json();if(!r.ok){showStatus(data.error||'Could not ship the order.',true);return;}showStatus(data.emailed?'Order #'+id+' shipped — customer emailed the tracking number.':'Order #'+id+' marked shipped, but the email did not send. Check RESEND_API_KEY.');loadOrders();}
 loadProducts().catch(()=>showStatus('The bookstore manager could not load its books.',true));
 loadSubscribers().catch(()=>{});
+loadOrders().catch(()=>{});
 </script>
 </body></html>

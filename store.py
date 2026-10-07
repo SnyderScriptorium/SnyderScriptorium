@@ -149,6 +149,7 @@ def ensure_store_tables():
                 "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_state TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_postal TEXT NOT NULL DEFAULT ''",
                 "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS ship_country TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS tracking_number TEXT NOT NULL DEFAULT ''",
             ]
         else:
             existing = {row["name"] for row in conn.execute("PRAGMA table_info(store_products)").fetchall()}
@@ -172,7 +173,7 @@ def ensure_store_tables():
                     migrations.append(f"ALTER TABLE store_products ADD COLUMN {name} {definition}")
             existing_orders = {row["name"] for row in conn.execute("PRAGMA table_info(store_orders)").fetchall()}
             for name in ("ship_name", "ship_line1", "ship_line2", "ship_city",
-                         "ship_state", "ship_postal", "ship_country"):
+                         "ship_state", "ship_postal", "ship_country", "tracking_number"):
                 if name not in existing_orders:
                     migrations.append(f"ALTER TABLE store_orders ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
         for statement in migrations:
@@ -751,6 +752,116 @@ def admin_send_digest():
         except Exception:
             failed += 1
     return jsonify({"ok": True, "sent": sent, "failed": failed})
+
+
+def _send_shipment_email(order, tracking_number):
+    """Email the customer their USPS tracking number when their order ships.
+
+    Never raises: a failed or unconfigured send must not break the admin flow.
+    Returns True if an email was actually sent.
+    """
+    try:
+        import json as _json
+        import urllib.request as _urlreq
+        resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+        if not resend_key:
+            print("[store] shipment email skipped: RESEND_API_KEY not set", flush=True)
+            return False
+        customer_email = (order.get("customer_email") or "").strip()
+        if not customer_email:
+            print("[store] shipment email skipped: no customer email on order %s" % order.get("id"), flush=True)
+            return False
+        resend_from = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+        order_id = order.get("id")
+        track_url = "https://tools.usps.com/go/TrackConfirmAction?tLabels=" + tracking_number
+        body = "\n".join([
+            "Your books are on their way!",
+            "Snyder Scriptorium",
+            "",
+            "Order #%s shipped via USPS Media Mail." % order_id,
+            "",
+            "Tracking number: %s" % tracking_number,
+            "Track it here: %s" % track_url,
+            "",
+            "Media Mail usually takes 2–8 business days. If it hasn't moved",
+            "in a few days, reply to this email and we'll look into it.",
+            "",
+            "Thank you for supporting a working bookstore —",
+            "K.W.",
+        ])
+        payload = _json.dumps({
+            "from": resend_from,
+            "to": [customer_email],
+            "subject": "Your Snyder Scriptorium order #%s has shipped" % order_id,
+            "text": body,
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": "Bearer " + resend_key,
+                "Content-Type": "application/json",
+                "User-Agent": "SnyderScriptorium/1.0",
+            },
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=20):
+            pass
+        print("[store] shipment email sent for order %s" % order_id, flush=True)
+        return True
+    except Exception as exc:
+        print("[store] shipment email failed for order %s: %r" % (order.get("id"), exc), flush=True)
+        return False
+
+
+@store_bp.route("/api/store/admin/orders", methods=["GET"])
+def admin_orders():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM store_orders ORDER BY date_created DESC LIMIT 200"
+    ).fetchall()
+    orders = []
+    for row in rows:
+        order = dict(row)
+        items = conn.execute(
+            "SELECT p.title, oi.quantity FROM store_order_items oi"
+            " JOIN store_products p ON p.id = oi.product_id"
+            " WHERE oi.order_id = ? ORDER BY oi.id",
+            (order["id"],),
+        ).fetchall()
+        order["items"] = [dict(i) for i in items]
+        orders.append(order)
+    conn.close()
+    return jsonify(orders)
+
+
+@store_bp.route("/api/store/admin/orders/<int:order_id>/ship", methods=["POST"])
+def admin_ship_order(order_id):
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    data = request.get_json(force=True, silent=True) or {}
+    tracking_number = (data.get("tracking_number") or "").strip()
+    if not tracking_number:
+        return jsonify({"ok": False, "error": "Tracking number is required."}), 400
+    conn = get_db()
+    row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (order_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Order not found."}), 404
+    order = dict(row)
+    conn.execute(
+        "UPDATE store_orders SET tracking_number = ?, order_status = 'shipped', date_updated = ? WHERE id = ?",
+        (tracking_number, now_string(), order_id),
+    )
+    conn.commit()
+    order["tracking_number"] = tracking_number
+    emailed = _send_shipment_email(order, tracking_number)
+    conn.close()
+    return jsonify({"ok": True, "emailed": emailed})
 
 
 @store_bp.route("/api/store/admin/products", methods=["GET"])
