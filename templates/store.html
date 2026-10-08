@@ -22,6 +22,17 @@
 .genre-nav{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:0 0 20px}
 .genre-pill{padding:7px 16px;border:1px solid #C9B78F;border-radius:999px;background:#FFFDF8;color:#5C4033;font:inherit;font-size:.9rem;cursor:pointer}
 .genre-pill:hover,.genre-pill.active{background:#5C4033;color:#fff;border-color:#5C4033}
+.store-layout{display:flex;gap:26px;align-items:flex-start}
+.genre-sidebar{flex:0 0 220px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:16px;box-shadow:0 4px 14px rgba(40,30,20,.05);position:sticky;top:18px}
+.genre-sidebar h3{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 10px;font-size:1.05rem}
+.genre-side-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.genre-side-btn{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0;border-radius:5px;background:transparent;color:#5C4033;font:inherit;font-size:.92rem;cursor:pointer}
+.genre-side-btn:hover{background:#F5EEE3}
+.genre-side-btn.active{background:#5C4033;color:#fff}
+.genre-side-btn.active .genre-count{color:#E8DCC3}
+.genre-count{font-size:.82rem;color:#8A6D3B;white-space:nowrap}
+.store-main{flex:1;min-width:0}
+@media(min-width:651px){.genre-nav{display:none!important}}
 .store-main-title{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 14px}
 .store-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px}
 .store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:14px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}
@@ -46,7 +57,7 @@
 .store-request-row input{padding:10px 12px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924;min-width:200px}
 .store-request-btn{padding:10px 20px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;cursor:pointer}
 .store-request-btn:hover{filter:brightness(.94)}
-@media(max-width:650px){.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}.store-grid{grid-template-columns:repeat(3,1fr);gap:10px}.store-card{padding:10px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-section{font-size:.7rem;margin-bottom:4px}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
+@media(max-width:650px){.store-layout{display:block}.genre-sidebar{display:none}.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}.store-grid{grid-template-columns:repeat(3,1fr);gap:10px}.store-card{padding:10px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-section{font-size:.7rem;margin-bottom:4px}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
 </style>
 {% endblock %}
 
@@ -68,7 +79,7 @@
         <button class="collection-link" type="button" data-section="New">New</button>
         <button class="collection-link active" type="button" data-section="">All Books</button>
     </nav>
-    <div class="genre-nav" id="genreNav" aria-label="Browse new books by genre" hidden></div>
+    <div class="genre-nav" id="genreNav" aria-label="Browse books by genre" hidden></div>
 
     {% if products %}
     <div class="store-controls" aria-label="Bookstore search and filters">
@@ -85,6 +96,12 @@
         <p id="storeFilterNote" class="store-filter-note"></p>
     </div>
 
+    <div class="store-layout">
+    <aside class="genre-sidebar" id="genreSidebar" aria-label="Browse books by genre" hidden>
+        <h3 id="genreSidebarTitle">Genres</h3>
+        <ul class="genre-side-list" id="genreSidebarList"></ul>
+    </aside>
+    <div class="store-main">
     <h2 id="storeMainTitle" class="store-main-title">All Books</h2>
     <div id="storeGrid" class="store-grid">
         {% for p in products %}
@@ -115,6 +132,8 @@
         <p>Try another section, letter, or search term.</p>
     </div>
     <div id="storePages" class="store-pages" hidden></div>
+    </div>
+    </div>
     {% else %}
     <div class="store-empty">
         <h2>Stocking the shelves…</h2>
@@ -154,33 +173,71 @@
   const pages=document.getElementById('storePages');
   const grid=document.getElementById('storeGrid');
   const genreNav=document.getElementById('genreNav');
+  const genreSidebar=document.getElementById('genreSidebar');
+  const genreSidebarList=document.getElementById('genreSidebarList');
+  const genreSidebarTitle=document.getElementById('genreSidebarTitle');
   const PAGE_SIZE=25;
   let section='', genre='', letter='', query='', page=1;
 
   function sectionLabel(){
     const base=section===''?'All Books':(section+' Books');
-    return (section==='New'&&genre)?(base+' · '+genre):base;
+    return genre?(base+' · '+genre):base;
   }
 
-  function buildGenrePills(){
+  function sectionGenres(){
+    const pool=section?cards.filter(c=>c.dataset.section===section):cards;
+    const counts={};
+    pool.forEach(c=>{
+      (c.dataset.genre||'').split(',').map(g=>g.trim()).filter(Boolean)
+        .forEach(g=>{counts[g]=(counts[g]||0)+1;});
+    });
+    return Object.keys(counts).sort((a,b)=>a.localeCompare(b))
+      .map(name=>({name:name,count:counts[name]}));
+  }
+
+  function setGenre(g){
+    genre=g;page=1;buildGenreNav();apply();gridTop();
+  }
+
+  function buildGenreNav(){
     if(!genreNav) return;
+    const genres=sectionGenres();
     genreNav.innerHTML='';
-    if(section!=='New'){genreNav.hidden=true;return;}
-    const genres=[...new Set(cards
-      .filter(c=>c.dataset.section==='New')
-      .flatMap(c=>(c.dataset.genre||'').split(',').map(g=>g.trim()))
-      .filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-    if(!genres.length){genreNav.hidden=true;return;}
+    if(genreSidebarList) genreSidebarList.innerHTML='';
+    if(genreSidebarTitle) genreSidebarTitle.textContent=(section||'All')+' Genres';
+    if(!genres.length){genreNav.hidden=true;if(genreSidebar) genreSidebar.hidden=true;return;}
     genreNav.hidden=false;
+    if(genreSidebar) genreSidebar.hidden=false;
     const all=document.createElement('button');
     all.type='button';all.className='genre-pill'+(genre===''?' active':'');all.textContent='All Genres';
-    all.addEventListener('click',()=>{genre='';page=1;buildGenrePills();apply();});
+    all.addEventListener('click',()=>setGenre(''));
     genreNav.appendChild(all);
+    if(genreSidebarList){
+      const allLi=document.createElement('li');
+      const allBtn=document.createElement('button');
+      allBtn.type='button';allBtn.className='genre-side-btn'+(genre===''?' active':'');
+      const allLabel=document.createElement('span');allLabel.textContent='All Genres';
+      allBtn.appendChild(allLabel);
+      allBtn.addEventListener('click',()=>setGenre(''));
+      allLi.appendChild(allBtn);
+      genreSidebarList.appendChild(allLi);
+    }
     genres.forEach(g=>{
       const b=document.createElement('button');
-      b.type='button';b.className='genre-pill'+(genre===g?' active':'');b.textContent=g;
-      b.addEventListener('click',()=>{genre=g;page=1;buildGenrePills();apply();gridTop();});
+      b.type='button';b.className='genre-pill'+(genre===g.name?' active':'');b.textContent=g.name;
+      b.addEventListener('click',()=>setGenre(g.name));
       genreNav.appendChild(b);
+      if(genreSidebarList){
+        const li=document.createElement('li');
+        const sb=document.createElement('button');
+        sb.type='button';sb.className='genre-side-btn'+(genre===g.name?' active':'');
+        const label=document.createElement('span');label.textContent=g.name;
+        const cnt=document.createElement('span');cnt.className='genre-count';cnt.textContent=g.count;
+        sb.appendChild(label);sb.appendChild(cnt);
+        sb.addEventListener('click',()=>setGenre(g.name));
+        li.appendChild(sb);
+        genreSidebarList.appendChild(li);
+      }
     });
   }
 
@@ -210,7 +267,7 @@
     cards.forEach(card=>{
       const titleText=card.dataset.title||'', author=card.dataset.author||'', publisher=card.dataset.publisher||'';
       const sectionOK=!section||card.dataset.section===section;
-      const cardGenres=(card.dataset.genre||'').split(',').map(g=>g.trim().toLowerCase());const genreOK=section!=='New'||!genre||cardGenres.includes(genre.toLowerCase());
+      const cardGenres=(card.dataset.genre||'').split(',').map(g=>g.trim().toLowerCase());const genreOK=!genre||cardGenres.includes(genre.toLowerCase());
       const letterOK=!letter||titleText.startsWith(letter.toLowerCase());
       const searchOK=!q||titleText.includes(q)||author.includes(q)||publisher.includes(q);
       if(sectionOK&&genreOK&&letterOK&&searchOK) matched.push(card);
@@ -237,7 +294,7 @@
     genre='';
     page=1;
     sections.forEach(x=>x.classList.toggle('active',x===btn));
-    buildGenrePills();
+    buildGenreNav();
     apply();
   }));
   letters.forEach(btn=>btn.addEventListener('click',()=>{
@@ -256,7 +313,7 @@
     var msg='Author: '+(a||'—')+'\nTitle: '+(t||'—')+'\n\n(Where should we reach you if a copy turns up?)';
     window.location.href='/contact?subject='+encodeURIComponent('Book Request')+'&message='+encodeURIComponent(msg);
   });
-  buildGenrePills();
+  buildGenreNav();
   apply();
   var subBtn=document.getElementById('subscribeBtn');
   if(subBtn) subBtn.addEventListener('click',function(){
