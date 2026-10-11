@@ -932,9 +932,13 @@ SCRIPTSMITH_BETA_PASSCODE = "Trial1"
 SCRIPTSMITH_APK_URL = "https://muse.ai/files/1334834263038768/992184323919572/cqzmpsie04cjatve7dpyfiiq/github-fixsignup.apk"
 
 
+@app.route("/scriptsmith-confirmed")
+def scriptsmith_confirmed():
+    return render_template("scriptsmith_confirmed.html")
+
+
 @app.route("/scriptsmith-beta", methods=["GET", "POST"])
-def scriptsmith_beta():
-    if request.method == "POST":
+def scriptsmith_beta():    if request.method == "POST":
         if request.form.get("passcode", "") == SCRIPTSMITH_BETA_PASSCODE:
             session["scriptsmith_beta_ok"] = True
             return redirect(url_for("scriptsmith_beta"))
