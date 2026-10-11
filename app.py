@@ -929,7 +929,7 @@ def update_about_content():
 # beta build goes out. Leave it empty to show "coming soon".
 # ---------------------------------------------------------------------------
 SCRIPTSMITH_BETA_PASSCODE = "Trial1"
-SCRIPTSMITH_APK_URL = "https://muse.ai/files/1334834263038768/2323436435141897/xos7jdlr3knhyawb8srmsjy1/github-nosyncfields.apk"
+SCRIPTSMITH_APK_URL = "https://muse.ai/files/1334834263038768/1460441359353547/tyr1ewpbq7sj9yhmvtgeo4vf/github-cleansync.apk"
 
 
 @app.route("/scriptsmith-beta", methods=["GET", "POST"])
