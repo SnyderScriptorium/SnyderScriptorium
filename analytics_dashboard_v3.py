@@ -503,7 +503,11 @@ def register(app):
         tab = request.args.get("tab", "overview")
         drill = request.args.get("drilldown", "")
         drill_q = f"&drilldown={quote(drill, safe='')}" if drill else ""
-        nav = "".join(f'<a href="/admin/analytics?period={key}&tab={tab}{drill_q}">{value}</a>' for key, value in [
+        cur_period = normalize_period(request.args.get("period", "30d"))
+        nav = "".join(
+            f'<a href="/admin/analytics?period={key}&tab={tab}{drill_q}"'
+            f'{" class=\"active\"" if key == cur_period else ""}>{value}</a>'
+            for key, value in [
             ("day", "1 Day — Today"), ("7d", "7 Days"), ("30d", "30 Days"), ("90d", "90 Days"),
             ("6m", "6 Months"), ("1y", "1 Year"), ("all", "All Time")])
         text = re.sub(r'<nav class="periods".*?</nav>', f'<nav class="periods" aria-label="Analytics period">{nav}</nav>', text, flags=re.S)
