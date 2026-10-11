@@ -938,7 +938,8 @@ def scriptsmith_confirmed():
 
 
 @app.route("/scriptsmith-beta", methods=["GET", "POST"])
-def scriptsmith_beta():    if request.method == "POST":
+def scriptsmith_beta():
+    if request.method == "POST":
         if request.form.get("passcode", "") == SCRIPTSMITH_BETA_PASSCODE:
             session["scriptsmith_beta_ok"] = True
             return redirect(url_for("scriptsmith_beta"))
