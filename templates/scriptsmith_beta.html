@@ -10,9 +10,21 @@
   <form method="post" action="{{ url_for('scriptsmith_beta') }}" class="beta-form">
     {% if error %}<p class="beta-error">{{ error }}</p>{% endif %}
     <label for="beta-passcode">Passcode</label>
-    <input type="password" id="beta-passcode" name="passcode" autocomplete="off" autofocus>
+    <span style="position:relative;display:block">
+      <input type="password" id="beta-passcode" name="passcode" autocomplete="off" autofocus style="padding-right:2.6em">
+      <button type="button" id="beta-showpass" aria-label="Show passcode" style="position:absolute;right:.5em;top:42%;transform:translateY(-50%);border:0;background:transparent;font-size:1.15em;cursor:pointer;padding:2px 6px">👁</button>
+    </span>
     <button type="submit">Enter</button>
   </form>
+  <script>
+    document.getElementById('beta-showpass').onclick = function() {
+      var p = document.getElementById('beta-passcode');
+      var showing = p.type === 'text';
+      p.type = showing ? 'password' : 'text';
+      this.textContent = showing ? '👁' : '🙈';
+      this.setAttribute('aria-label', showing ? 'Show passcode' : 'Hide passcode');
+    };
+  </script>
   {% else %}
   <p style="text-align:center;">Welcome, beta tester. Choose your download below.</p>
 
