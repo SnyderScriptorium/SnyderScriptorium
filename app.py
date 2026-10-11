@@ -937,6 +937,12 @@ def scriptsmith_confirmed():
     return render_template("scriptsmith_confirmed.html")
 
 
+@app.route("/scriptsmith-version.json")
+def scriptsmith_version():
+    from flask import jsonify
+    return jsonify({"build": 8, "apk_url": SCRIPTSMITH_APK_URL})
+
+
 @app.route("/scriptsmith-beta", methods=["GET", "POST"])
 def scriptsmith_beta():
     # Passcode is required on every visit — never remembered via session.
