@@ -939,15 +939,15 @@ def scriptsmith_confirmed():
 
 @app.route("/scriptsmith-beta", methods=["GET", "POST"])
 def scriptsmith_beta():
+    # Passcode is required on every visit — never remembered via session.
     if request.method == "POST":
         if request.form.get("passcode", "") == SCRIPTSMITH_BETA_PASSCODE:
-            session["scriptsmith_beta_ok"] = True
-            return redirect(url_for("scriptsmith_beta"))
+            return render_template("scriptsmith_beta.html", unlocked=True,
+                                   error=None, apk_url=SCRIPTSMITH_APK_URL)
         return render_template("scriptsmith_beta.html", unlocked=False,
                                error="Incorrect passcode. Try again.",
                                apk_url=SCRIPTSMITH_APK_URL)
-    unlocked = session.get("scriptsmith_beta_ok") is True
-    return render_template("scriptsmith_beta.html", unlocked=unlocked,
+    return render_template("scriptsmith_beta.html", unlocked=False,
                            error=None, apk_url=SCRIPTSMITH_APK_URL)
 
 
