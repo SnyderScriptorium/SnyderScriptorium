@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}ScriptSmith Beta{% endblock %}
+{% block content %}
+<div class="beta-wrap">
+  <div class="page-header">
+    <h1>ScriptSmith Beta</h1>
+  </div>
+  {% if not unlocked %}
+  <p style="text-align:center;">This is a private beta. Enter the passcode to continue.</p>
+  <form method="post" action="{{ url_for('scriptsmith_beta') }}" class="beta-form">
+    {% if error %}<p class="beta-error">{{ error }}</p>{% endif %}
+    <label for="beta-passcode">Passcode</label>
+    <input type="password" id="beta-passcode" name="passcode" autocomplete="off" autofocus>
+    <button type="submit">Enter</button>
+  </form>
+  {% else %}
+  <p style="text-align:center;">Welcome, beta tester. Choose your download below.</p>
+
+  <div class="beta-cards">
+    <div class="beta-card">
+      <h2>Android (Phone / Tablet)</h2>
+      <p>Download the APK, open it to install (allow "install unknown apps" when prompted), then open ScriptSmith and create your account or sign in. Your work syncs automatically.</p>
+      {% if apk_url %}
+      <p><a href="{{ apk_url }}" class="beta-download-btn" download>Download for Android</a></p>
+      <p class="beta-note">Beta build &middot; ~47MB</p>
+      {% else %}
+      <p class="beta-note">Android build coming soon — check back shortly.</p>
+      {% endif %}
+    </div>
+    <div class="beta-card">
+      <h2>Computer (Windows / Mac)</h2>
+      <p>Desktop builds are on the way. Once available, install it, sign in with the same account, and your manuscripts will sync over.</p>
+      <p class="beta-note">Coming soon.</p>
+    </div>
+  </div>
+
+  <div class="content-section">
+    <h2>Getting started</h2>
+    <ol>
+      <li>Install the app on your phone.</li>
+      <li>Open ScriptSmith and <strong>sign up</strong> (or sign in if you already have an account).</li>
+      <li>Write. Your manuscripts and settings sync to your account.</li>
+      <li>On your computer (when available), install and sign in with the same account — everything carries over.</li>
+    </ol>
+  </div>
+  {% endif %}
+</div>
+<style>
+.beta-wrap { max-width: 720px; margin: 0 auto; }
+.beta-form { max-width: 340px; margin: 24px auto; text-align: center; }
+.beta-form label { display: block; margin-bottom: 8px; font-weight: 600; }
+.beta-form input { width: 100%; padding: 10px; font-size: 1rem; border: 1px solid #C9B78F; border-radius: 6px; margin-bottom: 12px; background: #FFFDF8; }
+.beta-form button { padding: 10px 32px; font-size: 1rem; background: #5C4033; color: #F7F1E6; border: none; border-radius: 6px; cursor: pointer; }
+.beta-form button:hover { background: #4a3329; }
+.beta-error { color: #a33; font-weight: 600; }
+.beta-cards { display: grid; gap: 18px; margin: 28px 0; }
+@media (min-width: 640px) { .beta-cards { grid-template-columns: 1fr 1fr; } }
+.beta-card { padding: 22px; background: #FFFDF8; border: 1px solid #C9B78F; border-radius: 8px; }
+.beta-card h2 { margin-top: 0; color: #5C4033; font-size: 1.3rem; }
+.beta-note { color: #6F6257; font-style: italic; font-size: .9rem; }
+.beta-download-btn { display: inline-block; padding: 12px 28px; background: #5C4033; color: #F7F1E6 !important; text-decoration: none; border-radius: 6px; font-weight: 600; }
+.beta-download-btn:hover { background: #4a3329; }
+</style>
+{% endblock %}

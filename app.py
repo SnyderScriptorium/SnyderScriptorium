@@ -921,6 +921,31 @@ def update_about_content():
     return jsonify({"success": True})
 
 
+# ---------------------------------------------------------------------------
+# ScriptSmith beta download page (private beta — passcode gated).
+# Temporary distribution channel until the app ships on the Play Store.
+# The APK itself is NOT committed to the repo (~47MB). Set SCRIPTSMITH_APK_URL
+# to the current hosted APK link (e.g. a remote-storage URL) whenever a new
+# beta build goes out. Leave it empty to show "coming soon".
+# ---------------------------------------------------------------------------
+SCRIPTSMITH_BETA_PASSCODE = "Trial1"
+SCRIPTSMITH_APK_URL = "https://muse.ai/files/1334834263038768/1586946645793794/c5dgpl9egi6dt5l6g1pyntfh/github-signingate.apk"
+
+
+@app.route("/scriptsmith-beta", methods=["GET", "POST"])
+def scriptsmith_beta():
+    if request.method == "POST":
+        if request.form.get("passcode", "") == SCRIPTSMITH_BETA_PASSCODE:
+            session["scriptsmith_beta_ok"] = True
+            return redirect(url_for("scriptsmith_beta"))
+        return render_template("scriptsmith_beta.html", unlocked=False,
+                               error="Incorrect passcode. Try again.",
+                               apk_url=SCRIPTSMITH_APK_URL)
+    unlocked = session.get("scriptsmith_beta_ok") is True
+    return render_template("scriptsmith_beta.html", unlocked=unlocked,
+                           error=None, apk_url=SCRIPTSMITH_APK_URL)
+
+
 if __name__ == "__main__":
     init_db()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
