@@ -489,7 +489,7 @@ def active_products(conn):
                WHERE page_type = 'store_book' AND category = 'store'
                GROUP BY content_id
            ) v ON v.content_id = p.id
-           WHERE p.status = 'active'
+           WHERE p.status = 'active' AND p.stock_quantity > 0
            ORDER BY LOWER(p.title), p.id"""
     ).fetchall()
 
@@ -649,7 +649,7 @@ def public_products():
         return redirect(url_for("the_hearth"))
     conn = get_db()
     rows = conn.execute(
-        "SELECT * FROM store_products WHERE status = 'active' ORDER BY LOWER(title), id"
+        "SELECT * FROM store_products WHERE status = 'active' AND stock_quantity > 0 ORDER BY LOWER(title), id"
     ).fetchall()
     conn.close()
     return jsonify([public_dict(row) for row in rows])
