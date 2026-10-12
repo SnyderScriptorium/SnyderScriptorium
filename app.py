@@ -929,7 +929,7 @@ def update_about_content():
 # beta build goes out. Leave it empty to show "coming soon".
 # ---------------------------------------------------------------------------
 SCRIPTSMITH_BETA_PASSCODE = "Trial1"
-SCRIPTSMITH_APK_URL = "https://muse.ai/files/1334834263038768/2310283186400432/fhfz1fwx0wmzuhcxjksckj28/github-inappupdate.apk"
+SCRIPTSMITH_APK_URL = "https://github.com/SnyderScriptorium/Scriptsmith/releases/download/beta/scriptsmith-beta.apk"
 # Windows installer URL (GitHub release). Updated when a new Windows build is published.
 SCRIPTSMITH_WINDOWS_URL = "https://github.com/SnyderScriptorium/Scriptsmith/releases/download/v0.1.0/ScriptSmith_0.1.0_x64-setup.exe"
 
@@ -947,7 +947,12 @@ def scriptsmith_reset_password():
 @app.route("/scriptsmith-version.json")
 def scriptsmith_version():
     from flask import jsonify
-    return jsonify({"build": 8, "apk_url": SCRIPTSMITH_APK_URL})
+    try:
+        with open("scriptsmith-build.txt") as f:
+            build = int(f.read().strip())
+    except:
+        build = 8
+    return jsonify({"build": build, "apk_url": SCRIPTSMITH_APK_URL})
 
 
 @app.route("/scriptsmith-beta", methods=["GET", "POST"])
