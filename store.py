@@ -54,6 +54,11 @@ def require_admin():
 
 def admin_required():
     if not require_admin():
+        # For API routes, return JSON instead of HTML redirect so the
+        # frontend can show the error instead of failing silently.
+        from flask import request
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Admin session expired. Please log in again."}), 401
         return redirect(url_for("admin_login_page"))
     return None
 
