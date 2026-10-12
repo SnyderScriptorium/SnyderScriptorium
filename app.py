@@ -938,6 +938,14 @@ SCRIPTSMITH_WINDOWS_URL = "https://github.com/SnyderScriptorium/Scriptsmith/rele
 def scriptsmith_confirmed():
     return render_template("scriptsmith_confirmed.html")
 
+@app.route("/scriptsmith-privacy")
+def scriptsmith_privacy():
+    return render_template("scriptsmith_privacy.html")
+
+@app.route("/scriptsmith-terms")
+def scriptsmith_terms():
+    return render_template("scriptsmith_terms.html")
+
 
 @app.route("/scriptsmith-reset-password")
 def scriptsmith_reset_password():
