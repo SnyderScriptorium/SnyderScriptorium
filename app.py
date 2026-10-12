@@ -937,6 +937,11 @@ def scriptsmith_confirmed():
     return render_template("scriptsmith_confirmed.html")
 
 
+@app.route("/scriptsmith-reset-password")
+def scriptsmith_reset_password():
+    return render_template("scriptsmith_reset_password.html")
+
+
 @app.route("/scriptsmith-version.json")
 def scriptsmith_version():
     from flask import jsonify
