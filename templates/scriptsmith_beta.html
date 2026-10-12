@@ -40,9 +40,13 @@
       {% endif %}
     </div>
     <div class="beta-card">
-      <h2>Computer (Windows / Mac)</h2>
-      <p>Desktop builds are on the way. Once available, install it, sign in with the same account, and your manuscripts will sync over.</p>
-      <p class="beta-note">Coming soon.</p>
+      <h2>Computer (Windows)</h2>
+      <p>Download the installer, run it, then open ScriptSmith and sign in with the same account. Your manuscripts sync automatically.</p>
+      {% if windows_url %}
+      <p><a href="{{ windows_url }}" class="beta-download-btn" download>Download for Windows</a></p>
+      {% else %}
+      <p class="beta-note">Windows build coming soon — check back shortly.</p>
+      {% endif %}
     </div>
   </div>
 

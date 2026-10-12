@@ -930,6 +930,8 @@ def update_about_content():
 # ---------------------------------------------------------------------------
 SCRIPTSMITH_BETA_PASSCODE = "Trial1"
 SCRIPTSMITH_APK_URL = "https://muse.ai/files/1334834263038768/2310283186400432/fhfz1fwx0wmzuhcxjksckj28/github-inappupdate.apk"
+# Windows installer URL (GitHub release). Updated when a new Windows build is published.
+SCRIPTSMITH_WINDOWS_URL = ""
 
 
 @app.route("/scriptsmith-confirmed")
@@ -954,12 +956,15 @@ def scriptsmith_beta():
     if request.method == "POST":
         if request.form.get("passcode", "") == SCRIPTSMITH_BETA_PASSCODE:
             return render_template("scriptsmith_beta.html", unlocked=True,
-                                   error=None, apk_url=SCRIPTSMITH_APK_URL)
+                                   error=None, apk_url=SCRIPTSMITH_APK_URL,
+                                   windows_url=SCRIPTSMITH_WINDOWS_URL)
         return render_template("scriptsmith_beta.html", unlocked=False,
                                error="Incorrect passcode. Try again.",
-                               apk_url=SCRIPTSMITH_APK_URL)
+                               apk_url=SCRIPTSMITH_APK_URL,
+                               windows_url=SCRIPTSMITH_WINDOWS_URL)
     return render_template("scriptsmith_beta.html", unlocked=False,
-                           error=None, apk_url=SCRIPTSMITH_APK_URL)
+                           error=None, apk_url=SCRIPTSMITH_APK_URL,
+                           windows_url=SCRIPTSMITH_WINDOWS_URL)
 
 
 if __name__ == "__main__":
