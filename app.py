@@ -931,7 +931,7 @@ def update_about_content():
 SCRIPTSMITH_BETA_PASSCODE = "Trial1"
 SCRIPTSMITH_APK_URL = "https://muse.ai/files/1334834263038768/2310283186400432/fhfz1fwx0wmzuhcxjksckj28/github-inappupdate.apk"
 # Windows installer URL (GitHub release). Updated when a new Windows build is published.
-SCRIPTSMITH_WINDOWS_URL = ""
+SCRIPTSMITH_WINDOWS_URL = "https://github.com/SnyderScriptorium/Scriptsmith/releases/download/v0.1.0/ScriptSmith_0.1.0_x64-setup.exe"
 
 
 @app.route("/scriptsmith-confirmed")
