@@ -1,6 +1,7 @@
+import hashlib
 import re
 import uuid
-from flask import request, session
+from flask import request, session, g
 from analytics_common import classify_path, traffic_source_label
 from database import get_db
 
@@ -22,8 +23,35 @@ def _source(referrer):
     return traffic_source_label(referrer)
 
 
+def _client_ip():
+    # Cloudflare overwrites CF-Connecting-IP, so trust it when present.
+    ip = (request.headers.get('CF-Connecting-IP') or '').strip()
+    if ip:
+        return ip
+    fwd = (request.headers.get('X-Forwarded-For') or '').strip()
+    if fwd:
+        return fwd.split(',')[0].strip()
+    return request.remote_addr or ''
+
+
 def _visitor_key():
-    return request.cookies.get('snyder_visitor_key') or str(uuid.uuid4())
+    ck = request.cookies.get('snyder_visitor_key')
+    if ck:
+        return ck
+    # No cookie: reuse one key for the whole request so the tracked pageview
+    # and the Set-Cookie header agree. Previously they minted two different
+    # UUIDs, double-counting every cookie-keeping human.
+    gk = getattr(g, '_snyder_visitor_key', None)
+    if gk:
+        return gk
+    # Cookieless client: stable IP+UA fingerprint instead of a fresh UUID per
+    # hit, so scrapers and cookie-blockers count as one visitor, not one per
+    # pageview. (Rare NAT collisions may slightly undercount; far more
+    # accurate than the old behavior.)
+    raw = _client_ip() + '|' + (request.headers.get('User-Agent', '') or '')
+    gk = 'fp-' + hashlib.sha256(raw.encode('utf-8', 'ignore')).hexdigest()[:32]
+    g._snyder_visitor_key = gk
+    return gk
 
 
 def _classify(path):
