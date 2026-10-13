@@ -211,6 +211,7 @@ The Hearth — Snyder Scriptorium
     }
     body:has(.hearth-page) .hearth-visitors span {
         font-weight: 700 !important;
+        font-size: 1.35rem !important;
     }
 
     @media (max-width: 760px) {
@@ -293,16 +294,22 @@ The Hearth — Snyder Scriptorium
       })
       .catch(function(){msg.textContent='Something went wrong, try again.';});
   });
-  fetch('/api/visitor-count')
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var n=parseInt(d.visitors,10);
-      var el=document.getElementById('hearthVisitorCount');
-      if(!el)return;
-      if(isNaN(n)){el.parentNode.style.display='none';return;}
-      el.textContent=n.toLocaleString('en-US');
-    })
-    .catch(function(){var el=document.getElementById('hearthVisitorCount');if(el)el.parentNode.style.display='none';});
+  var _vcOk=false;
+  function updateVisitorCount(){
+    fetch('/api/visitor-count')
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var n=parseInt(d.visitors,10);
+        var el=document.getElementById('hearthVisitorCount');
+        if(!el)return;
+        if(isNaN(n)){if(!_vcOk)el.parentNode.style.display='none';return;}
+        _vcOk=true;
+        el.textContent=n.toLocaleString('en-US');
+      })
+      .catch(function(){if(_vcOk)return;var el=document.getElementById('hearthVisitorCount');if(el)el.parentNode.style.display='none';});
+  }
+  updateVisitorCount();
+  setInterval(updateVisitorCount,60000);
 })();
 </script>
 {% endblock %}
