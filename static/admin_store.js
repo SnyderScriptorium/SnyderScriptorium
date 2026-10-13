@@ -23,6 +23,11 @@
     const mount=document.getElementById('storeAdminMount'); if(!mount||mount.dataset.ready==='1')return;
     mount.dataset.ready='1';
     mount.innerHTML=`
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button type="button" id="storeTabBooks">Books</button>
+        <button type="button" class="light" id="storeTabEmail">Email list</button>
+      </div>
+      <div id="storePaneBooks">
       <div class="two">
         <div class="preview">
           <h3 class="section-title" id="storeFormHeading">Add a Book to the Store</h3>
@@ -54,6 +59,25 @@
           </div>
           <div id="storeProductList" class="list"><p class="note">Loading...</p></div>
         </div>
+      </div>
+      </div>
+      <div id="storePaneEmail" style="display:none">
+        <div class="preview">
+          <h3 class="section-title">Email list</h3>
+          <p class="note">Free &ldquo;new arrivals&rdquo; subscribers. The storefront signup form feeds this list; paste the paper-sheet emails below, one per line, to add them too.</p>
+          <div class="actions" style="margin-top:0"><button type="button" class="light" id="storeSubRefresh">Refresh list</button></div>
+          <p class="note" id="storeSubCount" style="margin:8px 0 0">&mdash;</p>
+          <div id="storeSubList" class="list" style="margin-top:10px;max-height:220px;overflow:auto"></div>
+          <label>Add emails from the paper signup sheet</label>
+          <textarea id="storeBulkEmails" placeholder="one email per line" style="min-height:70px"></textarea>
+          <div class="actions"><button type="button" class="light" id="storeSubAdd">Add to list</button></div>
+          <label>Weekly digest &mdash; subject</label>
+          <input id="storeDigestSubject" placeholder="This week&rsquo;s new arrivals">
+          <label>Weekly digest &mdash; body</label>
+          <textarea id="storeDigestBody" style="min-height:150px" placeholder="New books + new posts this week&hellip;"></textarea>
+          <div class="actions"><button type="button" id="storeDigestSend">Send digest to all subscribers</button></div>
+          <p class="note">Sends one plain-text email per subscriber through Resend, with an unsubscribe link.</p>
+        </div>
       </div>`;
     const photoInput=document.getElementById('storePhoto');
     photoInput.addEventListener('change',()=>{
@@ -72,7 +96,13 @@
       });
     });
     const searchInput=document.getElementById('storeSearch');
-    searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();renderList();});
+    searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();productPage=1;renderList();});
+    document.getElementById('storeTabBooks').addEventListener('click',()=>setStoreTab('books'));
+    document.getElementById('storeTabEmail').addEventListener('click',()=>setStoreTab('email'));
+    document.getElementById('storeSubRefresh').addEventListener('click',loadSubscribers);
+    document.getElementById('storeSubAdd').addEventListener('click',addSubscribers);
+    document.getElementById('storeDigestSend').addEventListener('click',sendDigest);
+    try{const _st=localStorage.getItem('storeAdminTab');if(_st==='email')setStoreTab('email');}catch(_){}
     // Autosave form draft on every input so refreshes don't lose work
     ['storeTitle','storeAuthor','storeDescription','storePrice','storeIsbn','storeCover','storeGenre','storeStock'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',saveFormDraft);});
     ['storeFormat','storeCategory','storeStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',saveFormDraft);});
@@ -166,6 +196,55 @@
     b.style.cssText='padding:4px 10px;border-radius:999px;border:1px solid #C9B78F;background:'+(active?'#8a6d3b':'#fff')+';color:'+(active?'#fff':'#5C4033')+';cursor:pointer;font-size:.85rem';
     return b;
   }
+  function linkButton(label,active){
+    const b=document.createElement('button');
+    b.type='button'; b.textContent=label;
+    b.style.cssText='display:block;width:100%;text-align:left;break-inside:avoid;background:'+(active?'#8a6d3b':'none')+';border:0;border-radius:4px;padding:3px 6px;margin:0 0 2px;color:'+(active?'#fff':'#5C4033')+';cursor:pointer;font-size:.85rem;text-decoration:'+(active?'none':'underline')+';text-underline-offset:2px';
+    return b;
+  }
+  let storeTab='books';
+  function setStoreTab(t){
+    storeTab=t;
+    const pb=document.getElementById('storePaneBooks'), pe=document.getElementById('storePaneEmail');
+    if(pb)pb.style.display=(t==='books'?'':'none');
+    if(pe)pe.style.display=(t==='email'?'':'none');
+    const bb=document.getElementById('storeTabBooks'), be=document.getElementById('storeTabEmail');
+    if(bb)bb.className=(t==='books'?'':'light');
+    if(be)be.className=(t==='email'?'':'light');
+    if(t==='email')loadSubscribers();
+    try{localStorage.setItem('storeAdminTab',t);}catch(_){}
+  }
+  async function loadSubscribers(){
+    const wrap=document.getElementById('storeSubList'); if(!wrap)return;
+    wrap.innerHTML='<p class="note">Loading...</p>';
+    try{
+      const subs=await api('/api/store/admin/subscribers');
+      const cnt=document.getElementById('storeSubCount');
+      if(cnt)cnt.textContent=subs.length+' subscriber'+(subs.length===1?'':'s');
+      wrap.innerHTML=subs.length?subs.map(s=>'<div class="card" style="padding:8px 12px"><div><h3 style="font-size:1rem;margin:0">'+esc(s.email)+'</h3><small>since '+esc(s.subscribed_at||'')+'</small></div></div>').join(''):'<p class="note">No subscribers yet.</p>';
+    }catch(e){ wrap.innerHTML='<p class="note">Could not load the list.</p>'; if(window.showStatus)window.showStatus(e.message,true); }
+  }
+  async function addSubscribers(){
+    const box=document.getElementById('storeBulkEmails');
+    const raw=(box.value||'').trim();
+    if(!raw){ if(window.showStatus)window.showStatus('Paste at least one email address first.',true); return; }
+    try{
+      const data=await api('/api/store/admin/subscribers',{method:'POST',body:JSON.stringify({emails:raw})});
+      if(window.showStatus)window.showStatus('Added '+data.added+' email'+(data.added===1?'':'s')+' to the list.');
+      box.value='';
+      loadSubscribers();
+    }catch(e){ if(window.showStatus)window.showStatus(e.message,true); }
+  }
+  async function sendDigest(){
+    const subject=document.getElementById('storeDigestSubject').value.trim();
+    const body=document.getElementById('storeDigestBody').value.trim();
+    if(!subject||!body){ if(window.showStatus)window.showStatus('Subject and body are both required.',true); return; }
+    if(!confirm('Send this digest to all subscribers now?'))return;
+    try{
+      const data=await api('/api/store/admin/digest',{method:'POST',body:JSON.stringify({subject:subject,body:body})});
+      if(window.showStatus)window.showStatus('Digest sent: '+data.sent+' sent, '+data.failed+' failed.');
+    }catch(e){ if(window.showStatus)window.showStatus(e.message,true); }
+  }
   function buildFilterControls(){
     const statusWrap=document.getElementById('storeStatusPills');
     if(statusWrap){
@@ -179,20 +258,25 @@
     const genreWrap=document.getElementById('storeGenrePills');
     if(genreWrap){
       genreWrap.innerHTML='';
+      genreWrap.style.cssText='columns:130px;column-gap:14px;margin-bottom:8px';
       const genres=[...new Set(allProducts.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
       [['all','All']].concat(genres.map(g=>[g,g])).forEach(pair=>{
-        const b=pillButton(pair[1],filters.genre===pair[0]);
-        b.addEventListener('click',()=>{filters.genre=pair[0];buildFilterControls();renderList();});
+        const b=linkButton(pair[1],filters.genre===pair[0]);
+        b.addEventListener('click',()=>{filters.genre=pair[0];productPage=1;buildFilterControls();renderList();});
         genreWrap.appendChild(b);
       });
     }
     const letterWrap=document.getElementById('storeLetterRow');
     if(letterWrap){
       letterWrap.innerHTML='';
-      const letters=[...new Set(allProducts.map(p=>{const c=(p.title||'').trim().toUpperCase().charAt(0);return (c>='A'&&c<='Z')?c:'';}).filter(Boolean))].sort();
+      letterWrap.style.cssText='display:flex;gap:2px;flex-wrap:wrap;margin-bottom:8px';
+      const letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
       [['all','All']].concat(letters.map(l=>[l,l])).forEach(pair=>{
-        const b=pillButton(pair[1],filters.letter===pair[0]);
-        b.addEventListener('click',()=>{filters.letter=pair[0];buildFilterControls();renderList();});
+        const active=filters.letter===pair[0];
+        const b=document.createElement('button');
+        b.type='button'; b.textContent=pair[1];
+        b.style.cssText='background:'+(active?'#8a6d3b':'none')+';border:0;border-radius:4px;padding:3px 7px;margin:0;color:'+(active?'#fff':'#5C4033')+';cursor:pointer;font-size:.85rem;text-decoration:'+(active?'none':'underline')+';text-underline-offset:2px';
+        b.addEventListener('click',()=>{filters.letter=pair[0];productPage=1;buildFilterControls();renderList();});
         letterWrap.appendChild(b);
       });
     }
@@ -212,19 +296,24 @@
     });
     const count=document.getElementById('storeFilterCount');
     if(count)count.textContent=productTotal?(items.length+' of '+productTotal+' books'):'';
+    const perPage=15;
+    const pages=Math.max(1,Math.ceil(items.length/perPage));
+    if(productPage>pages)productPage=pages;
+    if(productPage<1)productPage=1;
+    const pageItems=items.slice((productPage-1)*perPage,productPage*perPage);
     list.innerHTML=items.length?'':'<p class="note">'+(allProducts.length?'No books match these filters.':'No books have been added to the store yet. Add your first finished book on the left.')+'</p>';
-    items.forEach(p=>{
+    pageItems.forEach(p=>{
       const card=document.createElement('div'); card.className='card';
       const status=p.status||'draft';
       card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)}</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
       list.appendChild(card);
     });
-    if(productPages>1){
+    if(pages>1){
       const nav=document.createElement('div');
       nav.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center';
-      for(let i=1;i<=productPages;i++){
+      for(let i=1;i<=pages;i++){
         const b=pillButton(String(i),productPage===i);
-        b.addEventListener('click',()=>{window.scrollTo({top:0,behavior:'smooth'});load(i);});
+        b.addEventListener('click',()=>{productPage=i;renderList();window.scrollTo({top:0,behavior:'smooth'});});
         nav.appendChild(b);
       }
       const info=document.createElement('span');
@@ -242,7 +331,7 @@
     list.innerHTML='<p class="note">Loading books...</p>';
     try{
       const statusParam=filters.status!=='all'?'&status='+encodeURIComponent(filters.status):'';
-      const res=await api('/api/store/admin/products?page='+productPage+statusParam);
+      const res=await api('/api/store/admin/products?per_page=1000'+statusParam);
       allProducts=res.products||res;
       productPages=res.pages||1;
       productTotal=res.total||allProducts.length;
