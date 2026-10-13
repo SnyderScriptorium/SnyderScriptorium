@@ -203,6 +203,15 @@ The Hearth — Snyder Scriptorium
         font-size: 0.95rem !important;
         min-height: 1.4em !important;
     }
+    body:has(.hearth-page) .hearth-visitors {
+        margin: 24px auto 0 !important;
+        font-size: 0.95rem !important;
+        color: #8A6A4A !important;
+        letter-spacing: 0.08em !important;
+    }
+    body:has(.hearth-page) .hearth-visitors span {
+        font-weight: 700 !important;
+    }
 
     @media (max-width: 760px) {
         body:has(.hearth-page) .hearth-hero {
@@ -264,6 +273,8 @@ The Hearth — Snyder Scriptorium
         </div>
         <p id="hearthSubscribeMsg"></p>
     </div>
+
+    <p class="hearth-visitors"><span id="hearthVisitorCount">&hellip;</span> visitors so far</p>
 </section>
 <script>
 (function(){
@@ -282,6 +293,16 @@ The Hearth — Snyder Scriptorium
       })
       .catch(function(){msg.textContent='Something went wrong, try again.';});
   });
+  fetch('/api/visitor-count')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var n=parseInt(d.visitors,10);
+      var el=document.getElementById('hearthVisitorCount');
+      if(!el)return;
+      if(isNaN(n)){el.parentNode.style.display='none';return;}
+      el.textContent=n.toLocaleString('en-US');
+    })
+    .catch(function(){var el=document.getElementById('hearthVisitorCount');if(el)el.parentNode.style.display='none';});
 })();
 </script>
 {% endblock %}

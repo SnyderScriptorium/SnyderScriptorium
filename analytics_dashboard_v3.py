@@ -495,6 +495,26 @@ def register(app):
             request.args.get("period", "30d"), request.args.get("content_page", 1),
             request.args.get("source_page", 1), request.args.get("drilldown")))
 
+    @app.get("/api/visitor-count")
+    def visitor_count():
+        # Public all-time distinct-visitor count, same definition as the
+        # analytics dashboard's "unique visitors". Used by the front-page counter.
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(DISTINCT visitor_key) AS n FROM page_views "
+                "WHERE visitor_key IS NOT NULL AND visitor_key<>''"
+            ).fetchone()
+            n = int(rowval(row, 0, "n") or 0)
+        except Exception:
+            n = 0
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        return jsonify({"visitors": n})
+
     @app.after_request
     def analytics_ui_v3(response):
         if request.path != "/admin/analytics" or "text/html" not in response.content_type:
