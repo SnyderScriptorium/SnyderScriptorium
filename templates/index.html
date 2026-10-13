@@ -147,6 +147,63 @@ The Hearth — Snyder Scriptorium
         color: #5C4033 !important;
     }
 
+    /* --- Front-page newsletter signup --- */
+    body:has(.hearth-page) .hearth-subscribe {
+        margin: 30px auto 10px !important;
+        padding: 26px 24px !important;
+        background: #FFFDF8 !important;
+        border: 1px solid #C9B78F !important;
+        border-radius: 12px !important;
+        max-width: 560px !important;
+    }
+    body:has(.hearth-page) .hearth-subscribe h3 {
+        font-family: "Cormorant Garamond", "Times New Roman", Times, Georgia, serif !important;
+        font-size: 1.6rem !important;
+        font-weight: 600 !important;
+        color: #5C4033 !important;
+        margin: 0 0 8px !important;
+    }
+    body:has(.hearth-page) .hearth-subscribe p {
+        font-size: 1.05rem !important;
+        color: #3D4C54 !important;
+        margin: 0 0 14px !important;
+    }
+    body:has(.hearth-page) .hearth-subscribe-row {
+        display: flex !important;
+        gap: 8px !important;
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+    }
+    body:has(.hearth-page) .hearth-subscribe input[type="email"] {
+        flex: 1 1 220px !important;
+        max-width: 320px !important;
+        padding: 10px 14px !important;
+        border: 1px solid #C9B78F !important;
+        border-radius: 6px !important;
+        font-size: 1rem !important;
+        font-family: inherit !important;
+        background: #fff !important;
+        color: #24333B !important;
+    }
+    body:has(.hearth-page) .hearth-subscribe button {
+        padding: 10px 22px !important;
+        background: #5C4033 !important;
+        color: #fff !important;
+        border: 1px solid #5C4033 !important;
+        border-radius: 6px !important;
+        font-size: 1rem !important;
+        font-family: inherit !important;
+        cursor: pointer !important;
+    }
+    body:has(.hearth-page) .hearth-subscribe button:hover {
+        filter: brightness(0.94) !important;
+    }
+    body:has(.hearth-page) #hearthSubscribeMsg {
+        margin: 10px 0 0 !important;
+        font-size: 0.95rem !important;
+        min-height: 1.4em !important;
+    }
+
     @media (max-width: 760px) {
         body:has(.hearth-page) .hearth-hero {
             flex-direction: column !important;
@@ -195,5 +252,36 @@ The Hearth — Snyder Scriptorium
     </nav>
 
     <p class="hearth-events">Catching us in person? <a href="{{ url_for('find_us') }}">See where we&rsquo;ll be next</a></p>
+
+    <div class="hearth-divider" aria-hidden="true"><span></span>&#10086;<span></span></div>
+
+    <div class="hearth-subscribe">
+        <h3>Get notified of new arrivals</h3>
+        <p>One email a week &mdash; new books and new posts, nothing else.</p>
+        <div class="hearth-subscribe-row">
+            <input id="hearthSubscribeEmail" type="email" placeholder="Your email" aria-label="Email for new arrival notifications" autocomplete="email">
+            <button id="hearthSubscribeBtn" type="button">Notify Me</button>
+        </div>
+        <p id="hearthSubscribeMsg"></p>
+    </div>
 </section>
+<script>
+(function(){
+  var btn=document.getElementById('hearthSubscribeBtn');
+  if(!btn)return;
+  btn.addEventListener('click',function(){
+    var em=(document.getElementById('hearthSubscribeEmail').value||'').trim();
+    var msg=document.getElementById('hearthSubscribeMsg');
+    if(!em||em.indexOf('@')<0){msg.textContent='Please enter a valid email.';return;}
+    msg.textContent='Subscribing…';
+    fetch('/store/subscribe',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'email='+encodeURIComponent(em)})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        msg.textContent=d.ok?'You\u2019re on the list \u2014 welcome.':'Something went wrong, try again.';
+        if(d.ok)document.getElementById('hearthSubscribeEmail').value='';
+      })
+      .catch(function(){msg.textContent='Something went wrong, try again.';});
+  });
+})();
+</script>
 {% endblock %}
