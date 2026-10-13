@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Visitor Audit — Scriptorium Control Panel</title>
+<style>
+:root{--ivory:#F7F1E6;--paper:#FFFDF8;--camel2:#E8D9B5;--ink:#24333B;--brown:#5C4033;--line:#C9B78F;--muted:#6F6257}
+*{box-sizing:border-box}body{margin:0;padding:16px;background:var(--camel2);color:var(--ink);font-family:Georgia,serif;line-height:1.6}
+.shell{max-width:800px;margin:auto}.panel{background:var(--ivory);border:1px solid var(--line);border-radius:10px;padding:22px}
+h1{color:var(--brown);font-weight:400;margin:0 0 6px}.note{color:var(--muted);font-style:italic}
+table{width:100%;border-collapse:collapse;margin:14px 0;background:var(--paper)}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{color:var(--brown)}td.n{text-align:right;font-variant-numeric:tabular-nums}
+a{color:var(--brown)}
+</style>
+</head>
+<body>
+<div class="shell"><div class="panel">
+<h1>Visitor Audit</h1>
+<p class="note">Is the front-page counter telling the truth? All-time numbers, read-only.</p>
+<table>
+<tr><th>What</th><th style="text-align:right">Count</th></tr>
+<tr><td>Distinct visitors (the front-page number)</td><td class="n"><strong>{{ visitors }}</strong></td></tr>
+<tr><td>Total pageviews</td><td class="n">{{ pageviews }}</td></tr>
+<tr><td>Visitors seen on 2+ pages (most likely real humans)</td><td class="n"><strong>{{ multi_hit }}</strong></td></tr>
+<tr><td>One-page visitors (real bounces, old double-count phantoms, or scrapers — can't separate)</td><td class="n">{{ single_hit }}</td></tr>
+<tr><td>Fingerprint-keyed visitors (new accurate scheme)</td><td class="n">{{ fp_keys }}</td></tr>
+</table>
+<h2 style="color:var(--brown);font-weight:400">Last 14 days</h2>
+<table>
+<tr><th>Day</th><th style="text-align:right">Visitors</th><th style="text-align:right">Views</th></tr>
+{% for r in daily %}
+<tr><td>{{ r.day }}</td><td class="n">{{ r.visitors }}</td><td class="n">{{ r.views }}</td></tr>
+{% endfor %}
+</table>
+<p class="note">A sudden one-day spike usually means a scraper flood, not a crowd. Steady numbers mean humans.</p>
+<p><a href="/admin">Back to Admin</a></p>
+</div></div>
+</body></html>

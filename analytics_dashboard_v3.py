@@ -488,6 +488,42 @@ def register(app):
             request.args.get("source_page", 1), request.args.get("drilldown")),
             tab=request.args.get("tab", "overview"))
 
+    @app.get("/admin/analytics-audit")
+    @admin_required
+    def analytics_audit():
+        # Human-vs-noise audit of the visitor count. Read-only.
+        conn = get_db()
+        try:
+            def one(sql, params=()):
+                r = conn.execute(sql, params).fetchone()
+                return rowval(r, 0) or 0
+            visitors = one("SELECT COUNT(DISTINCT visitor_key) FROM page_views WHERE visitor_key IS NOT NULL AND visitor_key<>''")
+            pageviews = one("SELECT COUNT(*) FROM page_views")
+            br = conn.execute(
+                "SELECT SUM(CASE WHEN cnt=1 THEN 1 ELSE 0 END), SUM(CASE WHEN cnt>1 THEN 1 ELSE 0 END) "
+                "FROM (SELECT COUNT(*) AS cnt FROM page_views WHERE visitor_key IS NOT NULL AND visitor_key<>'' GROUP BY visitor_key) t"
+            ).fetchone()
+            single_hit = int(rowval(br, 0) or 0)
+            multi_hit = int(rowval(br, 1) or 0)
+            fp_keys = one("SELECT COUNT(DISTINCT visitor_key) FROM page_views WHERE visitor_key LIKE 'fp-%'")
+            daily = conn.execute(
+                "SELECT DATE(viewed_at) AS d, COUNT(DISTINCT visitor_key) AS v, COUNT(*) AS hits "
+                "FROM page_views GROUP BY d ORDER BY d DESC LIMIT 14"
+            ).fetchall()
+            daily_rows = [
+                {"day": str(rowval(r, 0, "d")), "visitors": int(rowval(r, 1, "v") or 0), "views": int(rowval(r, 2, "hits") or 0)}
+                for r in daily
+            ]
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        return render_template(
+            "analytics_audit.html", visitors=visitors, pageviews=pageviews,
+            single_hit=single_hit, multi_hit=multi_hit, fp_keys=fp_keys,
+            daily=daily_rows)
+
     @app.get("/api/analytics-v3")
     @admin_required
     def analytics_api_v3():
