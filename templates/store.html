@@ -184,12 +184,30 @@
     return genre?(base+' · '+genre):base;
   }
 
+  const GENRE_GROUPS={
+    'FBI Thriller':'Thriller','Medical Thriller':'Thriller','Political Thriller':'Thriller',
+    'Psychological Thriller':'Thriller','Sports Thriller':'Thriller','Thriller':'Thriller',
+    'Suspense':'Thriller','suspense':'Thriller',
+    'Historical Mystery':'Mystery','Murder Mystery':'Mystery','Murder mystery':'Mystery',
+    'Police Mystery':'Mystery','Mystery':'Mystery',
+    'Contemporary Romance':'Romance','Romance':'Romance',
+    'Contemporary Fiction':'Fiction','Historical Fiction':'Fiction','Science Fiction':'Fiction',
+    'Horror':'Fiction','Short Story':'Fiction',
+    'Autobiography':'Biography & Memoir','Biography':'Biography & Memoir','Memoir':'Biography & Memoir',
+    'Military Biography':'Biography & Memoir','Military Memoir':'Biography & Memoir','Political Memoir':'Biography & Memoir',
+    'Young Adult':'Young Adult','Social Science':'Social Science'
+  };
+  function groupGenre(g){g=(g||'').trim();return GENRE_GROUPS[g]||g;}
+  function cardGenres(c){
+    return (c.dataset.genre||'').split(',').map(g=>groupGenre(g)).filter(Boolean);
+  }
+
   function sectionGenres(){
     const pool=section?cards.filter(c=>c.dataset.section===section):cards;
     const counts={};
     pool.forEach(c=>{
-      (c.dataset.genre||'').split(',').map(g=>g.trim()).filter(Boolean)
-        .forEach(g=>{counts[g]=(counts[g]||0)+1;});
+      const seen={};
+      cardGenres(c).forEach(g=>{if(!seen[g]){seen[g]=1;counts[g]=(counts[g]||0)+1;}});
     });
     return Object.keys(counts).sort((a,b)=>a.localeCompare(b))
       .map(name=>({name:name,count:counts[name]}));
@@ -267,7 +285,7 @@
     cards.forEach(card=>{
       const titleText=card.dataset.title||'', author=card.dataset.author||'', publisher=card.dataset.publisher||'';
       const sectionOK=!section||card.dataset.section===section;
-      const cardGenres=(card.dataset.genre||'').split(',').map(g=>g.trim().toLowerCase());const genreOK=!genre||cardGenres.includes(genre.toLowerCase());
+      const cgs=(card.dataset.genre||'').split(',').map(g=>groupGenre(g).toLowerCase());const genreOK=!genre||cgs.includes(genre.toLowerCase());
       const letterOK=!letter||titleText.startsWith(letter.toLowerCase());
       const searchOK=!q||titleText.includes(q)||author.includes(q)||publisher.includes(q);
       if(sectionOK&&genreOK&&letterOK&&searchOK) matched.push(card);
