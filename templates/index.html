@@ -237,6 +237,46 @@ The Hearth — Snyder Scriptorium
             text-align: center !important;
         }
     }
+    .hearth-shelf { text-align: center; padding: 6px 0 4px; }
+    .hearth-shelf-kicker {
+        font-family: "Cormorant Garamond", "Times New Roman", serif;
+        font-size: 1.5rem; font-weight: 600; color: #24333B;
+        margin: 0 0 18px; letter-spacing: .02em;
+    }
+    .hearth-shelf-books {
+        display: flex; justify-content: center; gap: 22px;
+        flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .hearth-shelf-book {
+        width: 150px; text-decoration: none; color: inherit;
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .hearth-shelf-book img {
+        width: 130px; height: 195px; object-fit: cover;
+        border-radius: 3px; box-shadow: 0 3px 10px rgba(36,51,59,.18);
+    }
+    .hearth-shelf-title {
+        font-family: "Cormorant Garamond", serif; font-weight: 600;
+        font-size: 1.02rem; color: #24333B; line-height: 1.25;
+    }
+    .hearth-shelf-author { font-size: .85rem; color: #6b5f52; }
+    .hearth-shelf-price { font-size: .9rem; color: #24333B; font-weight: 600; }
+    .hearth-shelf-note {
+        font-style: italic; color: #6b5f52; font-size: .95rem;
+        margin: 0 0 10px;
+    }
+    .hearth-shelf-cta { margin: 0; }
+    .hearth-shelf-cta a {
+        font-family: "Cormorant Garamond", serif; font-size: 1.15rem;
+        font-weight: 600; color: #24333B; text-decoration: none;
+        border-bottom: 1px solid rgba(36,51,59,.4); padding-bottom: 2px;
+    }
+    .hearth-shelf-cta a:hover { border-bottom-color: #24333B; }
+    @media (max-width: 640px) {
+        .hearth-shelf-books { gap: 14px; }
+        .hearth-shelf-book { width: 42vw; max-width: 160px; }
+        .hearth-shelf-book img { width: 100%; height: auto; aspect-ratio: 2/3; }
+    }
 </style>
 
 <section class="hearth-page">
@@ -249,6 +289,28 @@ The Hearth — Snyder Scriptorium
             <p class="hearth-sub">Antique, vintage, used &amp; new books, each one photographed and described by hand. Plus the blog, and original fiction from the writing desk.</p>
         </div>
     </div>
+
+    {% if shelf_books %}
+    <div class="hearth-divider" aria-hidden="true"><span></span>&#10086;<span></span></div>
+
+    <section class="hearth-shelf" aria-label="From the Scriptorium's shelves">
+        <p class="hearth-shelf-kicker">From the Scriptorium&rsquo;s Shelves</p>
+        <div class="hearth-shelf-books">
+            {% for b in shelf_books %}
+            <a class="hearth-shelf-book" href="{{ url_for('store.store_book', slug=b.slug) }}">
+                {% if b.cover_image_url %}
+                <img src="{{ b.cover_image_url }}" alt="{{ b.title|e }}" loading="lazy">
+                {% endif %}
+                <span class="hearth-shelf-title">{{ b.title|e }}</span>
+                <span class="hearth-shelf-author">{{ b.author|e }}</span>
+                {% if b.price_cents %}<span class="hearth-shelf-price">${{ "%.2f"|format(b.price_cents/100) }}</span>{% endif %}
+            </a>
+            {% endfor %}
+        </div>
+        <p class="hearth-shelf-note">Each book here is the only copy we have &mdash; when it&rsquo;s gone, it&rsquo;s gone.</p>
+        <p class="hearth-shelf-cta"><a href="{{ url_for('store.store_home') }}">Step into the shop &rarr;</a></p>
+    </section>
+    {% endif %}
 
     <div class="hearth-divider" aria-hidden="true"><span></span>&#10086;<span></span></div>
 

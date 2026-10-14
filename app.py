@@ -151,7 +151,18 @@ def route_kw_domain():
 
 @app.route("/")
 def the_hearth():
-    return render_template("index.html")
+    shelf_books = []
+    try:
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT id, title, slug, author, price_cents, cover_image_url FROM store_products "
+            "WHERE status = 'active' ORDER BY date_created DESC LIMIT 4"
+        ).fetchall()
+        shelf_books = [dict(r) for r in rows]
+        conn.close()
+    except Exception:
+        shelf_books = []
+    return render_template("index.html", shelf_books=shelf_books)
 
 
 
