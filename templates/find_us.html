@@ -33,7 +33,7 @@
                     <h3>{{ event['title'] }}</h3>
                     <div class="find-us-meta">
                         <span><strong>{{ event['date']|display_event_date }}</strong></span>
-                        {% if event['start_time'] %}<span>{{ event['start_time'] }}{% if event['end_time'] %}–{{ event['end_time'] }}{% endif %}</span>{% endif %}
+                        {% if event['start_time'] %}<span>{{ event['start_time']|time12h }}{% if event['end_time'] %} – {{ event['end_time']|time12h }}{% endif %}</span>{% endif %}
                         {% if event['location'] %}<span>{{ event['location'] }}</span>{% endif %}
                     </div>
                     {% if event['address'] %}<p><strong>Address:</strong> {{ event['address'] }}</p>{% endif %}

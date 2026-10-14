@@ -24,6 +24,21 @@ app.config.update(
 ADMIN_AUTH_VERSION = "2026-08-16-1"
 
 
+@app.template_filter('time12h')
+def time12h(value):
+    """Convert 24h time string (e.g. '19:00') to 12h (e.g. '7:00 PM')."""
+    if not value:
+        return value
+    try:
+        parts = str(value).strip().split(':')
+        h, m = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+        suffix = 'AM' if h < 12 else 'PM'
+        h12 = h % 12 or 12
+        return f"{h12}:{m:02d} {suffix}"
+    except (ValueError, IndexError):
+        return value
+
+
 def get_db():
     return database_get_db()
 
