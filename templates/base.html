@@ -96,6 +96,10 @@
             <li><a href="{{ url_for('merch_shop') }}">Merch Shop</a></li>
         </ul>
     </nav>
+    <form class="site-search" action="{{ url_for('site_search') }}" method="get" role="search" aria-label="Search the site">
+        <input type="search" name="q" placeholder="Search books and posts..." aria-label="Search the site">
+        <button type="submit" aria-label="Search">&#128269;</button>
+    </form>
 </header>
 
 <main class="site-main">

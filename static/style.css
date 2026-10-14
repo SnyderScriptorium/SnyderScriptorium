@@ -22,7 +22,7 @@ body {
     padding: 24px 30px 0;
     display: grid;
     grid-template-columns: 132px 1fr;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto auto auto;
     align-items: center;
     gap: 6px 24px;
 }
@@ -36,6 +36,37 @@ body {
     font-weight: 500;
     letter-spacing: .015em;
     line-height: 1.05;
+}
+
+.site-search {
+    grid-column: 2;
+    grid-row: 3;
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    max-width: 420px;
+}
+.site-search input[type="search"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid rgba(36, 51, 59, .38);
+    border-radius: 5px;
+    font-size: 1rem;
+    background: #fff;
+}
+.site-search button {
+    flex: none;
+    padding: 8px 14px;
+    border: 1px solid #24333B;
+    border-radius: 5px;
+    background: #24333B;
+    color: #fff;
+    cursor: pointer;
+    font-size: 1rem;
+}
+@media (max-width: 640px) {
+    .site-search { max-width: 100%; }
 }
 
 .site-navigation {

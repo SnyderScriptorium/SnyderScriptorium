@@ -139,6 +139,36 @@ def the_hearth():
     return render_template("index.html")
 
 
+
+
+@app.route("/search")
+def site_search():
+    q = (request.args.get("q") or "").strip()
+    post_results = []
+    book_results = []
+    if q and len(q) >= 2:
+        like = "%" + q + "%"
+        conn = get_db()
+        # Public blog posts only — never member-only, drafts, or unpublished
+        post_rows = conn.execute(
+            "SELECT id, title, category, date_published FROM published_posts "
+            "WHERE access_level = 'public' AND (title LIKE ? OR content LIKE ?) "
+            "ORDER BY date_published DESC LIMIT 20",
+            (like, like)).fetchall()
+        post_results = [dict(r) for r in post_rows]
+        # Active store books only
+        try:
+            book_rows = conn.execute(
+                "SELECT id, title, slug, author, price_cents FROM store_products "
+                "WHERE status = 'active' AND (title LIKE ? OR author LIKE ? OR description LIKE ?) "
+                "ORDER BY title LIMIT 20",
+                (like, like, like)).fetchall()
+            book_results = [dict(r) for r in book_rows]
+        except Exception:
+            book_results = []
+        conn.close()
+    return render_template("search.html", q=q, posts=post_results, books=book_results)
+
 @app.route("/about")
 def about():
     conn = get_db()

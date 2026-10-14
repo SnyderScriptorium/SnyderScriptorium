@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Search{% if q %} — {{ q }}{% endif %} — Snyder Scriptorium{% endblock %}
+{% block content %}
+<section class="content-section" style="max-width:820px;margin:0 auto;">
+  <h1>Search</h1>
+  <form action="{{ url_for('site_search') }}" method="get" style="display:flex;gap:8px;margin-bottom:20px">
+    <input type="search" name="q" value="{{ q|e }}" placeholder="Search books and posts..." aria-label="Search the site" style="flex:1">
+    <button type="submit">Search</button>
+  </form>
+
+  {% if q %}
+    {% if not posts and not books %}
+      <p class="note">No results for "{{ q|e }}". Try a different search.</p>
+    {% endif %}
+
+    {% if posts %}
+      <h2>Posts ({{ posts|length }})</h2>
+      <div class="list">
+      {% for p in posts %}
+        <div class="card">
+          <div>
+            <h3><a href="{{ url_for('view_post', post_id=p.id) }}">{{ p.title|e }}</a></h3>
+            <small>{{ p.date_published or '' }}{% if p.category %} · {{ p.category|e }}{% endif %}</small>
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if books %}
+      <h2 style="margin-top:24px">Books ({{ books|length }})</h2>
+      <div class="list">
+      {% for b in books %}
+        <div class="card">
+          <div>
+            <h3><a href="{{ url_for('store.store_book', slug=b.slug) }}">{{ b.title|e }}</a></h3>
+            <small>{{ b.author|e }}{% if b.price_cents %} · ${{ "%.2f"|format(b.price_cents/100) }}{% endif %}</small>
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% else %}
+    <p class="note">Enter a search term above to find books and blog posts.</p>
+  {% endif %}
+</section>
+{% endblock %}
