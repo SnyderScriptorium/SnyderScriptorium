@@ -155,8 +155,11 @@ def the_hearth():
     try:
         conn = get_db()
         rows = conn.execute(
-            "SELECT id, title, slug, author, price_cents, cover_image_url FROM store_products "
-            "WHERE status = 'active' ORDER BY date_created DESC LIMIT 4"
+            "SELECT p.id, p.title, p.slug, p.author, p.price_cents, p.cover_image_url, "
+            "COALESCE(SUM(oi.quantity), 0) AS total_sold "
+            "FROM store_products p LEFT JOIN store_order_items oi ON oi.product_id = p.id "
+            "WHERE p.status = 'active' GROUP BY p.id "
+            "ORDER BY total_sold DESC, p.date_created DESC LIMIT 4"
         ).fetchall()
         shelf_books = [dict(r) for r in rows]
         conn.close()
