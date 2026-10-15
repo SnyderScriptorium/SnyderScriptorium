@@ -18,9 +18,9 @@ BOT_RE = re.compile(
 )
 
 
-def _source(referrer):
+def _source(referrer, utm_source=None):
     """Delegate to the shared referrer->source mapping in analytics_common."""
-    return traffic_source_label(referrer)
+    return traffic_source_label(referrer, utm_source)
 
 
 def _client_ip():
@@ -104,12 +104,13 @@ def register(app):
 
         visitor_key = _visitor_key()
         referrer = request.referrer or ''
+        utm_source = (request.args.get('utm_source') or '').strip()[:64]
         conn = None
         try:
             conn = get_db()
             conn.execute(
                 'INSERT INTO page_views(path,page_type,content_id,category,visitor_key,referrer,traffic_source,classified) VALUES (?,?,?,?,?,?,?,1)',
-                (path, page_type, content_id, category, visitor_key, referrer, _source(referrer)),
+                (path, page_type, content_id, category, visitor_key, referrer, _source(referrer, utm_source)),
             )
             conn.commit()
         except Exception:

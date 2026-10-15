@@ -249,6 +249,7 @@ def init_db():
             # Keeps the "any unclassified rows?" check cheap for the on-demand
             # backfill script (scripts/backfill_page_views.py).
             conn.execute("CREATE INDEX IF NOT EXISTS idx_page_views_classified ON page_views(classified)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_page_views_viewed_at ON page_views(viewed_at)")
         else:
             _log_phase("ensuring tables (sqlite)")
             conn.execute("CREATE TABLE IF NOT EXISTS drafts (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,category TEXT NOT NULL,content TEXT NOT NULL,date_created TEXT NOT NULL)")

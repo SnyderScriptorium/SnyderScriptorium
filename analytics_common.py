@@ -36,8 +36,42 @@ _SOURCE_PATTERNS = (
 )
 
 
-def traffic_source_label(referrer):
-    """Map a referrer header/URL to a human-readable traffic source."""
+# Map common utm_source values to display labels. Anything not listed here
+# gets title-cased (e.g. utm_source=newsletter -> "Newsletter").
+_UTM_LABELS = {
+    "facebook": "Facebook", "fb": "Facebook",
+    "instagram": "Instagram", "ig": "Instagram",
+    "pinterest": "Pinterest",
+    "google": "Google",
+    "bing": "Bing",
+    "twitter": "X / Twitter", "x": "X / Twitter",
+    "tiktok": "TikTok",
+    "youtube": "YouTube",
+    "email": "Email", "newsletter": "Email",
+    "qr": "QR Code", "qrcode": "QR Code",
+}
+
+
+def utm_source_label(utm_source):
+    """Map a utm_source query param to a human-readable traffic source."""
+    u = (utm_source or "").strip().lower()
+    if not u:
+        return None
+    if u in _UTM_LABELS:
+        return _UTM_LABELS[u]
+    # Title-case unknown sources so they still read sensibly.
+    return u.replace("_", " ").replace("-", " ").title()
+
+
+def traffic_source_label(referrer, utm_source=None):
+    """Map a referrer header/URL to a human-readable traffic source.
+
+    utm_source (from ?utm_source=...) wins when present, because it survives
+    referrer stripping by apps, messaging, and privacy tools.
+    """
+    utm = utm_source_label(utm_source)
+    if utm:
+        return utm
     r = (referrer or "").lower()
     if not r:
         return "Direct"
