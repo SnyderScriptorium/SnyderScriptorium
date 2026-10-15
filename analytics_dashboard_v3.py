@@ -97,7 +97,7 @@ def _parse_view_time(raw):
         dt = dt.replace(tzinfo=ZoneInfo("UTC"))
     return dt
 
-def count_sessions(view_times, gap_minutes=360):
+def count_sessions(view_times, gap_minutes=30):
     """Count distinct visit sessions. A new session starts after gap_minutes of inactivity."""
     times = []
     for t in view_times:
@@ -298,7 +298,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             f"{' AND' if where else ' WHERE'} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''", params
         ).fetchone(), 0, "unique_visitors"))
         # Returning visitors: distinct visitors with 2+ separate visit sessions in the period.
-        # A session ends after 6 hours of inactivity. Leaving and coming back = returning.
+        # A session ends after 30 min of inactivity. Leaving and coming back = returning.
         _sess_where = " WHERE pv.viewed_at >= ?" if start else ""
         _sess_params = [start.isoformat()] if start else []
         try:
@@ -485,7 +485,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                 _va = rowval(_r, 1, "viewed_at")
                 if _vk:
                     _rt.setdefault(_vk, []).append(_va)
-            regulars = sum(1 for _t in _rt.values() if count_sessions(_t) >= 4)
+            regulars = sum(1 for _t in _rt.values() if count_sessions(_t, 360) >= 4)
         except Exception:
             regulars = 0
 
