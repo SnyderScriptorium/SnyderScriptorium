@@ -494,11 +494,13 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             _store_where = " WHERE pv.viewed_at >= ?" if start else ""
             _store_params = [start.isoformat()] if start else []
             _store_and = " AND" if _store_where else " WHERE"
+            # Store = /store listing page + /store/book/* detail pages
+            _store_filter = f"({_store_and} (pv.path = '/store' OR pv.path LIKE '/store/book/%'))"
             store_views = int(rowval(conn.execute(
-                f"SELECT COUNT(*) AS n FROM page_views pv{_store_where}{_store_and} pv.category = 'store'",
+                f"SELECT COUNT(*) AS n FROM page_views pv{_store_where}{_store_filter}",
                 _store_params).fetchone(), 0, "n") or 0)
             store_uniques = int(rowval(conn.execute(
-                f"SELECT COUNT(DISTINCT pv.visitor_key) AS n FROM page_views pv{_store_where}{_store_and} pv.category = 'store' AND pv.visitor_key IS NOT NULL AND pv.visitor_key <> ''",
+                f"SELECT COUNT(DISTINCT pv.visitor_key) AS n FROM page_views pv{_store_where}{_store_filter} AND pv.visitor_key IS NOT NULL AND pv.visitor_key <> ''",
                 _store_params).fetchone(), 0, "n") or 0)
             # Books posted in period
             _prod_where = " WHERE date_created >= ?" if start else ""
@@ -520,7 +522,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             try:
                 _chart_rows = conn.execute(
                     f"""SELECT substr(pv.viewed_at, 1, 10) AS day, COUNT(*) AS n
-                        FROM page_views pv{_store_where}{_store_and} pv.category = 'store'
+                        FROM page_views pv{_store_where}{_store_filter}
                         GROUP BY day ORDER BY day""",
                     _store_params).fetchall()
                 store_daily = [{"date": rowval(r, 0, "day"), "views": int(rowval(r, 1, "n") or 0)} for r in _chart_rows]
@@ -531,7 +533,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                 f"""SELECT sp.title, sp.author, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
                     FROM page_views pv
                     LEFT JOIN store_products sp ON sp.id = pv.content_id
-                    {_store_where}{_store_and} pv.page_type = 'store_book' AND pv.category = 'store'
+                    {_store_where}{_store_and} pv.path LIKE '/store/book/%'
                     GROUP BY sp.id, sp.title, sp.author
                     ORDER BY views DESC LIMIT 50""",
                 _store_params).fetchall()
