@@ -170,3 +170,54 @@ def migration_status():
     if not _check_admin():
         return "Unauthorized", 401
     return jsonify(_state)
+
+
+@migrate_bp.route("/admin/verify-migration")
+def verify_migration():
+    """Standalone count verification with fresh connections. Safe to re-run."""
+    if not _check_admin():
+        return "Unauthorized", 401
+    import psycopg
+    from psycopg.rows import dict_row
+
+    source_url = os.environ.get("DATABASE_URL", "")
+    target_url = os.environ.get("TARGET_DATABASE_URL", "")
+    if not source_url or not target_url:
+        return jsonify({"error": "missing URLs"}), 500
+
+    tables = [
+        "drafts", "published_posts", "manuscript_books", "manuscript_chapters",
+        "members", "subscriptions", "inbox_messages", "site_content",
+        "page_views", "find_us_events", "blocked_senders", "push_subscriptions",
+        "email_subscribers", "store_categories", "store_products",
+        "store_orders", "store_order_items", "store_product_images",
+        "store_images",
+    ]
+    results = []
+    mismatches = []
+    try:
+        src = psycopg.connect(source_url, row_factory=dict_row, connect_timeout=30)
+        dst = psycopg.connect(target_url, row_factory=dict_row, connect_timeout=30)
+        for table in tables:
+            try:
+                with src.cursor() as scur, dst.cursor() as dcur:
+                    scur.execute(f'SELECT COUNT(*) AS c FROM "{table}"')
+                    dcur.execute(f'SELECT COUNT(*) AS c FROM "{table}"')
+                    s, d = scur.fetchone()["c"], dcur.fetchone()["c"]
+                    ok = (s == d)
+                    if not ok:
+                        mismatches.append(table)
+                    results.append({"table": table, "source": s, "target": d, "match": ok})
+            except Exception as e:
+                results.append({"table": table, "error": str(e), "match": False})
+                mismatches.append(table)
+        src.close()
+        dst.close()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({
+        "all_match": len(mismatches) == 0,
+        "mismatches": mismatches,
+        "tables": results,
+    })
