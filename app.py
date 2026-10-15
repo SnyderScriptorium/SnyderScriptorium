@@ -172,6 +172,24 @@ def the_hearth():
 
 
 
+# Clean share links: snyderscriptorium.com/go/<source> redirects to the
+# homepage while tagging the traffic source for analytics. Use these in
+# social bios instead of raw ?utm_source= URLs.
+_GO_SOURCES = {
+    "instagram", "facebook", "pinterest", "tiktok", "twitter", "x",
+    "writco", "wattpad", "inkitt", "youtube", "threads", "email",
+    "qr", "newsletter",
+}
+
+@app.route("/go/<source>")
+def go_redirect(source):
+    src = (source or "").strip().lower()
+    if src not in _GO_SOURCES:
+        return redirect("/", code=302)
+    # The analytics tracker picks up utm_source from the query string.
+    return redirect(f"/?utm_source={src}", code=302)
+
+
 @app.route("/search")
 def site_search():
     q = (request.args.get("q") or "").strip()
