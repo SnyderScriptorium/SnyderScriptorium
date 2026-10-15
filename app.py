@@ -154,14 +154,16 @@ def the_hearth():
     shelf_books = []
     try:
         conn = get_db()
+        featured_slugs = ['city-of-bones', 'the-devil-s-code', 'cover-her-face', 'a-thief-of-time']
+        placeholders = ','.join('?' for _ in featured_slugs)
         rows = conn.execute(
-            "SELECT p.id, p.title, p.slug, p.author, p.price_cents, p.cover_image_url, "
-            "COALESCE(SUM(oi.quantity), 0) AS total_sold "
-            "FROM store_products p LEFT JOIN store_order_items oi ON oi.product_id = p.id "
-            "WHERE p.status = 'active' GROUP BY p.id "
-            "ORDER BY total_sold DESC, p.date_created DESC LIMIT 4"
+            f"SELECT id, title, slug, author, price_cents, cover_image_url FROM store_products "
+            f"WHERE status = 'active' AND slug IN ({placeholders})",
+            featured_slugs
         ).fetchall()
-        shelf_books = [dict(r) for r in rows]
+        # Preserve the featured order
+        by_slug = {r['slug']: dict(r) for r in rows}
+        shelf_books = [by_slug[sl] for sl in featured_slugs if sl in by_slug]
         conn.close()
     except Exception:
         shelf_books = []
