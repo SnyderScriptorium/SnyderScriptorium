@@ -29,10 +29,10 @@
       </div>
       <div id="storePaneBooks">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        <button type="button" id="storeSubAdd">Add Book</button>
-        <button type="button" class="light" id="storeSubList">Book List</button>
+        <button type="button" id="storeBookTabAdd">Add Book</button>
+        <button type="button" class="light" id="storeBookTabList">Book List</button>
       </div>
-      <div id="storeSubPaneAdd">
+      <div id="storeBookPaneAdd">
         <div class="preview">
           <h3 class="section-title" id="storeFormHeading">Add a Book to the Store</h3>
           <p class="note">These are finished books for sale. Your Manuscripts Studio books remain separate.</p>
@@ -52,8 +52,7 @@
           <div class="actions"><button type="button" id="storeSaveButton" onclick="window.saveStoreProduct()">Add Book</button><button type="button" class="light" onclick="window.clearStoreForm()">Clear</button></div>
         </div>
         </div>
-      </div>
-      <div id="storeSubPaneList" style="display:none">
+      <div id="storeBookPaneList" style="display:none">
         <div class="preview">
           <h3 class="section-title">Books in the Store</h3>
           <p class="note">Drafts stay hidden from customers. Active books appear on The Scriptorium shelves.</p>
@@ -65,7 +64,6 @@
             <p class="note" id="storeFilterCount" style="margin:0"></p>
           </div>
           <div id="storeProductList" class="list"><p class="note">Loading...</p></div>
-        </div>
         </div>
       </div>
       </div>
@@ -107,6 +105,10 @@
     searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();productPage=1;renderList();});
     document.getElementById('storeTabBooks').addEventListener('click',()=>setStoreTab('books'));
     document.getElementById('storeTabEmail').addEventListener('click',()=>setStoreTab('email'));
+    const bta=document.getElementById('storeBookTabAdd'), btl=document.getElementById('storeBookTabList');
+    if(bta)bta.addEventListener('click',()=>setStoreBookTab('add'));
+    if(btl)btl.addEventListener('click',()=>setStoreBookTab('list'));
+    try{const sbt=localStorage.getItem('storeBookTab');if(sbt==='list')setStoreBookTab('list');}catch(_){}
     document.getElementById('storeSubRefresh').addEventListener('click',loadSubscribers);
     document.getElementById('storeSubAdd').addEventListener('click',addSubscribers);
     document.getElementById('storeDigestSend').addEventListener('click',sendDigest);
@@ -221,6 +223,17 @@
     if(be)be.className=(t==='email'?'':'light');
     if(t==='email')loadSubscribers();
     try{localStorage.setItem('storeAdminTab',t);}catch(_){}
+  }
+  let storeBookTab='add';
+  function setStoreBookTab(t){
+    storeBookTab=t;
+    const pa=document.getElementById('storeBookPaneAdd'), pl=document.getElementById('storeBookPaneList');
+    if(pa)pa.style.display=(t==='add'?'':'none');
+    if(pl)pl.style.display=(t==='list'?'':'none');
+    const ba=document.getElementById('storeBookTabAdd'), bl=document.getElementById('storeBookTabList');
+    if(ba)ba.className=(t==='add'?'':'light');
+    if(bl)bl.className=(t==='list'?'':'light');
+    try{localStorage.setItem('storeBookTab',t);}catch(_){}
   }
   async function loadSubscribers(){
     const wrap=document.getElementById('storeSubList'); if(!wrap)return;
