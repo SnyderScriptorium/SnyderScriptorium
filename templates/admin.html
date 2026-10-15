@@ -222,9 +222,12 @@ function setStatsTab(t){const po=document.getElementById("statsPaneOverview"),ps
 try{
 var d=await api("/api/analytics/store?period=30d");
 if(!d)return;
-var sp=document.getElementById("statStorePosted");if(sp)sp.textContent=d.books_posted||0;
-var ss=document.getElementById("statStoreSold");if(ss)ss.textContent=d.books_sold||0;
-var sv=document.getElementById("statStoreViews");if(sv)sv.textContent=d.store_views||0;
+var sp=document.getElementById("statStorePosted");
+if(sp)sp.textContent=d.books_posted||0;
+var ss=document.getElementById("statStoreSold");
+if(ss)ss.textContent=d.books_sold||0;
+var sv=document.getElementById("statStoreViews");
+if(sv)sv.textContent=d.store_views||0;
 var tb=document.getElementById("storeTopBooks");
 if(tb){
 if(d.top_books&&d.top_books.length){
@@ -239,10 +242,6 @@ tb.innerHTML="<p class='note'>No book views yet.</p>";
 }
 }
 }catch(e){}
-}
-else{
-ctx.fillStyle="#6F6257";ctx.font="15px Georgia";ctx.fillText("No store views recorded for this period yet.",left,top+40);
-}
 }
 window.addEventListener('resize',()=>{if(window.analyticsPeriod&&$("stats")&&!$("stats").classList.contains('hidden'))loadStats(window.analyticsPeriod)});async function refreshCounts(){const results=await Promise.allSettled([api(urls.drafts),api(urls.published),api(urls.manuscripts)]),[drafts,published,manuscripts]=results;if(drafts.status==="fulfilled"){$("draftCount").textContent=drafts.value.length;const draftStat=$("statDrafts");if(draftStat)draftStat.textContent=drafts.value.length}if(published.status==="fulfilled")$("statPublished").textContent=(published.value.total??published.value.length);if(manuscripts.status==="fulfilled")$("statBooks").textContent=(manuscripts.value.books||[]).length}
 function cat(c){return{curations:"Book Curations",reviews:"Book Reviews",curiosity:"Curiosity Cabinet",kwsnyderwriting:"K. W. Snyder Writing",kw_short_stories:"K. W. Snyder Writing — Short Stories",kw_poems:"K. W. Snyder Writing — Poems",kw_vignettes:"K. W. Snyder Writing — Vignettes"}[c]||"Site Page"}function esc(v){const d=document.createElement("div");d.textContent=v??"";return d.innerHTML}

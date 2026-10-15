@@ -575,14 +575,6 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
 
 
 def register(app):
-    @app.get("/admin/analytics")
-    @admin_required
-    def analytics_dashboard_v3():
-        return render_template("analytics.html", **report(
-            request.args.get("period", "30d"), request.args.get("content_page", 1),
-            request.args.get("source_page", 1), request.args.get("drilldown")),
-            tab=request.args.get("tab", "overview"))
-
     @app.get("/api/analytics/store")
     @admin_required
     def api_store_analytics():
