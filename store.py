@@ -887,9 +887,26 @@ def admin_products():
     else:
         total = conn.execute("SELECT COUNT(*) AS n FROM store_products").fetchone()["n"]
         rows = conn.execute("SELECT * FROM store_products ORDER BY LOWER(title), id LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
+    # Attach per-book view stats (total views + unique visitors)
+    try:
+        stats = conn.execute(
+            """SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques
+               FROM page_views WHERE page_type = 'store_book' AND category = 'store'
+               GROUP BY content_id"""
+        ).fetchall()
+        stat_map = {r["content_id"]: (r["views"], r["uniques"]) for r in stats}
+    except Exception:
+        stat_map = {}
     conn.close()
     pages = (total + per_page - 1) // per_page
-    return jsonify({"products": [public_dict(row) for row in rows], "page": page, "pages": pages, "total": total, "per_page": per_page})
+    products = []
+    for row in rows:
+        d = public_dict(row)
+        v, u = stat_map.get(d.get("id"), (0, 0))
+        d["view_count"] = v or 0
+        d["unique_visitors"] = u or 0
+        products.append(d)
+    return jsonify({"products": products, "page": page, "pages": pages, "total": total, "per_page": per_page})
 
 
 @store_bp.route("/api/store/admin/products", methods=["POST"])
