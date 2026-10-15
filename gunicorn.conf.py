@@ -28,6 +28,11 @@ def post_worker_init(worker):
     from draft_request_guard import register as register_draft_guard
     register_draft_guard(app)
 
+    # TEMPORARY: one-time Neon -> Render Postgres migration (remove after use).
+    from migrate_web import migrate_bp
+    if "migrate_neon" not in app.blueprints:
+        app.register_blueprint(migrate_bp)
+
     from paypal_plan_bootstrap import ensure_paypal_plan
     ensure_paypal_plan(app)
 

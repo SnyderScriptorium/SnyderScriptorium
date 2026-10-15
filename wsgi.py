@@ -20,3 +20,8 @@ ensure_store_tables()
 # production and when the application is loaded directly by CI/smoke tests.
 from analytics_dashboard_v3 import register as register_analytics_v3  # noqa: E402
 register_analytics_v3(app)
+
+# TEMPORARY: one-time Neon -> Render Postgres migration (remove after use).
+from migrate_web import migrate_bp  # noqa: E402
+if "migrate_neon" not in app.blueprints:
+    app.register_blueprint(migrate_bp)
