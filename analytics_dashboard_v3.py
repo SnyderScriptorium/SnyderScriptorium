@@ -298,7 +298,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             f"{' AND' if where else ' WHERE'} pv.visitor_key IS NOT NULL AND pv.visitor_key<>''", params
         ).fetchone(), 0, "unique_visitors"))
         # Returning visitors: distinct visitors with 2+ separate visit sessions in the period.
-        # A session ends after 30 min of inactivity. Leaving and coming back = returning.
+        # A session ends after 6 hours of inactivity. Leaving and coming back = returning.
         _sess_where = " WHERE pv.viewed_at >= ?" if start else ""
         _sess_params = [start.isoformat()] if start else []
         try:
