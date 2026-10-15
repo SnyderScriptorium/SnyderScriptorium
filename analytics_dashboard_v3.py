@@ -261,7 +261,28 @@ def _finalize_series(items, period):
     return items, chart_max, chart_ticks
 
 
+# Short TTL cache for analytics reports. Data trickles in slowly; no need to
+# re-run 10+ queries when she taps between periods within a minute.
+_REPORT_CACHE = {}
+_REPORT_TTL = 60  # seconds
+
 def report(period, content_page=1, source_page=1, drill_path=None):
+    import time
+    _ck = (str(period), int(content_page or 1), int(source_page or 1), str(drill_path or ""))
+    _now = time.time()
+    _hit = _REPORT_CACHE.get(_ck)
+    if _hit and _now - _hit[0] < _REPORT_TTL:
+        return _hit[1]
+    _result = _report_uncached(period, content_page, source_page, drill_path)
+    _REPORT_CACHE[_ck] = (_now, _result)
+    # Keep cache small
+    if len(_REPORT_CACHE) > 40:
+        _oldest = min(_REPORT_CACHE, key=lambda k: _REPORT_CACHE[k][0])
+        del _REPORT_CACHE[_oldest]
+    return _result
+
+
+def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
     period = normalize_period(period)
     start = start_for(period)
     conn = get_db()

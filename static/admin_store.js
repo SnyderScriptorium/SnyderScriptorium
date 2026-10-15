@@ -28,7 +28,11 @@
         <button type="button" class="light" id="storeTabEmail">Email list</button>
       </div>
       <div id="storePaneBooks">
-      <div class="two">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button type="button" id="storeSubAdd">Add Book</button>
+        <button type="button" class="light" id="storeSubList">Book List</button>
+      </div>
+      <div id="storeSubPaneAdd">
         <div class="preview">
           <h3 class="section-title" id="storeFormHeading">Add a Book to the Store</h3>
           <p class="note">These are finished books for sale. Your Manuscripts Studio books remain separate.</p>
@@ -47,6 +51,9 @@
           <label>Status</label><select id="storeStatus"><option value="draft">Draft</option><option value="active">Active — show on the store</option><option value="archived">Archived</option></select>
           <div class="actions"><button type="button" id="storeSaveButton" onclick="window.saveStoreProduct()">Add Book</button><button type="button" class="light" onclick="window.clearStoreForm()">Clear</button></div>
         </div>
+        </div>
+      </div>
+      <div id="storeSubPaneList" style="display:none">
         <div class="preview">
           <h3 class="section-title">Books in the Store</h3>
           <p class="note">Drafts stay hidden from customers. Active books appear on The Scriptorium shelves.</p>
@@ -58,6 +65,7 @@
             <p class="note" id="storeFilterCount" style="margin:0"></p>
           </div>
           <div id="storeProductList" class="list"><p class="note">Loading...</p></div>
+        </div>
         </div>
       </div>
       </div>
