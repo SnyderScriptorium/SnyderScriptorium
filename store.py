@@ -920,6 +920,19 @@ def admin_create_product():
         return jsonify({"error": str(exc)}), 400
     conn = get_db()
     try:
+        # Ensure slug is unique - append -2, -3, etc. if needed
+        base_slug = product["slug"]
+        slug = base_slug
+        counter = 2
+        while True:
+            existing = conn.execute("SELECT id FROM store_products WHERE slug = ?", (slug,)).fetchone()
+            if not existing:
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+            if counter > 100:  # Safety limit
+                break
+        product["slug"] = slug
         timestamp = now_string()
         cursor = conn.execute(
             f"INSERT INTO store_products({PRODUCT_COLUMNS}) VALUES ({', '.join(['?'] * 26)})",
@@ -1010,6 +1023,19 @@ def admin_update_product(product_id):
         data["cover_image_url"] = existing["cover_image_url"]
     try:
         product = product_payload(data)
+        # Ensure slug is unique (excluding current product)
+        base_slug = product["slug"]
+        slug = base_slug
+        counter = 2
+        while True:
+            existing_slug = conn.execute("SELECT id FROM store_products WHERE slug = ? AND id != ?", (slug, product_id)).fetchone()
+            if not existing_slug:
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+            if counter > 100:
+                break
+        product["slug"] = slug
     except (ValueError, TypeError) as exc:
         conn.close()
         return jsonify({"error": str(exc)}), 400
