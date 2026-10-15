@@ -273,8 +273,17 @@ The Hearth — Snyder Scriptorium
     }
     .hearth-shelf-cta a:hover { border-bottom-color: #24333B; }
     @media (max-width: 640px) {
-        .hearth-shelf-books { gap: 14px; }
-        .hearth-shelf-book { width: 42vw; max-width: 160px; }
+        .hearth-shelf-books {
+            gap: 14px; flex-wrap: nowrap; justify-content: flex-start;
+            overflow-x: auto; -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x mandatory; padding: 4px 4px 12px;
+            scrollbar-width: none;
+        }
+        .hearth-shelf-books::-webkit-scrollbar { display: none; }
+        .hearth-shelf-book {
+            width: 38vw; max-width: 150px; flex: 0 0 auto;
+            scroll-snap-align: start;
+        }
         .hearth-shelf-book img { width: 100%; height: auto; aspect-ratio: 2/3; }
     }
 </style>
