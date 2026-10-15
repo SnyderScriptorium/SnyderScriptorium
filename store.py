@@ -481,10 +481,12 @@ def prepare_store():
 
 def active_products(conn):
     return conn.execute(
-        """SELECT p.*, COALESCE(v.view_count, 0) AS view_count
+        """SELECT p.*, COALESCE(v.view_count, 0) AS view_count,
+                  COALESCE(v.unique_visitors, 0) AS unique_visitors
            FROM store_products p
            LEFT JOIN (
-               SELECT content_id, COUNT(*) AS view_count
+               SELECT content_id, COUNT(*) AS view_count,
+                      COUNT(DISTINCT visitor_key) AS unique_visitors
                FROM page_views
                WHERE page_type = 'store_book' AND category = 'store'
                GROUP BY content_id
