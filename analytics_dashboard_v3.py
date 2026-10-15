@@ -583,6 +583,25 @@ def register(app):
             request.args.get("source_page", 1), request.args.get("drilldown")),
             tab=request.args.get("tab", "overview"))
 
+    @app.get("/api/analytics/store")
+    @admin_required
+    def api_store_analytics():
+        """JSON store stats for the admin dashboard Store sub-tab."""
+        from flask import jsonify
+        period = request.args.get("period", "30d")
+        data = report(period, 1, 1, None)
+        top_books = [
+            {"title": b.get("title"), "author": b.get("author"), "views": b.get("views", 0)}
+            for b in (data.get("store_books") or [])[:10]
+        ]
+        return jsonify({
+            "books_posted": data.get("store_books_posted", 0),
+            "books_sold": data.get("store_books_sold", 0),
+            "store_views": data.get("store_views", 0),
+            "unique_visitors": data.get("store_unique_visitors", 0),
+            "top_books": top_books,
+        })
+
     @app.get("/admin/analytics-audit")
     @admin_required
     def analytics_audit():
