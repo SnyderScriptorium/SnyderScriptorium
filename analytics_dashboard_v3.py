@@ -581,67 +581,6 @@ def register(app):
         from flask import redirect
         return redirect("/admin", code=302)
 
-    @app.get("/admin/fix-sequence")
-    @admin_required
-    def fix_sequence():
-        """One-time diagnostic: check and fix page_views sequence."""
-        from flask import jsonify
-        conn = get_db()
-        try:
-            row = conn.execute("SELECT MAX(id) AS max_id, COUNT(*) AS cnt FROM page_views").fetchone()
-            max_id = row["max_id"] if isinstance(row, dict) else row[0]
-            cnt = row["cnt"] if isinstance(row, dict) else row[1]
-            
-            seq_row = conn.execute("SELECT last_value, is_called FROM page_views_id_seq").fetchone()
-            last_val = seq_row["last_value"] if isinstance(seq_row, dict) else seq_row[0]
-            is_called = seq_row["is_called"] if isinstance(seq_row, dict) else seq_row[1]
-            next_id = last_val + 1 if is_called else last_val
-            
-            fixed = False
-            if max_id and next_id <= max_id:
-                conn.execute("SELECT setval('page_views_id_seq', ?)", (max_id,))
-                conn.commit()
-                fixed = True
-                new_row = conn.execute("SELECT last_value FROM page_views_id_seq").fetchone()
-                new_val = new_row["last_value"] if isinstance(new_row, dict) else new_row[0]
-            else:
-                new_val = last_val
-            
-            # Test insert
-            test_ok = False
-            test_error = None
-            try:
-                conn.execute(
-                    "INSERT INTO page_views(path,page_type,category,visitor_key,classified) VALUES (?,?,?,?,?)",
-                    ("/__test__", "test", "test", "test-key", 1)
-                )
-                conn.commit()
-                test_ok = True
-                conn.execute("DELETE FROM page_views WHERE path = '/__test__'")
-                conn.commit()
-            except Exception as e:
-                test_error = str(e)
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
-            
-            return jsonify({
-                "max_id": max_id,
-                "count": cnt,
-                "sequence_was": last_val,
-                "sequence_now": new_val,
-                "was_broken": bool(max_id and next_id <= max_id),
-                "fixed": fixed,
-                "test_insert_ok": test_ok,
-                "test_error": test_error,
-            })
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
     @app.get("/api/analytics/store")
     @admin_required
     def api_store_analytics():
