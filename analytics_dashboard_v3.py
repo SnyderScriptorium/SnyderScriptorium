@@ -588,20 +588,22 @@ def register(app):
         from flask import jsonify
         conn = get_db()
         try:
-            cur = conn.cursor()
-            cur.execute("SELECT MAX(id), COUNT(*) FROM page_views")
-            max_id, cnt = cur.fetchone()
-            cur.execute("SELECT last_value, is_called FROM page_views_id_seq")
-            last_val, is_called = cur.fetchone()
+            row = conn.execute("SELECT MAX(id) AS max_id, COUNT(*) AS cnt FROM page_views").fetchone()
+            max_id = row["max_id"] if isinstance(row, dict) else row[0]
+            cnt = row["cnt"] if isinstance(row, dict) else row[1]
+            
+            seq_row = conn.execute("SELECT last_value, is_called FROM page_views_id_seq").fetchone()
+            last_val = seq_row["last_value"] if isinstance(seq_row, dict) else seq_row[0]
+            is_called = seq_row["is_called"] if isinstance(seq_row, dict) else seq_row[1]
             next_id = last_val + 1 if is_called else last_val
             
             fixed = False
-            if next_id <= max_id:
-                cur.execute("SELECT setval('page_views_id_seq', %s)", (max_id,))
+            if max_id and next_id <= max_id:
+                conn.execute("SELECT setval('page_views_id_seq', ?)", (max_id,))
                 conn.commit()
                 fixed = True
-                cur.execute("SELECT last_value FROM page_views_id_seq")
-                new_val = cur.fetchone()[0]
+                new_row = conn.execute("SELECT last_value FROM page_views_id_seq").fetchone()
+                new_val = new_row["last_value"] if isinstance(new_row, dict) else new_row[0]
             else:
                 new_val = last_val
             
@@ -609,31 +611,36 @@ def register(app):
             test_ok = False
             test_error = None
             try:
-                cur.execute(
+                conn.execute(
                     "INSERT INTO page_views(path,page_type,category,visitor_key,classified) VALUES (?,?,?,?,?)",
                     ("/__test__", "test", "test", "test-key", 1)
                 )
                 conn.commit()
                 test_ok = True
-                # Clean up test row
-                cur.execute("DELETE FROM page_views WHERE path = '/__test__'")
+                conn.execute("DELETE FROM page_views WHERE path = '/__test__'")
                 conn.commit()
             except Exception as e:
                 test_error = str(e)
-                conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             
             return jsonify({
                 "max_id": max_id,
                 "count": cnt,
                 "sequence_was": last_val,
                 "sequence_now": new_val,
-                "was_broken": next_id <= max_id,
+                "was_broken": bool(max_id and next_id <= max_id),
                 "fixed": fixed,
                 "test_insert_ok": test_ok,
                 "test_error": test_error,
             })
         finally:
-            conn.close()
+            try:
+                conn.close()
+            except Exception:
+                pass
 
     @app.get("/api/analytics/store")
     @admin_required
