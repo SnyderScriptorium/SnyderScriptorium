@@ -33,6 +33,10 @@ _SOURCE_PATTERNS = (
     ("reddit.com", "Reddit"),
     ("youtube.com", "YouTube"),
     ("tiktok.com", "TikTok"),
+    ("writco", "Writco"),
+    ("wattpad.com", "Wattpad"),
+    ("inkitt.com", "Inkitt"),
+    ("royalroad.com", "Royal Road"),
 )
 
 
@@ -49,6 +53,7 @@ _UTM_LABELS = {
     "youtube": "YouTube",
     "email": "Email", "newsletter": "Email",
     "qr": "QR Code", "qrcode": "QR Code",
+    "writco": "Writco", "wattpad": "Wattpad",
 }
 
 
