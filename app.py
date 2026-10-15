@@ -178,7 +178,7 @@ def the_hearth():
 _GO_SOURCES = {
     "instagram", "facebook", "pinterest", "tiktok", "twitter", "x",
     "writco", "wattpad", "inkitt", "youtube", "threads", "email",
-    "qr", "newsletter",
+    "qr", "newsletter", "mewe",
 }
 
 @app.route("/go/<source>")
