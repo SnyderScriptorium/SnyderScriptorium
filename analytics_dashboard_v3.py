@@ -575,6 +575,12 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
 
 
 def register(app):
+    @app.get("/admin/analytics")
+    @admin_required
+    def analytics_removed():
+        from flask import redirect
+        return redirect("/admin", code=302)
+
     @app.get("/api/analytics/store")
     @admin_required
     def api_store_analytics():
