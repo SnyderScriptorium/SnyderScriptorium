@@ -64,6 +64,7 @@
     <a class="{% if tab == 'overview' %}active{% endif %}" href="{{ url_for('analytics_dashboard_v3', period=period, tab='overview') }}">Overview</a>
     <a class="{% if tab == 'traffic' %}active{% endif %}" href="{{ url_for('analytics_dashboard_v3', period=period, tab='traffic') }}">Traffic &amp; Visitor Sources</a>
     <a class="{% if tab == 'pages' %}active{% endif %}" href="{{ url_for('analytics_dashboard_v3', period=period, tab='pages') }}">Pages &amp; Posts</a>
+    <a class="{% if tab == 'store' %}active{% endif %}" href="{{ url_for('analytics_dashboard_v3', period=period, tab='store') }}">Store</a>
     <a class="{% if tab == 'subscribers' %}active{% endif %}" href="{{ url_for('analytics_dashboard_v3', period=period, tab='subscribers') }}">Subscribers</a>
   </nav>
 
@@ -158,6 +159,46 @@
       </div>
     {% endif %}
     <p class="chart-note">Showing up to 25 pages/posts per page ({{ content_pagination.total }} total records).</p>
+
+  {% elif tab == 'store' %}
+    <h2 class="section-title">Store Analytics</h2>
+    <div class="summary-grid">
+      <div class="view-total">
+        <div class="number">{{ store_books_posted|default(0) }}</div>
+        <div class="label">Books Posted</div>
+      </div>
+      <div class="view-total">
+        <div class="number">{{ store_books_sold|default(0) }}</div>
+        <div class="label">Books Sold</div>
+      </div>
+      <div class="view-total">
+        <div class="number">{{ store_views|default(0) }}</div>
+        <div class="label">Store Views</div>
+      </div>
+      <div class="view-total">
+        <div class="number">{{ store_unique_visitors|default(0) }}</div>
+        <div class="label">Individual Visitors</div>
+      </div>
+    </div>
+
+    {% set c_points = store_daily %}
+    {% set c_ticks = chart_ticks %}
+    {% set c_period = period %}
+    {% set c_unit = 'month' if period == '1y' else 'date' %}
+    {% set c_heading = 'Store views over time' %}
+    {% include 'analytics_chart.html' %}
+
+    <h2 class="section-title">Most Viewed Books</h2>
+    <table class="analytics-table">
+      <thead><tr><th>Book</th><th>Author</th><th style="text-align:right">Views</th><th style="text-align:right">Unique Visitors</th></tr></thead>
+      <tbody>
+        {% for item in store_books %}
+          <tr><td>{{ item.title }}</td><td>{{ item.author }}</td><td class="views">{{ item.views }}</td><td class="unique">{{ item.unique_visitors }}</td></tr>
+        {% else %}
+          <tr><td colspan="4" class="note">No book views recorded for this period yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
 
   {% elif tab == 'subscribers' %}
     <h2 class="section-title">Subscriber Analytics</h2>
