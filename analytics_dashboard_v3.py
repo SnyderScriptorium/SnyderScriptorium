@@ -97,7 +97,7 @@ def _parse_view_time(raw):
         dt = dt.replace(tzinfo=ZoneInfo("UTC"))
     return dt
 
-def count_sessions(view_times, gap_minutes=30):
+def count_sessions(view_times, gap_minutes=360):
     """Count distinct visit sessions. A new session starts after gap_minutes of inactivity."""
     times = []
     for t in view_times:
