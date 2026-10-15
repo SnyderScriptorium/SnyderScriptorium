@@ -50,7 +50,53 @@
 const urls={drafts:"{{ url_for('get_drafts') }}",published:"{{ url_for('get_published') }}",manuscripts:"{{ url_for('get_manuscripts') }}",about:"{{ url_for('get_about_content') }}"};let currentBookId=null,currentChapterId=null,editingDraftId=null,editingPostId=null;const $=id=>document.getElementById(id);
 function showStatus(message,error=false){const s=$("status");s.textContent=message;s.className="status"+(error?" error":"");setTimeout(()=>s.classList.add("hidden"),3500)}function goHome(){location.href="{{ url_for('the_hearth') }}"}function logout(){location.href="{{ url_for('admin_logout') }}"}
 function syncAccess(){const category=window.effectivePostCategory?window.effectivePostCategory():$("postCategory").value;const locked=category.startsWith("kw");$("postAccess").value=locked?"members":"public";$("postAccess").disabled=locked}function cmd(command,value=null){const ed=$("postEditor");ed.focus();restoreSel();document.execCommand(command,false,value);ed.focus();}
-let _savedRange=null;document.addEventListener('selectionchange',function(){saveSel();});function saveSel(){const s=window.getSelection();if(s&&s.rangeCount){try{_savedRange=s.getRangeAt(0).cloneRange();}catch(e){_savedRange=null;}}}function restoreSel(){if(!_savedRange)return false;const s=window.getSelection();try{s.removeAllRanges();s.addRange(_savedRange);}catch(e){_savedRange=null;return false;}_savedRange=null;return true;}function setFontSize(editorId,pt){const ed=$(editorId);if(!ed)return;ed.focus();restoreSel();const sel=window.getSelection();if(!sel.rangeCount)return;let range=sel.getRangeAt(0);if(!ed.contains(range.commonAncestorContainer)){range=document.createRange();range.selectNodeContents(ed);range.collapse(false);sel.removeAllRanges();sel.addRange(range);}if(range.collapsed){const span=document.createElement('span');span.style.fontSize=pt+'pt';span.appendChild(document.createTextNode('\u200b'));range.insertNode(span);const nr=document.createRange();nr.setStart(span.firstChild,1);nr.collapse(true);sel.removeAllRanges();sel.addRange(nr);ed.focus();return;}const span=document.createElement('span');span.style.fontSize=pt+'pt';try{range.surroundContents(span);}catch(e){span.appendChild(range.extractContents());range.insertNode(span);}sel.removeAllRanges();const nr2=document.createRange();nr2.selectNodeContents(span);sel.addRange(nr2);ed.focus();}function cmdFor(id,command,value=null){const ed=$(id);ed.focus();restoreSel();document.execCommand(command,false,value);ed.focus();}function insertLink(id){const u=prompt("Enter the link URL:");if(u)cmdFor(id,"createLink",u)}
+let _savedRange=null;document.addEventListener('selectionchange',function(){saveSel();});function saveSel(){const s=window.getSelection();if(s&&s.rangeCount){try{_savedRange=s.getRangeAt(0).cloneRange();}catch(e){_savedRange=null;}}}function restoreSel(){if(!_savedRange)return false;const s=window.getSelection();try{s.removeAllRanges();s.addRange(_savedRange);}catch(e){_savedRange=null;return false;}_savedRange=null;return true;}function setFontSize(editorId,pt){
+var ed=$(editorId);if(!ed||!pt)return;
+ed.focus();
+var sel=window.getSelection();
+var range=null;
+// Try restored selection first
+if(_savedRange){
+try{
+sel.removeAllRanges();sel.addRange(_savedRange.cloneRange());
+range=sel.getRangeAt(0);
+}catch(e){range=null;}
+_savedRange=null;
+}
+// Fallback: try current selection
+if(!range&&sel.rangeCount){
+try{range=sel.getRangeAt(0);}catch(e){range=null;}
+}
+// Fallback: create range at end of editor
+if(!range||!ed.contains(range.commonAncestorContainer)){
+range=document.createRange();
+range.selectNodeContents(ed);
+range.collapse(false);
+sel.removeAllRanges();
+sel.addRange(range);
+}
+if(range.collapsed){
+// No text selected: insert sized span for next typing
+var span=document.createElement('span');
+span.style.fontSize=pt+'pt';
+span.appendChild(document.createTextNode('\u200b'));
+try{range.insertNode(span);}catch(e){ed.appendChild(span);}
+var nr=document.createRange();
+try{nr.setStart(span.firstChild,1);nr.collapse(true);}catch(e){nr.selectNodeContents(span);nr.collapse(false);}
+sel.removeAllRanges();sel.addRange(nr);
+}else{
+// Text selected: wrap it
+var span2=document.createElement('span');
+span2.style.fontSize=pt+'pt';
+try{range.surroundContents(span2);}catch(e){
+try{span2.appendChild(range.extractContents());range.insertNode(span2);}catch(e2){}
+}
+sel.removeAllRanges();
+var nr2=document.createRange();
+try{nr2.selectNodeContents(span2);sel.addRange(nr2);}catch(e){}
+}
+ed.focus();
+}function cmdFor(id,command,value=null){const ed=$(id);ed.focus();restoreSel();document.execCommand(command,false,value);ed.focus();}function insertLink(id){const u=prompt("Enter the link URL:");if(u)cmdFor(id,"createLink",u)}
 async function api(url,options={}){const r=await fetch(url,{headers:{"Content-Type":"application/json",...(options.headers||{})},...options});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.error||"Request failed");return data}
 async function saveDraft(){const title=$("postTitle").value.trim()||"Untitled Draft",category=effectivePostCategory(),content=$("postEditor").innerHTML;if(!content.trim())return showStatus("Add some content before saving the draft.",true);try{if(editingDraftId){await api(`/api/drafts/${editingDraftId}`,{method:"PUT",body:JSON.stringify({title,category,content})});clearPost();await refreshCounts();await loadDrafts();showStatus("Draft updated in the database.")}else{await api(urls.drafts,{method:"POST",body:JSON.stringify({title,category,content,date:new Date().toLocaleDateString()})});clearPost();await refreshCounts();showStatus("Draft saved to the database.")}}catch(e){showStatus(e.message,true)}}
 async function publishPost(){const title=$("postTitle").value.trim(),content=$("postEditor").innerHTML,draftId=editingDraftId;if(!title||!content.trim())return showStatus("Add a title and some content first.",true);try{await api("{{ url_for('create_published') }}",{method:"POST",body:JSON.stringify({title,category:effectivePostCategory(),content,accessLevel:$("postAccess").value,date:new Date().toLocaleDateString()})});if(draftId)await api(`/api/drafts/${draftId}`,{method:"DELETE"});clearPost();await refreshCounts();await loadDrafts();showStatus(draftId?"Draft published and removed from Drafts.":"Post published.")}catch(e){showStatus(e.message,true)}}
