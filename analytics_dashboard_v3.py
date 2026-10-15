@@ -568,7 +568,6 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             "subscription_activity": {"new": new_subs, "cancelled_or_expired": cancelled},
             "store_views": store_views, "store_unique_visitors": store_uniques,
             "store_books_posted": books_posted, "store_books_sold": books_sold,
-            "_debug_total_store_all_time": int(rowval(conn.execute("SELECT COUNT(*) AS n FROM page_views WHERE category='store'").fetchone(), 0, "n") or 0),
             "store_daily": store_daily, "store_books": store_books,
         }
     finally:
