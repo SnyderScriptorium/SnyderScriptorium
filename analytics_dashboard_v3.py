@@ -422,12 +422,21 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             GROUP BY traffic_source,referrer ORDER BY views DESC,referrer
         """, params).fetchall()
         details = []; source_totals = {}
+        import urllib.parse as _up
         for row in source_rows:
             name = source_label(rowval(row, 0, "source"), rowval(row, 1, "referrer"))
-            ref = str(rowval(row, 1, "referrer") or "").strip() or (
+            raw_ref = str(rowval(row, 1, "referrer") or "").strip()
+            # Extract clean domain for display (e.g. "https://m.facebook.com/x" -> "m.facebook.com")
+            domain = ""
+            if raw_ref and raw_ref.startswith("http"):
+                try:
+                    domain = _up.urlparse(raw_ref).netloc.lower().replace("www.", "")
+                except Exception:
+                    domain = ""
+            ref = raw_ref or (
                 "No referrer recorded (direct/bookmark or privacy-hidden referrer)" if name == "Direct" else "Referrer not recorded")
             views = int(rowval(row, 2, "views") or 0); uv = int(rowval(row, 3, "unique_visitors") or 0)
-            details.append({"source": name, "referrer": ref, "views": views, "unique_visitors": uv})
+            details.append({"source": name, "referrer": ref, "domain": domain, "views": views, "unique_visitors": uv})
             source_totals[name] = source_totals.get(name, 0) + views
         source_page_items, source_page, source_pages, source_total = paginate(details, source_page)
         traffic_sources = [{"source": n, "views": v} for n, v in sorted(source_totals.items(), key=lambda x: (-x[1], x[0]))]
