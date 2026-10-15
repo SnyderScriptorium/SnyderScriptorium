@@ -41,6 +41,8 @@ def traffic_source_label(referrer):
     r = (referrer or "").lower()
     if not r:
         return "Direct"
+    if "snyderscriptorium.com" in r:
+        return "Internal"
     for key, label in _SOURCE_PATTERNS:
         if key in r:
             return label
