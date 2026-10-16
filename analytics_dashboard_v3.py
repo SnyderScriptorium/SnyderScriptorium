@@ -494,8 +494,8 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             _store_where = " WHERE pv.viewed_at >= ?" if start else ""
             _store_params = [start.isoformat()] if start else []
             _store_and = " AND" if _store_where else " WHERE"
-            # Store = category 'store' (store listing + book detail pages) - case-insensitive
-            _store_filter = f"{_store_and} LOWER(pv.category) = 'store'"
+            # Store = /store and /store/book/* paths (more reliable than category)
+            _store_filter = f"{_store_and} (pv.path = '/store' OR pv.path LIKE '/store/%')"
             store_views = int(rowval(conn.execute(
                 f"SELECT COUNT(*) AS n FROM page_views pv{_store_where}{_store_filter}",
                 _store_params).fetchone(), 0, "n") or 0)
