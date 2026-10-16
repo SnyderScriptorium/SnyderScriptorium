@@ -958,10 +958,10 @@ def admin_create_product():
         conn.commit()
         row = conn.execute("SELECT * FROM store_products WHERE id = ?", (new_id,)).fetchone()
         images = get_product_images(conn, new_id)
-    except IntegrityError:
+    except IntegrityError as e:
         conn.rollback()
         conn.close()
-        return jsonify({"error": "A bookstore product with that slug already exists."}), 409
+        return jsonify({"error": f"A bookstore product with that slug already exists (tried: {product.get('slug', 'unknown')})."}), 409
     conn.close()
     payload = {"success": True, "product": row_to_dict(row)}
     payload["product"]["images"] = images
