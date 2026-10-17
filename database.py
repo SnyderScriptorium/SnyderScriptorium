@@ -181,6 +181,34 @@ def _log_phase(message):
     print(f"[init_db] {message}", flush=True)
 
 
+def _repair_sequences(conn):
+    """Reset any stale PostgreSQL serial sequences to MAX(id).
+
+    Bulk inserts and manual ID assignments can leave a sequence behind the
+    table's actual max ID, causing duplicate-key errors on the next insert
+    that get misreported as other problems (e.g. 'slug already exists').
+    This is a fast metadata-only repair: one query per table.
+    SQLite (AUTOINCREMENT) manages this itself; skip it there.
+    """
+    if not using_postgres():
+        return
+    tables = [
+        "drafts", "published_posts", "manuscript_books", "manuscript_chapters",
+        "members", "subscriptions", "inbox_messages", "page_views",
+        "find_us_events", "store_products", "store_orders", "store_images",
+        "store_order_items", "email_subscribers",
+    ]
+    for table in tables:
+        try:
+            conn.execute(
+                f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+                f"COALESCE((SELECT MAX(id) FROM {table}), 1))"
+            )
+        except Exception:
+            # Table may not exist yet or have no serial sequence; not fatal.
+            pass
+
+
 def init_db():
     """Ensure the schema exists. Called once per gunicorn worker at boot.
 
@@ -288,6 +316,8 @@ def init_db():
         _install_access_triggers(conn)
         # NOTE: no backfill here. Historical page_view classification runs via
         # scripts/backfill_page_views.py on demand -- never at worker boot.
+        _log_phase("repairing sequences")
+        _repair_sequences(conn)
         conn.commit()
     finally:
         conn.close()
