@@ -16,9 +16,13 @@ import inbox_admin_routes  # noqa: F401,E402
 
 ensure_store_tables()
 
+# Repair bookstore image sequences after the tables exist. This is deliberately
+# in the production WSGI path rather than relying on sitecustomize, so the
+# repair is guaranteed to run on the live workers before image uploads.
+import repair_store_sequences  # noqa: F401,E402
+
 # Register analytics in the WSGI entry point so the routes exist both in
 # production and when the application is loaded directly by CI/smoke tests.
 from analytics_dashboard_v3 import register as register_analytics_v3  # noqa: E402
 register_analytics_v3(app)
-
 
