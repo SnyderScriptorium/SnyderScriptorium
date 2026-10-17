@@ -489,51 +489,62 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
         except Exception:
             regulars = 0
 
-        # Store-specific analytics
+        # Store-specific analytics (each query isolated: one failure must not zero the rest)
+        _store_where = " WHERE pv.viewed_at >= ?" if start else ""
+        _store_params = [start.isoformat()] if start else []
+        _store_and = " AND" if _store_where else " WHERE"
+        # Store = /store and /store/book/* paths (more reliable than category)
+        _store_filter = f"{_store_and} (pv.path = '/store' OR pv.path LIKE '/store/%')"
         try:
-            _store_where = " WHERE pv.viewed_at >= ?" if start else ""
-            _store_params = [start.isoformat()] if start else []
-            _store_and = " AND" if _store_where else " WHERE"
-            # Store = /store and /store/book/* paths (more reliable than category)
-            _store_filter = f"{_store_and} (pv.path = '/store' OR pv.path LIKE '/store/%')"
             store_views = int(rowval(conn.execute(
                 f"SELECT COUNT(*) AS n FROM page_views pv{_store_where}{_store_filter}",
                 _store_params).fetchone(), 0, "n") or 0)
+        except Exception:
+            store_views = 0
+        try:
             store_uniques = int(rowval(conn.execute(
                 f"SELECT COUNT(DISTINCT pv.visitor_key) AS n FROM page_views pv{_store_where}{_store_filter} AND pv.visitor_key IS NOT NULL AND pv.visitor_key <> ''",
                 _store_params).fetchone(), 0, "n") or 0)
-            # Books posted in period
-            _prod_where = " WHERE date_created >= ?" if start else ""
-            _prod_params = [start.isoformat()] if start else []
+        except Exception:
+            store_uniques = 0
+        # Books posted in period
+        _prod_where = " WHERE date_created >= ?" if start else ""
+        _prod_params = [start.isoformat()] if start else []
+        try:
             books_posted = int(rowval(conn.execute(
                 f"SELECT COUNT(*) AS n FROM store_products{_prod_where}", _prod_params).fetchone(), 0, "n") or 0)
-            # Books sold in period (paid orders)
-            _ord_where = " WHERE date_created >= ?" if start else ""
-            _ord_params = [start.isoformat()] if start else []
-            try:
-                books_sold = int(rowval(conn.execute(
-                    f"""SELECT COALESCE(SUM(oi.quantity), 0) AS n FROM store_order_items oi
-                        JOIN store_orders o ON o.id = oi.order_id{_ord_where.replace('WHERE', 'WHERE o.')}
-                        AND o.payment_status = 'paid'""",
-                    _ord_params).fetchone(), 0, "n") or 0)
-            except Exception:
-                books_sold = 0
-            # Store views over time (for line graph)
-            try:
-                _chart_rows = conn.execute(
-                    f"""SELECT substr(pv.viewed_at, 1, 10) AS day, COUNT(*) AS n
-                        FROM page_views pv{_store_where}{_store_filter}
-                        GROUP BY day ORDER BY day""",
-                    _store_params).fetchall()
-                store_daily = [{"date": rowval(r, 0, "day"), "views": int(rowval(r, 1, "n") or 0)} for r in _chart_rows]
-            except Exception:
-                store_daily = []
-            # Per-book views
+        except Exception:
+            books_posted = 0
+        # Books sold in period (paid orders)
+        _ord_where = " WHERE date_created >= ?" if start else ""
+        _ord_params = [start.isoformat()] if start else []
+        try:
+            books_sold = int(rowval(conn.execute(
+                f"""SELECT COALESCE(SUM(oi.quantity), 0) AS n FROM store_order_items oi
+                    JOIN store_orders o ON o.id = oi.order_id{_ord_where.replace('WHERE', 'WHERE o.')}
+                    AND o.payment_status = 'paid'""",
+                _ord_params).fetchone(), 0, "n") or 0)
+        except Exception:
+            books_sold = 0
+        # Store views over time (for line graph)
+        try:
+            _chart_rows = conn.execute(
+                f"""SELECT substr(pv.viewed_at, 1, 10) AS day, COUNT(*) AS n
+                    FROM page_views pv{_store_where}{_store_filter}
+                    GROUP BY day ORDER BY day""",
+                _store_params).fetchall()
+            store_daily = [{"date": rowval(r, 0, "day"), "views": int(rowval(r, 1, "n") or 0)} for r in _chart_rows]
+        except Exception:
+            store_daily = []
+        # Per-book views (path-based, consistent with store_views filter)
+        try:
+            _book_where = " WHERE pv.viewed_at >= ?" if start else ""
+            _book_and = " AND" if _book_where else " WHERE"
             store_book_rows = conn.execute(
                 f"""SELECT sp.title, sp.author, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
                     FROM page_views pv
                     LEFT JOIN store_products sp ON sp.id = pv.content_id
-                    {_store_where}{_store_and} pv.category = 'store' AND pv.page_type = 'store_book'
+                    {_book_where}{_book_and} pv.path LIKE '/store/book/%'
                     GROUP BY sp.id, sp.title, sp.author
                     ORDER BY views DESC LIMIT 50""",
                 _store_params).fetchall()
@@ -544,11 +555,6 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                 "unique_visitors": int(rowval(r, 3, "uniques") or 0),
             } for r in store_book_rows]
         except Exception:
-            store_views = 0
-            store_uniques = 0
-            books_posted = 0
-            books_sold = 0
-            store_daily = []
             store_books = []
 
         return {
