@@ -54,6 +54,20 @@ jobs:
           response = client.get('/api/store/admin/products', follow_redirects=False)
           if response.status_code != 401 or not response.is_json or 'error' not in response.get_json():
               raise SystemExit('ADMIN API LOGIN REGRESSION: /api/store/admin/products must return JSON HTTP 401 when logged out.')
+          with client.session_transaction() as sess:
+              sess['admin_logged_in'] = True
+              sess['admin_auth_version'] = '2026-08-16-1'
+          response = client.get('/api/store/admin/products?page=1&per_page=15&q=zzzz-no-match-scriptorium-ci-2026')
+          if response.status_code != 200:
+              raise SystemExit(f'BOOK LIST API REGRESSION: expected HTTP 200, got {response.status_code}.')
+          payload = response.get_json()
+          if not isinstance(payload, dict) or payload.get('total') != 0 or payload.get('products') != []:
+              raise SystemExit('BOOK LIST FILTER REGRESSION: unmatched search should return zero products and total.')
+          if not isinstance(payload.get('genres'), list):
+              raise SystemExit('BOOK LIST FILTER REGRESSION: expected the full genre list in the response.')
+          stats = client.get('/api/store/admin/product-stats?ids=1')
+          if stats.status_code != 200 or not isinstance(stats.get_json().get('stats'), dict):
+              raise SystemExit('BOOK STATS REGRESSION: scoped lazy stats endpoint failed.')
           print('Required routes and admin login gates verified.')
           PY
       - name: Smoke-test public page rendering and template endpoint integrity
