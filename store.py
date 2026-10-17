@@ -876,52 +876,108 @@ def admin_products():
     blocked = admin_required()
     if blocked:
         return blocked
-    page = max(1, int(request.args.get("page", 1)))
-    per_page = min(1000, max(1, int(request.args.get("per_page", 15))))
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = min(100, max(1, int(request.args.get("per_page", 15))))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Page and page size must be whole numbers."}), 400
     status_filter = (request.args.get("status") or "all").strip().lower()
+    if status_filter not in ("all", "draft", "active", "archived"):
+        status_filter = "all"
+    query = (request.args.get("q") or "").strip().lower()[:200]
+    genre_filter = (request.args.get("genre") or "").strip()[:120]
+    letter_filter = (request.args.get("letter") or "").strip().upper()[:1]
+    if letter_filter and not (letter_filter.isalpha() and letter_filter.isascii()):
+        letter_filter = ""
+
+    where = []
+    params = []
+    if status_filter != "all":
+        where.append("status = ?")
+        params.append(status_filter)
+    if query:
+        where.append("LOWER(COALESCE(title, '') || ' ' || COALESCE(author, '') || ' ' || COALESCE(isbn, '')) LIKE ?")
+        params.append("%" + query + "%")
+    if genre_filter:
+        where.append("TRIM(COALESCE(genre, '')) = ?")
+        params.append(genre_filter)
+    if letter_filter:
+        where.append("UPPER(SUBSTR(TRIM(COALESCE(title, '')), 1, 1)) = ?")
+        params.append(letter_filter)
+
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
     offset = (page - 1) * per_page
     conn = get_db()
-    if status_filter in ("draft", "active", "archived"):
-        total = conn.execute("SELECT COUNT(*) AS n FROM store_products WHERE status = ?", (status_filter,)).fetchone()["n"]
-        rows = conn.execute("SELECT * FROM store_products WHERE status = ? ORDER BY LOWER(title), id LIMIT ? OFFSET ?", (status_filter, per_page, offset)).fetchall()
-    else:
-        total = conn.execute("SELECT COUNT(*) AS n FROM store_products").fetchone()["n"]
-        rows = conn.execute("SELECT * FROM store_products ORDER BY LOWER(title), id LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
-    # Attach per-book view stats (total views + unique visitors)
-    # NOTE: stats query removed from the list endpoint -- it scanned all
-    # page_views on every load and timed out the admin page. Stats now load
-    # lazily via /api/store/admin/product-stats.
-    stat_map = {}
-    conn.close()
-    pages = (total + per_page - 1) // per_page
+    try:
+        total = conn.execute("SELECT COUNT(*) AS n FROM store_products" + where_sql, tuple(params)).fetchone()["n"]
+        rows = conn.execute(
+            "SELECT * FROM store_products" + where_sql + " ORDER BY LOWER(title), id LIMIT ? OFFSET ?",
+            tuple(params) + (per_page, offset),
+        ).fetchall()
+        # Genres cover the entire selected status scope, not only this page.
+        genre_where = []
+        genre_params = []
+        if status_filter != "all":
+            genre_where.append("status = ?")
+            genre_params.append(status_filter)
+        genre_sql = (" WHERE " + " AND ".join(genre_where)) if genre_where else ""
+        genre_join = " AND " if genre_sql else " WHERE "
+        genre_rows = conn.execute(
+            "SELECT DISTINCT TRIM(genre) AS genre FROM store_products" + genre_sql +
+            genre_join + "genre IS NOT NULL AND TRIM(genre) <> '' ORDER BY LOWER(TRIM(genre))",
+            tuple(genre_params),
+        ).fetchall()
+        genres = [r["genre"] for r in genre_rows if r["genre"]]
+    finally:
+        conn.close()
+
+    pages = max(1, (total + per_page - 1) // per_page)
     products = []
     for row in rows:
         d = public_dict(row)
-        v, u = stat_map.get(d.get("id"), (0, 0))
-        d["view_count"] = v or 0
-        d["unique_visitors"] = u or 0
+        d["view_count"] = 0
+        d["unique_visitors"] = 0
         products.append(d)
-    return jsonify({"products": products, "page": page, "pages": pages, "total": total, "per_page": per_page})
+    return jsonify({"products": products, "page": page, "pages": pages, "total": total, "per_page": per_page, "genres": genres})
 
 
 @store_bp.route("/api/store/admin/product-stats", methods=["GET"])
 def admin_product_stats():
-    """Lazy-load per-book view stats. Called separately so the book list
-    loads fast; the stats query can take its time without blocking the page."""
+    """Lazy-load view stats for requested books without delaying the book list."""
     blocked = admin_required()
     if blocked:
         return blocked
+    raw_ids = (request.args.get("ids") or "").strip()
+    ids = []
+    if raw_ids:
+        for value in raw_ids.split(",")[:100]:
+            try:
+                product_id = int(value)
+                if product_id > 0 and product_id not in ids:
+                    ids.append(product_id)
+            except (TypeError, ValueError):
+                continue
     conn = get_db()
     try:
-        stats = conn.execute(
-            """SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques
-               FROM page_views WHERE page_type = 'store_book' AND category = 'store'
-               GROUP BY content_id"""
-        ).fetchall()
+        if ids:
+            placeholders = ", ".join(["?"] * len(ids))
+            stats = conn.execute(
+                "SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques "
+                "FROM page_views WHERE page_type = 'store_book' AND category = 'store' "
+                "AND content_id IN (" + placeholders + ") GROUP BY content_id",
+                tuple(ids),
+            ).fetchall()
+        else:
+            stats = conn.execute(
+                """SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques
+                   FROM page_views WHERE page_type = 'store_book' AND category = 'store'
+                   GROUP BY content_id"""
+            ).fetchall()
         stat_map = {str(r["content_id"]): {"views": r["views"], "uniques": r["uniques"]} for r in stats}
     except Exception:
         stat_map = {}
-    conn.close()
+    finally:
+        conn.close()
     return jsonify({"stats": stat_map})
 
 
