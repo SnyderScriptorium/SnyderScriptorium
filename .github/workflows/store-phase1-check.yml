@@ -18,6 +18,8 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Compile Python modules
         run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py inbox_admin_routes.py draft_request_guard.py gunicorn.conf.py
+      - name: Check bookstore admin JavaScript syntax
+        run: node --check static/admin_store.js
       - name: Load application and verify store, Find Us, and admin gates
         run: |
           python - <<'PY'
@@ -44,13 +46,30 @@ jobs:
               '/admin/inbox',
               '/admin/store',
               '/admin/find-us',
-              '/api/store/admin/products',
               '/api/find-us',
           ]
           for path in protected_paths:
               response = client.get(path, follow_redirects=False)
               if response.status_code != 302 or '/admin/login' not in response.headers.get('Location', ''):
                   raise SystemExit(f'ADMIN LOGIN REGRESSION: {path} was not protected.')
+          # Store admin APIs intentionally return JSON 401 responses, not HTML redirects.
+          response = client.get('/api/store/admin/products', follow_redirects=False)
+          if response.status_code != 401 or not response.is_json or 'error' not in response.get_json():
+              raise SystemExit('ADMIN API LOGIN REGRESSION: /api/store/admin/products must return JSON HTTP 401 when logged out.')
+          with client.session_transaction() as sess:
+              sess['admin_logged_in'] = True
+              sess['admin_auth_version'] = '2026-08-16-1'
+          response = client.get('/api/store/admin/products?page=1&per_page=15&q=zzzz-no-match-scriptorium-ci-2026')
+          if response.status_code != 200:
+              raise SystemExit(f'BOOK LIST API REGRESSION: expected HTTP 200, got {response.status_code}.')
+          payload = response.get_json()
+          if not isinstance(payload, dict) or payload.get('total') != 0 or payload.get('products') != []:
+              raise SystemExit('BOOK LIST FILTER REGRESSION: unmatched search should return zero products and total.')
+          if not isinstance(payload.get('genres'), list):
+              raise SystemExit('BOOK LIST FILTER REGRESSION: expected the full genre list in the response.')
+          stats = client.get('/api/store/admin/product-stats?ids=1')
+          if stats.status_code != 200 or not isinstance(stats.get_json().get('stats'), dict):
+              raise SystemExit('BOOK STATS REGRESSION: scoped lazy stats endpoint failed.')
           print('Required routes and admin login gates verified.')
           PY
       - name: Smoke-test public page rendering and template endpoint integrity
@@ -90,8 +109,8 @@ jobs:
           assert chart_scale(1)[1] == [0, 1]
           assert chart_scale(6)[1] == [0, 1, 2, 3, 4, 5, 6]
           assert chart_scale(9)[1] == [0, 2, 4, 6, 8, 10]
-          assert chart_scale(74)[1] == [0, 10, 20, 30, 40, 50, 60, 70, 80]
-          assert chart_scale(149)[1] == [0, 20, 40, 60, 80, 100, 120, 140, 160]
+          assert chart_scale(74)[1] == [0, 20, 40, 60, 80]
+          assert chart_scale(149)[1] == [0, 50, 100, 150]
           assert label('/', 'page', '', '') == 'Home'
           assert label('/store', 'page', '', '') == 'The Scriptorium Book Store'
           assert label('/merch', 'page', '', '') == 'Scriptorium Merch Shop'
