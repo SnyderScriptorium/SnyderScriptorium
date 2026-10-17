@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import threading
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from xml.sax.saxutils import escape as xml_escape
@@ -11,6 +12,8 @@ from flask import Blueprint, jsonify, make_response, redirect, render_template, 
 from database import get_db, using_postgres, IntegrityError
 
 store_bp = Blueprint("store", __name__)
+_store_request_schema_ready = False
+_store_request_schema_lock = threading.Lock()
 
 # --- Bookstore visibility -------------------------------------------------
 # The public storefront is live. Set STORE_VISIBLE to False to hide it again
@@ -476,7 +479,17 @@ def public_dict(row):
 
 @store_bp.before_request
 def prepare_store():
-    ensure_store_tables()
+    # wsgi.py initializes the store schema at startup. Keep a guarded fallback
+    # for alternate entry points, but never run schema/migration checks on each
+    # admin list, image, or storefront request.
+    global _store_request_schema_ready
+    if _store_request_schema_ready:
+        return None
+    with _store_request_schema_lock:
+        if not _store_request_schema_ready:
+            ensure_store_tables()
+            _store_request_schema_ready = True
+    return None
 
 
 def active_products(conn):
@@ -924,7 +937,7 @@ def admin_products():
         genre_join = " AND " if genre_sql else " WHERE "
         genre_rows = conn.execute(
             "SELECT DISTINCT TRIM(genre) AS genre FROM store_products" + genre_sql +
-            genre_join + "genre IS NOT NULL AND TRIM(genre) <> '' ORDER BY LOWER(TRIM(genre))",
+            genre_join + "genre IS NOT NULL AND TRIM(genre) <> '' ORDER BY genre",
             tuple(genre_params),
         ).fetchall()
         genres = [r["genre"] for r in genre_rows if r["genre"]]
