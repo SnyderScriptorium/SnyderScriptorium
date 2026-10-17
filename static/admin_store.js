@@ -390,53 +390,41 @@
   }
   async function save(){
     const button=document.getElementById('storeSaveButton');
-    const wasEditing=editingId!==null;
-    if(!button)return;
-    if(button.disabled)return;
-    const originalLabel=button.textContent;
-    button.disabled=true;
-    button.textContent='Saving…';
+    if(button&&button.disabled)return;
+    if(button){button.disabled=true;button.textContent='Saving…';}
     try{
-      const titleEl=document.getElementById('storeTitle');
-      const priceEl=document.getElementById('storePrice');
-      if(!titleEl||!priceEl)throw new Error('The book form did not load properly. Refresh the page and try again.');
-      const title=titleEl.value.trim();
-      if(!title)throw new Error('Give the book a title first.');
+      const titleEl=document.getElementById('storeTitle'),priceEl=document.getElementById('storePrice');
+      if(!titleEl||!priceEl)throw new Error('Form not loaded properly — refresh the page and try again.');
+      const title=titleEl.value.trim(); if(!title)throw new Error('Give the book a title first.');
       const priceVal=priceEl.value.replace(/[$,\\s]/g,'').trim();
       if(!priceVal)throw new Error('Put a price in the Price field first.');
-      if(isNaN(parseFloat(priceVal))||parseFloat(priceVal)<0)throw new Error('Price must be a number, like 9.25.');
+      if(!Number.isFinite(Number(priceVal))||Number(priceVal)<0)throw new Error('Price must be a number, like 9.25.');
       const fd=new FormData();
-      fd.append('title',title);
-      fd.append('price',priceVal);
+      fd.append('title',title);fd.append('price',priceVal);
       fd.append('author',document.getElementById('storeAuthor').value.trim());
       fd.append('description',document.getElementById('storeDescription').value.trim());
       fd.append('format',document.getElementById('storeFormat').value);
       fd.append('isbn',document.getElementById('storeIsbn').value.trim());
       fd.append('stock_quantity',document.getElementById('storeStock').value);
-      const url=document.getElementById('storeCover').value.trim();
-      if(url)fd.append('cover_image_url',url);
+      const url=document.getElementById('storeCover').value.trim();if(url)fd.append('cover_image_url',url);
       fd.append('category',document.getElementById('storeCategory').value.trim()||'Vintage');
       fd.append('genre',document.getElementById('storeGenre').value.trim());
       fd.append('status',document.getElementById('storeStatus').value);
-      const f=document.getElementById('storePhoto').files[0];
-      if(f)fd.append('photo',await fileToUpload(f));
-      const extras=[...document.getElementById('storePhotos').files];
-      for(const g of extras)fd.append('photos',await fileToUpload(g));
-      const response=await fetch(wasEditing?'/api/store/admin/products/'+editingId:'/api/store/admin/products',{
-        method:wasEditing?'PUT':'POST',credentials:'same-origin',body:fd
-      });
-      const contentType=response.headers.get('content-type')||'';
-      if(!contentType.includes('application/json'))throw new Error('Your admin login may have expired. Refresh the page and log in again, then retry.');
-      const data=await response.json();
-      if(!response.ok||data.success===false)throw new Error(data.error||'Could not save the book ('+response.status+').');
-      clearForm();
-      await load(1);
-      if(window.showStatus)window.showStatus(data.photo_warning?('Book saved, but the photo was not: '+data.photo_warning):(wasEditing?'Book updated.':'Book added to The Scriptorium Store.'));
+      const f=document.getElementById('storePhoto').files[0];if(f)fd.append('photo',await fileToUpload(f));
+      for(const g of [...document.getElementById('storePhotos').files])fd.append('photos',await fileToUpload(g));
+      const wasEditing=!!editingId;
+      const r=await fetch(wasEditing?'/api/store/admin/products/'+editingId:'/api/store/admin/products',{method:wasEditing?'PUT':'POST',credentials:'same-origin',body:fd});
+      const ct=r.headers.get('content-type')||'';
+      if(!ct.includes('application/json'))throw new Error('Your admin login may have expired — refresh the page and log in again, then retry.');
+      const data=await r.json();
+      if(!r.ok||data.success===false)throw new Error(data.error||'Could not save the book ('+r.status+').');
+      clearForm();await load();
+      if(window.showStatus)window.showStatus(data.photo_warning?'Book saved, but the photo was not: '+data.photo_warning:(wasEditing?'Book updated.':'Book added to The Scriptorium Store.'));
     }catch(e){
-      if(window.showStatus)window.showStatus(e&&e.message?e.message:'The book could not be saved. Please try again.',true);
-      else console.error('Store book save failed:',e);
+      const message=e&&e.message?e.message:'The book could not be saved. Please try again.';
+      if(window.showStatus)window.showStatus(message,true);else alert(message);
     }finally{
-      if(button.isConnected){button.disabled=false;button.textContent=editingId!==null?'Save Changes':originalLabel;}
+      if(button){button.disabled=false;button.textContent=editingId?'Save Changes':'Add Book';}
     }
   }
   async function edit(id){try{fill(await api(`/api/store/admin/products/${id}`));}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
