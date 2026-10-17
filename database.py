@@ -207,6 +207,15 @@ def _repair_sequences(conn):
         except Exception:
             # Table may not exist yet or have no serial sequence; not fatal.
             pass
+    # Performance: index for the admin book-list view stats query.
+    # Without this, every admin page load scans all page_views.
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_page_views_store_book "
+            "ON page_views (page_type, category, content_id)"
+        )
+    except Exception:
+        pass
 
 
 def init_db():
