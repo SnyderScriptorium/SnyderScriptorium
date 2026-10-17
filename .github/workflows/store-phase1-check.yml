@@ -44,13 +44,16 @@ jobs:
               '/admin/inbox',
               '/admin/store',
               '/admin/find-us',
-              '/api/store/admin/products',
               '/api/find-us',
           ]
           for path in protected_paths:
               response = client.get(path, follow_redirects=False)
               if response.status_code != 302 or '/admin/login' not in response.headers.get('Location', ''):
                   raise SystemExit(f'ADMIN LOGIN REGRESSION: {path} was not protected.')
+          # Store admin APIs intentionally return JSON 401 responses, not HTML redirects.
+          response = client.get('/api/store/admin/products', follow_redirects=False)
+          if response.status_code != 401 or not response.is_json or 'error' not in response.get_json():
+              raise SystemExit('ADMIN API LOGIN REGRESSION: /api/store/admin/products must return JSON HTTP 401 when logged out.')
           print('Required routes and admin login gates verified.')
           PY
       - name: Smoke-test public page rendering and template endpoint integrity
