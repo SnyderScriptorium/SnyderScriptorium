@@ -1017,8 +1017,6 @@ def admin_create_product():
                 break
             slug = f"{base_slug}-{counter}"
             counter += 1
-            if counter > 100:  # Safety limit
-                break
         product["slug"] = slug
         timestamp = now_string()
         cursor = conn.execute(
@@ -1126,8 +1124,6 @@ def admin_update_product(product_id):
                 break
             slug = f"{base_slug}-{counter}"
             counter += 1
-            if counter > 100:
-                break
         product["slug"] = slug
     except (ValueError, TypeError) as exc:
         conn.close()

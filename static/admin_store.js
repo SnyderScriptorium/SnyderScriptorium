@@ -49,7 +49,7 @@
           <label>Cover Image URL <span class="note">(optional — paste a link instead of uploading)</span></label><input id="storeCover" type="url" placeholder="https://...">
           <div class="two"><div><label>Section</label><select id="storeCategory"><option>Antique</option><option selected>Vintage</option><option>Used</option><option>New</option></select></div><div><label>Genre <span class="note">(used under New — e.g. Mystery)</span></label><input id="storeGenre" type="text" list="storeGenreList" placeholder="e.g. Mystery"><datalist id="storeGenreList"></datalist></div></div>
           <label>Status</label><select id="storeStatus"><option value="draft">Draft</option><option value="active">Active — show on the store</option><option value="archived">Archived</option></select>
-          <div class="actions"><button type="button" id="storeSaveButton" onclick="window.saveStoreProduct()">Add Book</button><button type="button" class="light" onclick="window.clearStoreForm()">Clear</button></div>
+          <div class="actions"><button type="button" id="storeSaveButton">Add Book</button><button type="button" class="light" id="storeClearButton">Clear</button></div>
         </div>
         </div>
       <div id="storeBookPaneList" style="display:none">
@@ -103,6 +103,8 @@
     });
     const searchInput=document.getElementById('storeSearch');
     searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();productPage=1;clearTimeout(searchTimer);searchTimer=setTimeout(()=>load(1),220);});
+    document.getElementById('storeSaveButton').addEventListener('click',save);
+    document.getElementById('storeClearButton').addEventListener('click',clearForm);
     document.getElementById('storeTabBooks').addEventListener('click',()=>setStoreTab('books'));
     document.getElementById('storeTabEmail').addEventListener('click',()=>setStoreTab('email'));
     const bta=document.getElementById('storeBookTabAdd'), btl=document.getElementById('storeBookTabList');
@@ -387,41 +389,43 @@
     return new File([blob],String(file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
   }
   async function save(){
-    const titleEl=document.getElementById('storeTitle');
-    const priceEl=document.getElementById('storePrice');
-    if(!titleEl||!priceEl){return window.showStatus&&window.showStatus('Form not loaded properly — refresh the page and try again.',true);}
-    const title=titleEl.value.trim();
-    if(!title){return window.showStatus&&window.showStatus('Give the book a title first.',true);}
-    const priceVal=priceEl.value.replace(/[$,\s]/g,'').trim();
-    if(!priceVal){return window.showStatus&&window.showStatus('Put a price in the Price field first.',true);}
-    if(isNaN(parseFloat(priceVal))||parseFloat(priceVal)<0){return window.showStatus&&window.showStatus('Price must be a number, like 9.25.',true);}
-    const fd=new FormData();
-    fd.append('title',title);
-    fd.append('price',priceVal);
-    fd.append('author',document.getElementById('storeAuthor').value.trim());
-    fd.append('description',document.getElementById('storeDescription').value.trim());
-    fd.append('format',document.getElementById('storeFormat').value);
-    fd.append('isbn',document.getElementById('storeIsbn').value.trim());
-    fd.append('stock_quantity',document.getElementById('storeStock').value);
-    const url=document.getElementById('storeCover').value.trim();
-    if(url)fd.append('cover_image_url',url);
-    fd.append('category',document.getElementById('storeCategory').value.trim()||'Vintage');
-    fd.append('genre',document.getElementById('storeGenre').value.trim());
-    fd.append('status',document.getElementById('storeStatus').value);
-    const f=document.getElementById('storePhoto').files[0];
-    if(f)fd.append('photo',await fileToUpload(f));
-    const extras=[...document.getElementById('storePhotos').files];
-    for(const g of extras){fd.append('photos',await fileToUpload(g));}
+    const button=document.getElementById('storeSaveButton');
+    if(button&&button.disabled)return;
+    if(button){button.disabled=true;button.textContent='Saving…';}
     try{
-      const r=await fetch(editingId?`/api/store/admin/products/${editingId}`:'/api/store/admin/products',{method:editingId?'PUT':'POST',credentials:'same-origin',body:fd});
+      const titleEl=document.getElementById('storeTitle'),priceEl=document.getElementById('storePrice');
+      if(!titleEl||!priceEl)throw new Error('Form not loaded properly — refresh the page and try again.');
+      const title=titleEl.value.trim(); if(!title)throw new Error('Give the book a title first.');
+      const priceVal=priceEl.value.replace(/[$,\\s]/g,'').trim();
+      if(!priceVal)throw new Error('Put a price in the Price field first.');
+      if(!Number.isFinite(Number(priceVal))||Number(priceVal)<0)throw new Error('Price must be a number, like 9.25.');
+      const fd=new FormData();
+      fd.append('title',title);fd.append('price',priceVal);
+      fd.append('author',document.getElementById('storeAuthor').value.trim());
+      fd.append('description',document.getElementById('storeDescription').value.trim());
+      fd.append('format',document.getElementById('storeFormat').value);
+      fd.append('isbn',document.getElementById('storeIsbn').value.trim());
+      fd.append('stock_quantity',document.getElementById('storeStock').value);
+      const url=document.getElementById('storeCover').value.trim();if(url)fd.append('cover_image_url',url);
+      fd.append('category',document.getElementById('storeCategory').value.trim()||'Vintage');
+      fd.append('genre',document.getElementById('storeGenre').value.trim());
+      fd.append('status',document.getElementById('storeStatus').value);
+      const f=document.getElementById('storePhoto').files[0];if(f)fd.append('photo',await fileToUpload(f));
+      for(const g of [...document.getElementById('storePhotos').files])fd.append('photos',await fileToUpload(g));
+      const wasEditing=!!editingId;
+      const r=await fetch(wasEditing?'/api/store/admin/products/'+editingId:'/api/store/admin/products',{method:wasEditing?'PUT':'POST',credentials:'same-origin',body:fd});
       const ct=r.headers.get('content-type')||'';
-      if(!ct.includes('application/json'))
-        throw new Error('Your admin login expired — refresh the page and log in again, then retry.');
+      if(!ct.includes('application/json'))throw new Error('Your admin login may have expired — refresh the page and log in again, then retry.');
       const data=await r.json();
-      if(!r.ok||data.success===false)throw new Error(data.error||`Could not save the book (${r.status}).`);
-      clearForm(); await load();
-      if(window.showStatus)window.showStatus(data.photo_warning?('Book saved, but the photo was not: '+data.photo_warning):(editingId?'Book updated.':'Book added to The Scriptorium Store.'));
-    }catch(e){if(window.showStatus)window.showStatus(e.message,true);}
+      if(!r.ok||data.success===false)throw new Error(data.error||'Could not save the book ('+r.status+').');
+      clearForm();await load();
+      if(window.showStatus)window.showStatus(data.photo_warning?'Book saved, but the photo was not: '+data.photo_warning:(wasEditing?'Book updated.':'Book added to The Scriptorium Store.'));
+    }catch(e){
+      const message=e&&e.message?e.message:'The book could not be saved. Please try again.';
+      if(window.showStatus)window.showStatus(message,true);else alert(message);
+    }finally{
+      if(button){button.disabled=false;button.textContent=editingId?'Save Changes':'Add Book';}
+    }
   }
   async function edit(id){try{fill(await api(`/api/store/admin/products/${id}`));}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
   async function archive(id){if(!confirm('Archive this book? It will no longer appear on the public store.'))return;try{await api(`/api/store/admin/products/${id}`,{method:'DELETE'});await load();window.showStatus&&window.showStatus('Book archived.');}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
