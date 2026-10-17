@@ -961,7 +961,13 @@ def admin_create_product():
     except IntegrityError as e:
         conn.rollback()
         conn.close()
-        return jsonify({"error": f"A bookstore product with that slug already exists (tried: {product.get('slug', 'unknown')})."}), 409
+        # Distinguish a real slug conflict from other integrity errors
+        # (e.g. stale primary-key sequence). Only blame the slug if the
+        # error actually names the slug constraint.
+        err_text = str(e).lower()
+        if "slug" in err_text and "pkey" not in err_text:
+            return jsonify({"error": f"A bookstore product with that slug already exists (tried: {product.get('slug', 'unknown')})."}), 409
+        return jsonify({"error": f"Could not save the book due to a database error: {e}. Please try again or contact support."}), 500
     conn.close()
     payload = {"success": True, "product": row_to_dict(row)}
     payload["product"]["images"] = images
@@ -1065,10 +1071,13 @@ def admin_update_product(product_id):
         conn.commit()
         row = conn.execute("SELECT * FROM store_products WHERE id = ?", (product_id,)).fetchone()
         images = get_product_images(conn, product_id)
-    except IntegrityError:
+    except IntegrityError as e:
         conn.rollback()
         conn.close()
-        return jsonify({"error": "A bookstore product with that slug already exists."}), 409
+        err_text = str(e).lower()
+        if "slug" in err_text and "pkey" not in err_text:
+            return jsonify({"error": "A bookstore product with that slug already exists."}), 409
+        return jsonify({"error": f"Could not save the book due to a database error: {e}. Please try again or contact support."}), 500
     conn.close()
     payload = {"success": True, "product": row_to_dict(row)}
     payload["product"]["images"] = images
