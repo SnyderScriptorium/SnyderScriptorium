@@ -112,6 +112,7 @@ def slugify(value):
 
 
 def ensure_store_tables():
+    global _store_request_schema_ready
     conn = get_db()
     try:
         if using_postgres():
@@ -195,6 +196,7 @@ def ensure_store_tables():
                 (seed_category, now_string()),
             )
         conn.commit()
+        _store_request_schema_ready = True
     finally:
         conn.close()
 
