@@ -507,23 +507,25 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                 _store_params).fetchone(), 0, "n") or 0)
         except Exception:
             store_uniques = 0
-        # Books posted in period
-        _prod_where = " WHERE date_created >= ?" if start else ""
-        _prod_params = [start.isoformat()] if start else []
+        # Books posted in period (date_created is TEXT "MM/DD/YYYY...", parse in Python)
         try:
-            books_posted = int(rowval(conn.execute(
-                f"SELECT COUNT(*) AS n FROM store_products{_prod_where}", _prod_params).fetchone(), 0, "n") or 0)
+            books_posted = 0
+            for row in conn.execute("SELECT date_created FROM store_products").fetchall():
+                dt = _parse_loose_date(rowval(row, 0, "date_created"))
+                if dt and (start is None or dt >= start):
+                    books_posted += 1
         except Exception:
             books_posted = 0
-        # Books sold in period (paid orders)
-        _ord_where = " WHERE date_created >= ?" if start else ""
-        _ord_params = [start.isoformat()] if start else []
+        # Books sold in period (paid orders; date_created is TEXT, parse in Python)
         try:
-            books_sold = int(rowval(conn.execute(
-                f"""SELECT COALESCE(SUM(oi.quantity), 0) AS n FROM store_order_items oi
-                    JOIN store_orders o ON o.id = oi.order_id{_ord_where.replace('WHERE', 'WHERE o.')}
-                    AND o.payment_status = 'paid'""",
-                _ord_params).fetchone(), 0, "n") or 0)
+            books_sold = 0
+            for row in conn.execute(
+                """SELECT o.date_created, oi.quantity FROM store_order_items oi
+                    JOIN store_orders o ON o.id = oi.order_id
+                    WHERE o.payment_status = 'paid'""").fetchall():
+                dt = _parse_loose_date(rowval(row, 0, "date_created"))
+                if dt and (start is None or dt >= start):
+                    books_sold += int(rowval(row, 1, "quantity") or 0)
         except Exception:
             books_sold = 0
         # Store views over time (for line graph)

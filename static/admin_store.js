@@ -161,6 +161,7 @@
   }
   function fill(p){
     editingId=p.id;
+    if(typeof setStoreBookTab==='function')setStoreBookTab('add');
     document.getElementById('storeFormHeading').textContent='Edit Book';
     document.getElementById('storeSaveButton').textContent='Save Book Changes';
     document.getElementById('storeTitle').value=p.title||'';
@@ -326,7 +327,7 @@
     pageItems.forEach(p=>{
       const card=document.createElement('div'); card.className='card';
       const status=p.status||'draft';
-      card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)} · 👁 ${esc(p.view_count??0)} views / ${esc(p.unique_visitors??0)} visitors</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct('+p.id+')">Delete</button></div>`;
+      card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)} · 👁 ${esc(p.view_count??0)} views / ${esc(p.unique_visitors??0)} visitors</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct(${p.id})">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct(${p.id})">Delete</button></div>`;
       list.appendChild(card);
     });
     if(pages>1){
