@@ -888,15 +888,10 @@ def admin_products():
         total = conn.execute("SELECT COUNT(*) AS n FROM store_products").fetchone()["n"]
         rows = conn.execute("SELECT * FROM store_products ORDER BY LOWER(title), id LIMIT ? OFFSET ?", (per_page, offset)).fetchall()
     # Attach per-book view stats (total views + unique visitors)
-    try:
-        stats = conn.execute(
-            """SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques
-               FROM page_views WHERE page_type = 'store_book' AND category = 'store'
-               GROUP BY content_id"""
-        ).fetchall()
-        stat_map = {r["content_id"]: (r["views"], r["uniques"]) for r in stats}
-    except Exception:
-        stat_map = {}
+    # NOTE: stats query removed from the list endpoint -- it scanned all
+    # page_views on every load and timed out the admin page. Stats now load
+    # lazily via /api/store/admin/product-stats.
+    stat_map = {}
     conn.close()
     pages = (total + per_page - 1) // per_page
     products = []
@@ -907,6 +902,27 @@ def admin_products():
         d["unique_visitors"] = u or 0
         products.append(d)
     return jsonify({"products": products, "page": page, "pages": pages, "total": total, "per_page": per_page})
+
+
+@store_bp.route("/api/store/admin/product-stats", methods=["GET"])
+def admin_product_stats():
+    """Lazy-load per-book view stats. Called separately so the book list
+    loads fast; the stats query can take its time without blocking the page."""
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    try:
+        stats = conn.execute(
+            """SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques
+               FROM page_views WHERE page_type = 'store_book' AND category = 'store'
+               GROUP BY content_id"""
+        ).fetchall()
+        stat_map = {str(r["content_id"]): {"views": r["views"], "uniques": r["uniques"]} for r in stats}
+    except Exception:
+        stat_map = {}
+    conn.close()
+    return jsonify({"stats": stat_map})
 
 
 @store_bp.route("/api/store/admin/products", methods=["POST"])
