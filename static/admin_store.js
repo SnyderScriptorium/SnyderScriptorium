@@ -353,7 +353,7 @@
     list.innerHTML='<p class="note">Loading books...</p>';
     try{
       const statusParam=filters.status!=='all'?'&status='+encodeURIComponent(filters.status):'';
-      const res=await api('/api/store/admin/products?per_page=1000'+statusParam);
+      const res=await api('/api/store/admin/products?per_page=50'+statusParam);
       allProducts=res.products||res;
       productPages=res.pages||1;
       productTotal=res.total||allProducts.length;
