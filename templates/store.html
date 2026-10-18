@@ -79,11 +79,7 @@
     {% endif %}
 
     <nav class="store-collection-nav" id="sectionNav" aria-label="Bookstore sections">
-        <button class="collection-link" type="button" data-section="Antique">Antique</button>
-        <button class="collection-link" type="button" data-section="Vintage">Vintage</button>
-        <button class="collection-link" type="button" data-section="Used">Used</button>
-        <button class="collection-link" type="button" data-section="New">New</button>
-        <button class="collection-link active" type="button" data-section="">All Books</button>
+        <button class="collection-link active" type="button" id="storeTabBtn" data-tab="store">Store</button>
         <button class="collection-link" type="button" id="reviewsTabBtn" data-tab="reviews">Reviews</button>
     </nav>
 
@@ -217,6 +213,7 @@
   const filterCondBtns=document.getElementById('filterCondBtns');
   const inStockOnly=document.getElementById('inStockOnly');
   const reviewsTabBtn=document.getElementById('reviewsTabBtn');
+  const storeTabBtn=document.getElementById('storeTabBtn');
   const storeControls=document.getElementById('storeControls');
   const storeLayout=document.getElementById('storeLayout');
   const storeRequest=document.getElementById('storeRequest');
@@ -224,10 +221,10 @@
   const storeReviews=document.getElementById('storeReviews');
   const PAGE_SIZE=20;
   const PRICE_BANDS=[
-    {id:'u10',label:'Under $10',test:p=>p<10},
-    {id:'b1025',label:'$10 to $25',test:p=>p>=10&&p<=25},
-    {id:'b2550',label:'$25 to $50',test:p=>p>25&&p<=50},
-    {id:'o50',label:'Over $50',test:p=>p>50}
+    {id:'u5',label:'Under $5',test:p=>p<5},
+    {id:'b510',label:'$5 to $10',test:p=>p>=5&&p<=10},
+    {id:'b1025',label:'$10 to $25',test:p=>p>10&&p<=25},
+    {id:'o25',label:'$25 & above',test:p=>p>25}
   ];
   const CONDITIONS=['','Antique','Vintage','Used','New'];
   let section='', genres=new Set(), priceBands=new Set(), stockOnly=false;
@@ -266,12 +263,12 @@
       .map(name=>({name:name,count:counts[name]}));
   }
 
+  function setActiveTab(which){
+    sections.forEach(x=>x.classList.toggle('active',x.dataset.tab===which));
+  }
+
   function setSection(s,scroll){
     section=s;genres.clear();page=1;
-    sections.forEach(x=>{
-      if(x.hasAttribute('data-tab')){x.classList.remove('active');return;}
-      x.classList.toggle('active',x.dataset.section===s);
-    });
     buildConditionBtns();buildGenreFilters();apply();showBooksView();
     if(scroll!==false) gridTop();
   }
@@ -422,6 +419,7 @@
 
   function showBooksView(){
     onReviewsTab=false;
+    setActiveTab('store');
     if(storeControls) storeControls.hidden=false;
     if(storeLayout) storeLayout.hidden=false;
     if(storeRequest) storeRequest.hidden=false;
@@ -430,8 +428,7 @@
   }
   function showReviewsView(){
     onReviewsTab=true;
-    sections.forEach(x=>x.classList.remove('active'));
-    if(reviewsTabBtn) reviewsTabBtn.classList.add('active');
+    setActiveTab('reviews');
     closeFilters();
     if(storeControls) storeControls.hidden=true;
     if(storeLayout) storeLayout.hidden=true;
@@ -450,10 +447,7 @@
     if(filterBackdrop) filterBackdrop.classList.remove('open');
   }
 
-  sections.forEach(btn=>{
-    if(btn.hasAttribute('data-tab')) return;
-    btn.addEventListener('click',()=>setSection(btn.dataset.section||''));
-  });
+  if(storeTabBtn) storeTabBtn.addEventListener('click',()=>{showBooksView();gridTop();});
   if(reviewsTabBtn) reviewsTabBtn.addEventListener('click',showReviewsView);
   letters.forEach(btn=>btn.addEventListener('click',()=>{
     letter=btn.dataset.letter||'';
