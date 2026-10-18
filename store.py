@@ -123,6 +123,7 @@ def ensure_store_tables():
                 "CREATE TABLE IF NOT EXISTS store_order_items (id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id BIGINT NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS store_product_images (id BIGSERIAL PRIMARY KEY, product_id BIGINT NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_images (id BIGSERIAL PRIMARY KEY, data BYTEA NOT NULL, mime TEXT NOT NULL DEFAULT 'image/jpeg', date_created TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_reviews (id BIGSERIAL PRIMARY KEY, order_id BIGINT NOT NULL UNIQUE REFERENCES store_orders(id) ON DELETE CASCADE, customer_name TEXT NOT NULL DEFAULT '', rating INTEGER NOT NULL DEFAULT 5, title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
             ]
         else:
             statements = [
@@ -132,6 +133,7 @@ def ensure_store_tables():
                 "CREATE TABLE IF NOT EXISTS store_order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES store_orders(id) ON DELETE CASCADE, product_id INTEGER NOT NULL REFERENCES store_products(id), quantity INTEGER NOT NULL DEFAULT 1, unit_price_cents INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS store_product_images (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL REFERENCES store_products(id) ON DELETE CASCADE, image_url TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, date_created TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS store_images (id INTEGER PRIMARY KEY AUTOINCREMENT, data BLOB NOT NULL, mime TEXT NOT NULL DEFAULT 'image/jpeg', date_created TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS store_reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL UNIQUE REFERENCES store_orders(id) ON DELETE CASCADE, customer_name TEXT NOT NULL DEFAULT '', rating INTEGER NOT NULL DEFAULT 5, title TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', date_created TEXT NOT NULL, date_updated TEXT NOT NULL)",
             ]
         for statement in statements:
             conn.execute(statement)
@@ -700,6 +702,144 @@ def public_product(product_id):
     item = public_dict(row)
     item["images"] = images
     return jsonify(item)
+
+
+# --- Customer reviews (verified purchase) -------------------------------
+# Verification: the reviewer must supply the order ID and email from their
+# order confirmation. The backend checks that the order exists, the email
+# matches, and payment_status is 'paid'. One review per order.
+
+@store_bp.route("/api/store/reviews", methods=["GET"])
+def public_reviews():
+    """List approved reviews for the storefront."""
+    if not STORE_VISIBLE:
+        return jsonify([])
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, customer_name, rating, title, body, date_created "
+        "FROM store_reviews WHERE status = 'approved' ORDER BY id DESC LIMIT 50"
+    ).fetchall()
+    conn.close()
+    return jsonify([
+        {
+            "id": r["id"],
+            "name": r["customer_name"],
+            "rating": r["rating"],
+            "title": r["title"],
+            "body": r["body"],
+            "date": r["date_created"],
+        }
+        for r in rows
+    ])
+
+
+@store_bp.route("/api/store/reviews", methods=["POST"])
+def submit_review():
+    """Submit a review. Requires a verified paid order (order ID + email)."""
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        order_id = int(data.get("order_id") or 0)
+    except (TypeError, ValueError):
+        order_id = 0
+    email = str(data.get("email") or "").strip().lower()
+    name = str(data.get("name") or "").strip()[:80]
+    title = str(data.get("title") or "").strip()[:120]
+    body = str(data.get("body") or "").strip()
+    try:
+        rating = int(data.get("rating") or 0)
+    except (TypeError, ValueError):
+        rating = 0
+    if not order_id or not email:
+        return jsonify({"error": "Please enter your order number and the email you ordered with."}), 400
+    if rating < 1 or rating > 5:
+        return jsonify({"error": "Please choose a star rating from 1 to 5."}), 400
+    if not body or len(body) < 10:
+        return jsonify({"error": "Please write a few words about your experience (at least 10 characters)."}), 400
+    if len(body) > 2000:
+        return jsonify({"error": "Please keep your review under 2000 characters."}), 400
+    conn = get_db()
+    try:
+        order = conn.execute(
+            "SELECT id, customer_name, customer_email, payment_status FROM store_orders WHERE id = ?",
+            (order_id,),
+        ).fetchone()
+        if not order:
+            return jsonify({"error": "We couldn't find that order number. Please check your confirmation email."}), 404
+        if (order["customer_email"] or "").strip().lower() != email:
+            return jsonify({"error": "That email doesn't match the order. Please use the email you ordered with."}), 403
+        if order["payment_status"] != "paid":
+            return jsonify({"error": "That order hasn't completed payment yet, so it can't be reviewed."}), 403
+        existing = conn.execute(
+            "SELECT id FROM store_reviews WHERE order_id = ?", (order_id,)
+        ).fetchone()
+        if existing:
+            return jsonify({"error": "A review has already been left for this order."}), 409
+        if not name:
+            name = (order["customer_name"] or "").strip()[:80] or "Verified buyer"
+        ts = now_string()
+        conn.execute(
+            "INSERT INTO store_reviews(order_id, customer_name, rating, title, body, status, date_created, date_updated) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
+            (order_id, name, rating, title, body, ts, ts),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"success": True, "message": "Thank you! Your review is awaiting approval and will appear soon."}), 201
+
+
+@store_bp.route("/api/store/admin/reviews", methods=["GET"])
+def admin_list_reviews():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT r.id, r.order_id, r.customer_name, r.rating, r.title, r.body, r.status, r.date_created, "
+        "o.customer_email FROM store_reviews r "
+        "LEFT JOIN store_orders o ON o.id = r.order_id "
+        "ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, r.id DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([
+        {
+            "id": r["id"], "order_id": r["order_id"], "name": r["customer_name"],
+            "email": r["customer_email"], "rating": r["rating"], "title": r["title"],
+            "body": r["body"], "status": r["status"], "date": r["date_created"],
+        }
+        for r in rows
+    ])
+
+
+@store_bp.route("/api/store/admin/reviews/<int:review_id>/approve", methods=["POST"])
+def admin_approve_review(review_id):
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE store_reviews SET status = 'approved', date_updated = ? WHERE id = ?",
+        (now_string(), review_id),
+    )
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Review not found."}), 404
+    return jsonify({"success": True})
+
+
+@store_bp.route("/api/store/admin/reviews/<int:review_id>/reject", methods=["POST"])
+def admin_reject_review(review_id):
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    cur = conn.execute("DELETE FROM store_reviews WHERE id = ?", (review_id,))
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Review not found."}), 404
+    return jsonify({"success": True})
 
 
 @store_bp.route("/admin/store")

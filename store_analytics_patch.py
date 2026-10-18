@@ -127,7 +127,7 @@ def admin_product_stats_fixed():
                     ON sp.id = pv.content_id
                     OR ('/store/book/' || sp.slug) = pv.path
                   WHERE pv.path LIKE '/store/book/%'
-                    AND sp.id IN (""" + placeholders + ")
+                    AND sp.id IN (""" + placeholders + """)
                   GROUP BY sp.id"""
         rows = conn.execute(sql, tuple(ids)).fetchall()
         stats = {str(r["product_id"]): {"views": int(r["views"] or 0),
