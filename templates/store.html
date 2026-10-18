@@ -141,7 +141,7 @@
             <h2>{{ p.title }}</h2>
             <p class="store-author">{{ p.author or 'The Scriptorium' }}</p>
             {% if p.section %}<div class="store-section">{{ p.section }}</div>{% endif %}
-            <div class="store-publine">{% if p.publisher %}{{ p.publisher }}{% endif %}{% if p.publisher and p.publication_year %}, {% endif %}{% if p.publication_year %}{{ p.publication_year }}{% endif %}{% if p.edition %} · {{ p.edition }}{% endif %}</div>
+            {% if p.publisher or p.publication_year or p.edition %}<div class="store-publine">{% if p.publisher %}{{ p.publisher }}{% endif %}{% if p.publisher and p.publication_year %}, {% endif %}{% if p.publication_year %}{{ p.publication_year }}{% endif %}{% if p.edition %} · {{ p.edition }}{% endif %}</div>{% endif %}
             {% if p.condition_notes %}<div class="store-condition">{{ p.condition_notes }}</div>{% endif %}
             <div class="store-price">${{ p.price }}</div>
             <div class="store-stock">{% if p.stock_quantity|int > 1 %}{{ p.stock_quantity }} copies{% elif p.stock_quantity|int == 1 %}Only 1 available{% else %}Currently unavailable{% endif %}</div>
