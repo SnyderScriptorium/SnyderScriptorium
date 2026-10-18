@@ -102,8 +102,6 @@ def patched_report(period, content_page=1, source_page=1, drill_path=None):
     try:
         data.update(_store_data(period))
     except Exception:
-        # Never make the main analytics dashboard fail because store analytics
-        # have a database problem.
         data.setdefault("store_views", 0)
         data.setdefault("store_unique_visitors", 0)
         data.setdefault("store_daily", [])
@@ -111,19 +109,26 @@ def patched_report(period, content_page=1, source_page=1, drill_path=None):
     return data
 
 
-# The existing dashboard route calls the module-level report() function at
-# request time, so replacing it also fixes the broader analytics data without
-# rewriting the large dashboard module.
 analytics.report = patched_report
 
 
 @admin_required
 def api_store_analytics_fixed():
     """Fresh Store-tab data, including every viewed book (up to 50)."""
-    data = _store_data(request.args.get("period", "30d"))
+    period = request.args.get("period", "30d")
+    data = _store_data(period)
+    # Preserve the existing dashboard's posted/sold counters from the normal
+    # report, while replacing only the live store-view metrics.
+    try:
+        base = _original_report(period, 1, 1, None)
+        books_posted = base.get("store_books_posted", 0)
+        books_sold = base.get("store_books_sold", 0)
+    except Exception:
+        books_posted = 0
+        books_sold = 0
     return jsonify({
-        "books_posted": 0,
-        "books_sold": 0,
+        "books_posted": books_posted,
+        "books_sold": books_sold,
         "store_views": data["store_views"],
         "unique_visitors": data["store_unique_visitors"],
         "top_books": data["store_books"],
