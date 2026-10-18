@@ -16,6 +16,10 @@ _store_request_schema_ready = False
 _store_request_schema_lock = threading.Lock()
 
 # --- Bookstore visibility -------------------------------------------------
+# The public storefront is live. Set STORE_VISIBLE to False to hide it again
+# (and comment out the nav link in base.html).
+# Admin routes (/admin/store, /api/store/admin/*) are intentionally NOT gated
+# so inventory can keep being managed while the storefront is hidden.
 STORE_VISIBLE = True
 
 ALLOWED_STATUS = {"draft", "active", "archived"}
@@ -24,6 +28,11 @@ ALLOWED_SECTIONS = {"Antique", "Vintage", "Used", "New"}
 
 
 def canonical_section(value):
+    """Strict section for a category string: Antique, Vintage, Used, New, or None.
+
+    A book belongs to exactly one section tab. Anything else (legacy
+    values like "Books") shows only under All Books.
+    """
     text = str(value or "").strip().lower()
     for section in ALLOWED_SECTIONS:
         if text == section.lower():
@@ -48,13 +57,20 @@ def require_admin():
 
 def admin_required():
     if not require_admin():
+        # For API routes, return JSON instead of HTML redirect so the
+        # frontend can show the error instead of failing silently.
+        from flask import request
         if request.path.startswith("/api/"):
             return jsonify({"error": "Admin session expired. Please log in again."}), 401
         return redirect(url_for("admin_login_page"))
     return None
 
 
-STORE_MAINTENANCE_UNTIL = "2026-10-05T00:00:00+00:00"
+# --- Storefront maintenance curtain -------------------------------------
+# Shows a friendly "under maintenance" page in front of the public store
+# while the shop is being worked on. Lifts itself Sunday evening; override
+# anytime with the STORE_MAINTENANCE env var ("1" = on, "0" = off).
+STORE_MAINTENANCE_UNTIL = "2026-10-05T00:00:00+00:00"  # Sun Oct 4, 8pm EDT
 
 
 def _store_under_maintenance():
@@ -81,7 +97,7 @@ def _store_maintenance_curtain():
     if not is_storefront:
         return None
     if require_admin():
-        return None
+        return None  # the admin can peek behind the curtain
     if not _store_under_maintenance():
         return None
     resp = make_response(render_template("store_maintenance.html"), 503)
@@ -196,6 +212,11 @@ def parse_price(value):
 
 
 def product_payload(data):
+    """Build a product dict from manually entered form/JSON data.
+
+    Every field is optional except title and price — antique/vintage books
+    have no external database to pull from, so everything is typed by hand.
+    """
     title = str(data.get("title", "")).strip()
     if not title:
         raise ValueError("A book title is required.")
@@ -210,6 +231,8 @@ def product_payload(data):
         raise ValueError("Invalid product status.")
 
     raw_section = str(data.get("category", "")).strip()
+    # Canonicalize known sections (case-insensitive); preserve any other
+    # non-empty legacy value untouched; default blanks to Antique.
     section = canonical_section(raw_section) or raw_section or "Antique"
 
     try:
@@ -248,6 +271,7 @@ def product_payload(data):
 
 
 def image_extension_for(data):
+    """Detect a real image type from magic bytes. Returns extension or None."""
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return ".png"
     if data.startswith(b"\xff\xd8\xff"):
@@ -260,6 +284,7 @@ def image_extension_for(data):
 
 
 def _validate_upload(storage):
+    """Validate an uploaded image. Returns (data, mime). Raises ValueError."""
     filename = (storage.filename or "").strip()
     ext = os.path.splitext(filename)[1].lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
@@ -277,6 +302,10 @@ def _validate_upload(storage):
 
 
 def store_image_data(conn, data, mime):
+    """Persist image bytes in the database (survives redeploys).
+
+    Returns the public /store/image/<id> URL.
+    """
     cur = conn.execute(
         "INSERT INTO store_images(data, mime, date_created) VALUES (?, ?, ?)",
         (bytes(data), mime, now_string()),
@@ -285,6 +314,7 @@ def store_image_data(conn, data, mime):
 
 
 def save_product_photo(conn, storage):
+    """Validate and store an uploaded book photo in the DB. Returns the public URL."""
     data, mime = _validate_upload(storage)
     return store_image_data(conn, data, mime)
 
@@ -293,11 +323,13 @@ MAX_GALLERY_IMAGES = 6
 
 
 def save_gallery_photo(conn, storage):
+    """Validate and store one gallery photo in the DB. Returns the public URL."""
     data, mime = _validate_upload(storage)
     return store_image_data(conn, data, mime)
 
 
 def _image_id_from_url(url):
+    """Extract the DB image id from a /store/image/<id> URL, else None."""
     if not url or not isinstance(url, str):
         return None
     prefix = "/store/image/"
@@ -308,6 +340,7 @@ def _image_id_from_url(url):
 
 
 def delete_stored_image(conn, url):
+    """Delete a DB-backed image row. Legacy local files are removed from disk."""
     image_id = _image_id_from_url(url)
     if image_id:
         conn.execute("DELETE FROM store_images WHERE id = ?", (image_id,))
@@ -319,6 +352,12 @@ _images_migrated = False
 
 
 def _migrate_local_store_images(conn, limit=50):
+    """One-time, strictly bounded: import surviving local /static/store_images
+    files into the database and rewrite their URLs to /store/image/<id>.
+
+    Render wipes the local upload directory on redeploy, so this rescues any
+    files still on disk. Runs once per process; never touches remote URLs.
+    """
     global _images_migrated
     if _images_migrated:
         return 0
@@ -364,6 +403,7 @@ def _migrate_local_store_images(conn, limit=50):
 
 @store_bp.route("/store/image/<int:image_id>")
 def serve_store_image(image_id):
+    """Serve a database-backed store image with a long immutable cache."""
     conn = get_db()
     try:
         row = conn.execute("SELECT data, mime FROM store_images WHERE id = ?", (image_id,)).fetchone()
@@ -381,6 +421,7 @@ def serve_store_image(image_id):
 
 
 def get_product_images(conn, product_id):
+    """Gallery images for a product, oldest first. Returns [{id, image_url}]."""
     rows = conn.execute(
         "SELECT id, image_url FROM store_product_images WHERE product_id = ? ORDER BY position, id",
         (product_id,),
@@ -389,41 +430,15 @@ def get_product_images(conn, product_id):
 
 
 def _request_gallery_photos():
+    """Uploaded gallery files from a multipart form (empty list if none)."""
     if request.is_json:
         return []
     photos = request.files.getlist("photos")
     return [p for p in photos if p and (p.filename or "").strip()]
 
 
-def _sync_postgres_sequence_for_table(conn, table):
-    """Make a PostgreSQL serial/bigserial sequence agree with its table.
-
-    This is deliberately done immediately before an image-row insert as well
-    as during startup. That protects the book-save flow from stale sequences
-    left behind by older imports/migrations, including a sequence that became
-    stale after a previous deployment.
-    """
-    if not using_postgres():
-        return
-    if table != "store_product_images":
-        raise ValueError("Unsupported bookstore sequence table.")
-    conn.execute(
-        "SELECT pg_advisory_xact_lock(hashtext('snyderscriptorium_store_product_images_sequence'))"
-    )
-    conn.execute(
-        "SELECT setval(pg_get_serial_sequence('store_product_images', 'id'), "
-        "COALESCE((SELECT MAX(id) FROM store_product_images), 0), "
-        "CASE WHEN COALESCE((SELECT MAX(id) FROM store_product_images), 0) > 0 THEN true ELSE false END)"
-    )
-
-
 def add_gallery_photos(conn, product_id, slug):
-    """Save uploaded gallery photos; returns warning strings.
-
-    PostgreSQL gallery IDs are repaired under a transaction advisory lock
-    immediately before each insert. This makes the operation self-healing even
-    when a stale sequence survived an earlier deployment.
-    """
+    """Save uploaded gallery photos; returns a list of warning strings."""
     warnings = []
     existing = conn.execute(
         "SELECT COUNT(*) AS c FROM store_product_images WHERE product_id = ?", (product_id,)
@@ -438,7 +453,18 @@ def add_gallery_photos(conn, product_id, slug):
         except ValueError as exc:
             warnings.append(str(exc))
             continue
-        _sync_postgres_sequence_for_table(conn, "store_product_images")
+        if using_postgres():
+            # Older imports can leave the BIGSERIAL sequence behind the actual
+            # highest image id. Repair it immediately before the insert so a
+            # new book can never fail with a duplicate store_product_images id.
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('snyderscriptorium_store_product_images_sequence'))"
+            )
+            conn.execute(
+                "SELECT setval(pg_get_serial_sequence('store_product_images', 'id'), "
+                "COALESCE((SELECT MAX(id) FROM store_product_images), 0), "
+                "CASE WHEN COALESCE((SELECT MAX(id) FROM store_product_images), 0) > 0 THEN true ELSE false END)"
+            )
         conn.execute(
             "INSERT INTO store_product_images(product_id, image_url, position, date_created) VALUES (?, ?, ?, ?)",
             (product_id, url, position, now_string()),
@@ -453,11 +479,13 @@ def row_to_dict(row):
     item["is_new_release"] = bool(item.get("is_new_release"))
     item["is_kw_snyder"] = bool(item.get("is_kw_snyder"))
     item["genre"] = item.get("genre") or ""
+    # Strict storefront section: Antique, Vintage, Used, New, or None (All Books only).
     item["section"] = canonical_section(item.get("category"))
     return item
 
 
 def public_dict(row):
+    """Public-facing product dict — never leaks the private admin notes."""
     item = row_to_dict(row)
     item.pop("notes", None)
     return item
@@ -465,6 +493,9 @@ def public_dict(row):
 
 @store_bp.before_request
 def prepare_store():
+    # wsgi.py initializes the store schema at startup. Keep a guarded fallback
+    # for alternate entry points, but never run schema/migration checks on each
+    # admin list, image, or storefront request.
     global _store_request_schema_ready
     if _store_request_schema_ready:
         return None
@@ -499,4 +530,1536 @@ def _request_data():
 
 
 def _request_photo():
-    return request.files.get("cover_photo") if not request.is_json else None
+    if request.is_json:
+        return None
+    photo = request.files.get("photo")
+    if photo and (photo.filename or "").strip():
+        return photo
+    return None
+
+
+PRODUCT_COLUMNS = ("title, slug, author, description, price_cents, format, isbn, cover_image_url, category, genre, language, fulfillment_source, fulfillment_method, stock_quantity, availability_status, condition, is_new_release, is_kw_snyder, status, publisher, publication_year, edition, condition_notes, notes, date_created, date_updated")
+
+
+def _product_values(product):
+    return (product["title"], product["slug"], product["author"], product["description"], product["price_cents"], product["format"], product["isbn"], product["cover_image_url"], product["category"], product["genre"], product["language"], product["fulfillment_source"], product["fulfillment_method"], product["stock_quantity"], product["availability_status"], product["condition"], product["is_new_release"], product["is_kw_snyder"], product["status"], product["publisher"], product["publication_year"], product["edition"], product["condition_notes"], product["notes"])
+
+
+@store_bp.route("/store")
+def store_home():
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
+    conn = get_db()
+    rows = active_products(conn)
+    conn.close()
+    return render_template("store.html", products=[public_dict(row) for row in rows])
+
+
+@store_bp.route("/store/subscribe", methods=["POST"])
+def store_subscribe():
+    email = (request.form.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return jsonify({"ok": False, "error": "Please enter a valid email address."}), 400
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO email_subscribers (email, active) VALUES (?, 1) "
+            "ON CONFLICT (email) DO UPDATE SET active = 1",
+            (email,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True})
+
+
+@store_bp.route("/store/unsubscribe")
+def store_unsubscribe():
+    email = (request.args.get("email") or "").strip().lower()
+    if email:
+        conn = get_db()
+        try:
+            conn.execute("UPDATE email_subscribers SET active = 0 WHERE email = ?", (email,))
+            conn.commit()
+        finally:
+            conn.close()
+    return render_template("store_unsubscribed.html", email=email)
+
+
+@store_bp.route("/store/book/<slug>")
+def store_book(slug):
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
+    conn = get_db()
+    product = conn.execute(
+        "SELECT * FROM store_products WHERE slug = ? AND status = 'active'",
+        (slug,),
+    ).fetchone()
+    images = get_product_images(conn, product["id"]) if product else []
+    conn.close()
+    if not product:
+        abort(404)
+    item = public_dict(product)
+    item["images"] = images
+    return render_template("store_book.html", product=item, shipping_cents=shipping_cents(1))
+
+
+@store_bp.route("/sitemap.xml")
+def sitemap():
+    """Search-engine sitemap: static pages plus every active book for sale."""
+    conn = get_db()
+    rows = active_products(conn)
+    conn.close()
+    urls = []
+    for endpoint in ("the_hearth", "about", "contact"):
+        urls.append(url_for(endpoint, _external=True))
+    urls.append(url_for("store.store_home", _external=True))
+    for row in rows:
+        item = public_dict(row)
+        if item.get("slug"):
+            urls.append(url_for("store.store_book", slug=item["slug"], _external=True))
+    seen = set()
+    unique = [u for u in urls if not (u in seen or seen.add(u))]
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u in unique:
+        lines.append("  <url><loc>%s</loc></url>" % xml_escape(u))
+    lines.append("</urlset>")
+    resp = make_response("\n".join(lines))
+    resp.headers["Content-Type"] = "application/xml"
+    return resp
+
+
+@store_bp.route("/robots.txt")
+def robots():
+    resp = make_response(
+        "User-agent: *\nAllow: /\n\nSitemap: %s\n"
+        % url_for("store.sitemap", _external=True)
+    )
+    resp.headers["Content-Type"] = "text/plain"
+    return resp
+
+
+@store_bp.route("/admin/store/preview")
+def admin_store_preview():
+    """Admin-only preview of the storefront while STORE_VISIBLE is False."""
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    rows = active_products(conn)
+    conn.close()
+    return render_template("store.html", products=[public_dict(row) for row in rows], preview=True)
+
+
+@store_bp.route("/admin/store/preview/book/<slug>")
+def admin_store_preview_book(slug):
+    """Admin-only preview of a product detail page while hidden."""
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    product = conn.execute(
+        "SELECT * FROM store_products WHERE slug = ? AND status = 'active'",
+        (slug,),
+    ).fetchone()
+    images = get_product_images(conn, product["id"]) if product else []
+    conn.close()
+    if not product:
+        abort(404)
+    item = public_dict(product)
+    item["images"] = images
+    return render_template("store_book.html", product=item, preview=True, shipping_cents=shipping_cents(1))
+
+
+@store_bp.route("/api/store/products")
+def public_products():
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM store_products WHERE status = 'active' AND stock_quantity > 0 ORDER BY LOWER(title), id"
+    ).fetchall()
+    conn.close()
+    return jsonify([public_dict(row) for row in rows])
+
+
+@store_bp.route("/api/store/products/<int:product_id>")
+def public_product(product_id):
+    if not STORE_VISIBLE:
+        return redirect(url_for("the_hearth"))
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM store_products WHERE id = ? AND status = 'active'",
+        (product_id,),
+    ).fetchone()
+    images = get_product_images(conn, row["id"]) if row else []
+    conn.close()
+    if not row:
+        return jsonify({"error": "Book not found."}), 404
+    item = public_dict(row)
+    item["images"] = images
+    return jsonify(item)
+
+
+@store_bp.route("/admin/store")
+def admin_store():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    return render_template("admin_store.html")
+
+
+@store_bp.route("/api/store/admin/subscribers", methods=["GET", "POST"])
+def admin_subscribers():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    if request.method == "POST":
+        import re as _re
+        data = request.get_json(force=True, silent=True) or {}
+        raw = data.get("emails") or ""
+        emails = [
+            _re.sub(r"\s+", "", e).lower()
+            for e in _re.split(r"[\n,;]+", raw)
+        ]
+        emails = [e for e in emails if "@" in e and "." in e.split("@")[-1]]
+        added = 0
+        for e in emails:
+            conn.execute(
+                "INSERT INTO email_subscribers (email, active) VALUES (?, 1) "
+                "ON CONFLICT (email) DO UPDATE SET active = 1",
+                (e,),
+            )
+            added += 1
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "added": added})
+    rows = conn.execute(
+        "SELECT email, subscribed_at FROM email_subscribers WHERE active = 1 ORDER BY subscribed_at DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([{"email": r["email"], "subscribed_at": r["subscribed_at"]} for r in rows])
+
+
+@store_bp.route("/api/store/admin/digest", methods=["POST"])
+def admin_send_digest():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    import json as _json
+    import urllib.request as _urlreq
+    data = request.get_json(force=True, silent=True) or {}
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+    if not subject or not body:
+        return jsonify({"ok": False, "error": "Subject and body are required."}), 400
+    resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+    if not resend_key:
+        return jsonify({"ok": False, "error": "RESEND_API_KEY not set."}), 500
+    conn = get_db()
+    rows = conn.execute("SELECT email FROM email_subscribers WHERE active = 1").fetchall()
+    conn.close()
+    emails = [r["email"] for r in rows]
+    if not emails:
+        return jsonify({"ok": False, "error": "No active subscribers."}), 400
+    frm = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+    sent, failed = 0, 0
+    for email in emails:
+        payload = _json.dumps({
+            "from": frm,
+            "to": [email],
+            "subject": subject,
+            "text": body + "\n\n—\nUnsubscribe: https://www.snyderscriptorium.com/store/unsubscribe?email=" + email,
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={"Authorization": "Bearer " + resend_key, "Content-Type": "application/json",
+                     "User-Agent": "SnyderScriptorium/1.0"},
+            method="POST",
+        )
+        try:
+            with _urlreq.urlopen(req, timeout=20):
+                sent += 1
+        except Exception:
+            failed += 1
+    return jsonify({"ok": True, "sent": sent, "failed": failed})
+
+
+def _send_shipment_email(order, tracking_number):
+    """Email the customer their USPS tracking number when their order ships.
+
+    Never raises: a failed or unconfigured send must not break the admin flow.
+    Returns True if an email was actually sent.
+    """
+    try:
+        import json as _json
+        import urllib.request as _urlreq
+        resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+        if not resend_key:
+            print("[store] shipment email skipped: RESEND_API_KEY not set", flush=True)
+            return False
+        customer_email = (order.get("customer_email") or "").strip()
+        if not customer_email:
+            print("[store] shipment email skipped: no customer email on order %s" % order.get("id"), flush=True)
+            return False
+        resend_from = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+        order_id = order.get("id")
+        track_url = "https://tools.usps.com/go/TrackConfirmAction?tLabels=" + tracking_number
+        body = "\n".join([
+            "Your books are on their way!",
+            "Snyder Scriptorium",
+            "",
+            "Order #%s shipped via USPS Media Mail." % order_id,
+            "",
+            "Tracking number: %s" % tracking_number,
+            "Track it here: %s" % track_url,
+            "",
+            "Media Mail usually takes 2–8 business days. If it hasn't moved",
+            "in a few days, reply to this email and we'll look into it.",
+            "",
+            "Thank you for supporting a working bookstore —",
+            "K.W.",
+        ])
+        payload = _json.dumps({
+            "from": resend_from,
+            "to": [customer_email],
+            "subject": "Your Snyder Scriptorium order #%s has shipped" % order_id,
+            "text": body,
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": "Bearer " + resend_key,
+                "Content-Type": "application/json",
+                "User-Agent": "SnyderScriptorium/1.0",
+            },
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=20):
+            pass
+        print("[store] shipment email sent for order %s" % order_id, flush=True)
+        return True
+    except Exception as exc:
+        print("[store] shipment email failed for order %s: %r" % (order.get("id"), exc), flush=True)
+        return False
+
+
+@store_bp.route("/api/store/admin/orders", methods=["GET"])
+def admin_orders():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM store_orders ORDER BY date_created DESC LIMIT 200"
+    ).fetchall()
+    orders = []
+    for row in rows:
+        order = dict(row)
+        items = conn.execute(
+            "SELECT p.title, oi.quantity FROM store_order_items oi"
+            " JOIN store_products p ON p.id = oi.product_id"
+            " WHERE oi.order_id = ? ORDER BY oi.id",
+            (order["id"],),
+        ).fetchall()
+        order["items"] = [dict(i) for i in items]
+        orders.append(order)
+    conn.close()
+    return jsonify(orders)
+
+
+@store_bp.route("/api/store/admin/orders/<int:order_id>/ship", methods=["POST"])
+def admin_ship_order(order_id):
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    data = request.get_json(force=True, silent=True) or {}
+    tracking_number = (data.get("tracking_number") or "").strip()
+    if not tracking_number:
+        return jsonify({"ok": False, "error": "Tracking number is required."}), 400
+    conn = get_db()
+    row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (order_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"ok": False, "error": "Order not found."}), 404
+    order = dict(row)
+    conn.execute(
+        "UPDATE store_orders SET tracking_number = ?, order_status = 'shipped', date_updated = ? WHERE id = ?",
+        (tracking_number, now_string(), order_id),
+    )
+    conn.commit()
+    order["tracking_number"] = tracking_number
+    emailed = _send_shipment_email(order, tracking_number)
+    conn.close()
+    return jsonify({"ok": True, "emailed": emailed})
+
+
+@store_bp.route("/api/store/admin/products", methods=["GET"])
+def admin_products():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        per_page = min(100, max(1, int(request.args.get("per_page", 15))))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Page and page size must be whole numbers."}), 400
+    status_filter = (request.args.get("status") or "all").strip().lower()
+    if status_filter not in ("all", "draft", "active", "archived"):
+        status_filter = "all"
+    query = (request.args.get("q") or "").strip().lower()[:200]
+    genre_filter = (request.args.get("genre") or "").strip()[:120]
+    letter_filter = (request.args.get("letter") or "").strip().upper()[:1]
+    if letter_filter and not (letter_filter.isalpha() and letter_filter.isascii()):
+        letter_filter = ""
+
+    where = []
+    params = []
+    if status_filter != "all":
+        where.append("status = ?")
+        params.append(status_filter)
+    if query:
+        where.append("LOWER(COALESCE(title, '') || ' ' || COALESCE(author, '') || ' ' || COALESCE(isbn, '')) LIKE ?")
+        params.append("%" + query + "%")
+    if genre_filter:
+        where.append("TRIM(COALESCE(genre, '')) = ?")
+        params.append(genre_filter)
+    if letter_filter:
+        where.append("UPPER(SUBSTR(TRIM(COALESCE(title, '')), 1, 1)) = ?")
+        params.append(letter_filter)
+
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+    offset = (page - 1) * per_page
+    conn = get_db()
+    try:
+        total = conn.execute("SELECT COUNT(*) AS n FROM store_products" + where_sql, tuple(params)).fetchone()["n"]
+        rows = conn.execute(
+            "SELECT * FROM store_products" + where_sql + " ORDER BY LOWER(title), id LIMIT ? OFFSET ?",
+            tuple(params) + (per_page, offset),
+        ).fetchall()
+        # Genres cover the entire selected status scope, not only this page.
+        genre_where = []
+        genre_params = []
+        if status_filter != "all":
+            genre_where.append("status = ?")
+            genre_params.append(status_filter)
+        genre_sql = (" WHERE " + " AND ".join(genre_where)) if genre_where else ""
+        genre_join = " AND " if genre_sql else " WHERE "
+        genre_rows = conn.execute(
+            "SELECT DISTINCT TRIM(genre) AS genre FROM store_products" + genre_sql +
+            genre_join + "genre IS NOT NULL AND TRIM(genre) <> '' ORDER BY genre",
+            tuple(genre_params),
+        ).fetchall()
+        genres = [r["genre"] for r in genre_rows if r["genre"]]
+    finally:
+        conn.close()
+
+    pages = max(1, (total + per_page - 1) // per_page)
+    products = []
+    for row in rows:
+        d = public_dict(row)
+        d["view_count"] = 0
+        d["unique_visitors"] = 0
+        products.append(d)
+    return jsonify({"products": products, "page": page, "pages": pages, "total": total, "per_page": per_page, "genres": genres})
+
+
+@store_bp.route("/api/store/admin/product-stats", methods=["GET"])
+def admin_product_stats():
+    """Lazy-load view stats for requested books without delaying the book list."""
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    raw_ids = (request.args.get("ids") or "").strip()
+    ids = []
+    if raw_ids:
+        for value in raw_ids.split(",")[:100]:
+            try:
+                product_id = int(value)
+                if product_id > 0 and product_id not in ids:
+                    ids.append(product_id)
+            except (TypeError, ValueError):
+                continue
+    conn = get_db()
+    try:
+        if ids:
+            placeholders = ", ".join(["?"] * len(ids))
+            stats = conn.execute(
+                "SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques "
+                "FROM page_views WHERE page_type = 'store_book' AND category = 'store' "
+                "AND content_id IN (" + placeholders + ") GROUP BY content_id",
+                tuple(ids),
+            ).fetchall()
+        else:
+            stats = conn.execute(
+                """SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques
+                   FROM page_views WHERE page_type = 'store_book' AND category = 'store'
+                   GROUP BY content_id"""
+            ).fetchall()
+        stat_map = {str(r["content_id"]): {"views": r["views"], "uniques": r["uniques"]} for r in stats}
+    except Exception:
+        stat_map = {}
+    finally:
+        conn.close()
+    return jsonify({"stats": stat_map})
+
+
+@store_bp.route("/api/store/admin/products", methods=["POST"])
+def admin_create_product():
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    try:
+        product = product_payload(_request_data())
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    conn = get_db()
+    try:
+        # Ensure slug is unique - append -2, -3, etc. if needed
+        base_slug = product["slug"]
+        slug = base_slug
+        counter = 2
+        while True:
+            existing = conn.execute("SELECT id FROM store_products WHERE slug = ?", (slug,)).fetchone()
+            if not existing:
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        product["slug"] = slug
+        timestamp = now_string()
+        cursor = conn.execute(
+            f"INSERT INTO store_products({PRODUCT_COLUMNS}) VALUES ({', '.join(['?'] * 26)})",
+            _product_values(product) + (timestamp, timestamp),
+        )
+        new_id = cursor.lastrowid
+        photo_warning = None
+        photo = _request_photo()
+        if photo:
+            try:
+                product["cover_image_url"] = save_product_photo(conn, photo)
+                conn.execute(
+                    "UPDATE store_products SET cover_image_url = ?, date_updated = ? WHERE id = ?",
+                    (product["cover_image_url"], now_string(), new_id),
+                )
+            except ValueError as exc:
+                photo_warning = str(exc)
+        gallery_warnings = add_gallery_photos(conn, new_id, product["slug"])
+        if gallery_warnings and not photo_warning:
+            photo_warning = "; ".join(gallery_warnings)
+        elif gallery_warnings:
+            photo_warning = photo_warning + "; " + "; ".join(gallery_warnings)
+        conn.commit()
+        row = conn.execute("SELECT * FROM store_products WHERE id = ?", (new_id,)).fetchone()
+        images = get_product_images(conn, new_id)
+    except IntegrityError as e:
+        conn.rollback()
+        conn.close()
+        # Distinguish a real slug conflict from other integrity errors
+        # (e.g. stale primary-key sequence). Only blame the slug if the
+        # error actually names the slug constraint.
+        err_text = str(e).lower()
+        if "slug" in err_text and "pkey" not in err_text:
+            return jsonify({"error": f"A bookstore product with that slug already exists (tried: {product.get('slug', 'unknown')})."}), 409
+        return jsonify({"error": f"Could not save the book due to a database error: {e}. Please try again or contact support."}), 500
+    conn.close()
+    payload = {"success": True, "product": row_to_dict(row)}
+    payload["product"]["images"] = images
+    if photo_warning:
+        payload["photo_warning"] = photo_warning
+    return jsonify(payload), 201
+
+
+@store_bp.route("/api/store/admin/products/<int:product_id>", methods=["GET"])
+def admin_get_product(product_id):
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    row = conn.execute("SELECT * FROM store_products WHERE id = ?", (product_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Book not found."}), 404
+    item = row_to_dict(row)
+    item["images"] = get_product_images(conn, product_id)
+    conn.close()
+    return jsonify(item)
+
+
+@store_bp.route("/api/store/admin/product-images/<int:image_id>", methods=["DELETE"])
+def admin_delete_product_image(image_id):
+    """Remove one gallery photo (row + local file). The cover photo is separate."""
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id, image_url FROM store_product_images WHERE id = ?", (image_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Photo not found."}), 404
+    delete_stored_image(conn, row["image_url"])
+    conn.execute("DELETE FROM store_product_images WHERE id = ?", (image_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "deleted": True})
+
+
+@store_bp.route("/api/store/admin/products/<int:product_id>", methods=["PUT"])
+def admin_update_product(product_id):
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    conn = get_db()
+    existing = conn.execute("SELECT * FROM store_products WHERE id = ?", (product_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return jsonify({"error": "Book not found."}), 404
+    data = _request_data()
+    # Keep the current photo unless a new one is uploaded or a URL is typed in.
+    if "cover_image_url" not in data:
+        data = dict(data)
+        data["cover_image_url"] = existing["cover_image_url"]
+    try:
+        product = product_payload(data)
+        # Ensure slug is unique (excluding current product)
+        base_slug = product["slug"]
+        slug = base_slug
+        counter = 2
+        while True:
+            existing_slug = conn.execute("SELECT id FROM store_products WHERE slug = ? AND id != ?", (slug, product_id)).fetchone()
+            if not existing_slug:
+                break
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        product["slug"] = slug
+    except (ValueError, TypeError) as exc:
+        conn.close()
+        return jsonify({"error": str(exc)}), 400
+    try:
+        conn.execute(
+            "UPDATE store_products SET title = ?, slug = ?, author = ?, description = ?, price_cents = ?, format = ?, isbn = ?, cover_image_url = ?, category = ?, genre = ?, language = ?, fulfillment_source = ?, fulfillment_method = ?, stock_quantity = ?, availability_status = ?, condition = ?, is_new_release = ?, is_kw_snyder = ?, status = ?, publisher = ?, publication_year = ?, edition = ?, condition_notes = ?, notes = ?, date_updated = ? WHERE id = ?",
+            _product_values(product)[0:19] + _product_values(product)[19:24] + (now_string(), product_id),
+        )
+        photo_warning = None
+        photo = _request_photo()
+        if photo:
+            try:
+                old_cover = existing["cover_image_url"]
+                cover_url = save_product_photo(conn, photo)
+                delete_stored_image(conn, old_cover)
+                conn.execute(
+                    "UPDATE store_products SET cover_image_url = ?, date_updated = ? WHERE id = ?",
+                    (cover_url, now_string(), product_id),
+                )
+            except ValueError as exc:
+                photo_warning = str(exc)
+        gallery_warnings = add_gallery_photos(conn, product_id, product["slug"])
+        if gallery_warnings and not photo_warning:
+            photo_warning = "; ".join(gallery_warnings)
+        elif gallery_warnings:
+            photo_warning = photo_warning + "; " + "; ".join(gallery_warnings)
+        conn.commit()
+        row = conn.execute("SELECT * FROM store_products WHERE id = ?", (product_id,)).fetchone()
+        images = get_product_images(conn, product_id)
+    except IntegrityError as e:
+        conn.rollback()
+        conn.close()
+        err_text = str(e).lower()
+        if "slug" in err_text and "pkey" not in err_text:
+            return jsonify({"error": "A bookstore product with that slug already exists."}), 409
+        return jsonify({"error": f"Could not save the book due to a database error: {e}. Please try again or contact support."}), 500
+    conn.close()
+    payload = {"success": True, "product": row_to_dict(row)}
+    payload["product"]["images"] = images
+    if photo_warning:
+        payload["photo_warning"] = photo_warning
+    return jsonify(payload)
+
+
+def _delete_local_cover_image(cover_url):
+    """Remove a locally uploaded cover image file. Remote URLs are untouched."""
+    if not cover_url or not isinstance(cover_url, str):
+        return
+    prefix = "/static/store_images/"
+    if not cover_url.startswith(prefix):
+        return
+    filename = cover_url[len(prefix):]
+    if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
+        return
+    path = os.path.join(STORE_IMAGE_DIR, filename)
+    # Belt and suspenders: never delete outside the store image dir.
+    if os.path.abspath(path).startswith(os.path.abspath(STORE_IMAGE_DIR) + os.sep):
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except OSError:
+            pass
+
+
+@store_bp.route("/api/store/admin/products/<int:product_id>", methods=["DELETE"])
+def admin_delete_product(product_id):
+    blocked = admin_required()
+    if blocked:
+        return blocked
+    permanent = request.args.get("permanent") == "1"
+    conn = get_db()
+    row = conn.execute("SELECT id, cover_image_url FROM store_products WHERE id = ?", (product_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Book not found."}), 404
+    if permanent:
+        gallery_urls = [
+            row["image_url"]
+            for row in conn.execute(
+                "SELECT image_url FROM store_product_images WHERE product_id = ?", (product_id,)
+            ).fetchall()
+        ]
+        try:
+            # Order line items reference the product without ON DELETE CASCADE.
+            conn.execute("DELETE FROM store_order_items WHERE product_id = ?", (product_id,))
+            conn.execute("DELETE FROM store_products WHERE id = ?", (product_id,))
+            for url in gallery_urls + [row["cover_image_url"]]:
+                image_id = _image_id_from_url(url)
+                if image_id:
+                    conn.execute("DELETE FROM store_images WHERE id = ?", (image_id,))
+            conn.commit()
+        except Exception as exc:  # Surface as JSON, never an HTML 500 page.
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            conn.close()
+            return jsonify({"error": "Could not delete the book. (%s)" % exc}), 500
+        conn.close()
+        _delete_local_cover_image(row["cover_image_url"])
+        for url in gallery_urls:
+            _delete_local_cover_image(url)
+        return jsonify({"success": True, "deleted": True})
+    conn.execute("UPDATE store_products SET status = 'archived', date_updated = ? WHERE id = ?", (now_string(), product_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+# Media Mail shipping, in cents: $4.47 for the first book, $0.75 for each
+# additional book. Charged by quantity, not weight — one shared helper used
+# by both the Buy Now and cart checkout flows.
+SHIPPING_FIRST_BOOK_CENTS = 447
+SHIPPING_EXTRA_BOOK_CENTS = 75
+
+
+def shipping_cents(total_qty):
+    """Media Mail shipping for an order holding total_qty books."""
+    try:
+        qty = int(total_qty or 0)
+    except (TypeError, ValueError):
+        qty = 0
+    if qty < 1:
+        return 0
+    return SHIPPING_FIRST_BOOK_CENTS + SHIPPING_EXTRA_BOOK_CENTS * (qty - 1)
+
+
+# --- PayPal checkout ------------------------------------------------------
+# Single-entry checkout: books are entered once in the store admin. When a
+# customer buys, the backend builds the PayPal order from the database row —
+# nothing is ever typed into PayPal by hand.
+#
+# Server env vars (set in Render; never committed):
+#   PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET (PAYPAL_SECRET also accepted as a
+#   legacy alias), PAYPAL_MODE=sandbox|live
+# The client ID is public by design (it ships in the page JS). The secret
+# stays server-side and is only used for server-to-server API calls.
+
+PAYPAL_SANDBOX_API = "https://api-m.sandbox.paypal.com"
+PAYPAL_LIVE_API = "https://api-m.paypal.com"
+
+_paypal_token_cache = {"token": None, "expires_at": 0.0}
+
+
+def paypal_mode():
+    return (os.environ.get("PAYPAL_MODE", "sandbox") or "sandbox").strip().lower()
+
+
+def paypal_api_base():
+    return PAYPAL_LIVE_API if paypal_mode() == "live" else PAYPAL_SANDBOX_API
+
+
+def paypal_secret():
+    # PAYPAL_CLIENT_SECRET is the canonical name (the membership code uses
+    # it); PAYPAL_SECRET is kept as a legacy alias so either one works.
+    return (os.environ.get("PAYPAL_CLIENT_SECRET") or os.environ.get("PAYPAL_SECRET") or "").strip()
+
+
+def paypal_configured():
+    return bool(os.environ.get("PAYPAL_CLIENT_ID") and paypal_secret())
+
+
+def paypal_access_token():
+    """Server-to-server OAuth token, cached until near expiry."""
+    now = time.time()
+    if _paypal_token_cache["token"] and _paypal_token_cache["expires_at"] > now + 60:
+        return _paypal_token_cache["token"]
+    resp = requests.post(
+        paypal_api_base() + "/v1/oauth2/token",
+        auth=(os.environ.get("PAYPAL_CLIENT_ID", ""), paypal_secret()),
+        data={"grant_type": "client_credentials"},
+        headers={"Accept": "application/json"},
+        timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    _paypal_token_cache["token"] = data["access_token"]
+    _paypal_token_cache["expires_at"] = now + int(data.get("expires_in", 3000))
+    return _paypal_token_cache["token"]
+
+
+def paypal_request(method, path, payload=None):
+    return requests.request(
+        method,
+        paypal_api_base() + path,
+        headers={
+            "Authorization": "Bearer " + paypal_access_token(),
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=20,
+    )
+
+
+@store_bp.route("/api/store/paypal/config")
+def paypal_config():
+    if not STORE_VISIBLE:
+        return jsonify({"configured": False})
+    return jsonify({
+        "configured": paypal_configured(),
+        "mode": paypal_mode(),
+    })
+
+
+@store_bp.route("/api/store/paypal/start-checkout", methods=["POST"])
+def paypal_start_checkout():
+    """Start checkout for a book. Creates the local order and a PayPal order,
+    then returns PayPal's approval URL. The buyer approves on PayPal's site and
+    is sent back to /store/checkout/return, where we capture. The price is
+    always read server-side — the browser never decides what a book costs."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    if not paypal_configured():
+        return jsonify({"error": "Checkout is not set up yet."}), 503
+    data = _request_data()
+    try:
+        product_id = int(data.get("product_id") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid book."}), 400
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM store_products WHERE id = ? AND status = 'active'",
+        (product_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "That book is no longer available."}), 404
+    product = row_to_dict(row)
+    if int(product.get("stock_quantity") or 0) < 1:
+        conn.close()
+        return jsonify({"error": "That book is out of stock."}), 409
+    price_cents = int(product.get("price_cents") or 0)
+    if price_cents < 1:
+        conn.close()
+        return jsonify({"error": "That book has no price set."}), 409
+    ship_cents = shipping_cents(1)
+    total_cents = price_cents + ship_cents
+    now = now_string()
+    cursor = conn.execute(
+        "INSERT INTO store_orders (customer_name, customer_email, total_cents, payment_status, order_status, provider, provider_order_id, date_created, date_updated)"
+        " VALUES (?, ?, ?, 'unpaid', 'pending', 'paypal', '', ?, ?)",
+        ("", "", total_cents, now, now),
+    )
+    local_order_id = cursor.lastrowid
+    conn.execute(
+        "INSERT INTO store_order_items (order_id, product_id, quantity, unit_price_cents) VALUES (?, ?, 1, ?)",
+        (local_order_id, product_id, price_cents),
+    )
+    conn.commit()
+    base = request.host_url.rstrip("/")
+    try:
+        resp = paypal_request("POST", "/v2/checkout/orders", {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": str(local_order_id),
+                "description": (product.get("title") or "Book")[:120],
+                "amount": {
+                    "currency_code": "USD",
+                    "value": f"{total_cents / 100:.2f}",
+                    "breakdown": {
+                        "item_total": {
+                            "currency_code": "USD",
+                            "value": f"{price_cents / 100:.2f}",
+                        },
+                        "shipping": {
+                            "currency_code": "USD",
+                            "value": f"{ship_cents / 100:.2f}",
+                        },
+                    },
+                },
+            }],
+            "application_context": {
+                "brand_name": "Snyder Scriptorium",
+                "return_url": base + "/store/checkout/return",
+                "cancel_url": base + "/store/checkout/cancel",
+                "user_action": "PAY_NOW",
+                "shipping_preference": "GET_FROM_FILE",
+            },
+        })
+        body = resp.json()
+    except Exception as exc:
+        conn.close()
+        return jsonify({"error": "Could not start checkout. (%s)" % exc}), 502
+    if resp.status_code not in (200, 201):
+        detail = ""
+        try:
+            err = (body.get("details") or body.get("message")) if isinstance(body, dict) else ""
+            detail = (" — %s" % err) if err else ""
+        except Exception:
+            pass
+        conn.close()
+        return jsonify({"error": "Checkout was declined by PayPal (status %d%s)." % (resp.status_code, detail)}), 502
+    paypal_order_id = body.get("id", "") if isinstance(body, dict) else ""
+    approval_url = ""
+    try:
+        for link in body.get("links", []):
+            if link.get("rel") == "approve" and link.get("href"):
+                approval_url = link["href"]
+                break
+    except Exception:
+        approval_url = ""
+    if not paypal_order_id or not approval_url:
+        conn.close()
+        return jsonify({"error": "PayPal did not return an approval link. Please try again."}), 502
+    conn.execute(
+        "UPDATE store_orders SET provider_order_id = ?, date_updated = ? WHERE id = ?",
+        (paypal_order_id, now_string(), local_order_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"approval_url": approval_url})
+
+
+def _notify_money(cents):
+    return "$%.2f" % (int(cents or 0) / 100)
+
+
+def _send_order_notification(conn, local_order_id):
+    """Email the owner a packing slip the moment an order is captured.
+
+    Never raises: a failed or unconfigured notification must not break
+    checkout. Returns True if an email was actually sent.
+    """
+    try:
+        notify_to = (os.environ.get("NOTIFY_EMAIL_TO") or "").strip()
+        if not notify_to:
+            print("[store] order notification skipped: NOTIFY_EMAIL_TO not set", flush=True)
+            return False
+
+        row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
+        if not row:
+            print("[store] order notification skipped: order %s not found" % local_order_id, flush=True)
+            return False
+        order = dict(row)
+        items = conn.execute(
+            "SELECT p.title, oi.quantity, oi.unit_price_cents"
+            " FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
+            " WHERE oi.order_id = ? ORDER BY oi.id",
+            (local_order_id,),
+        ).fetchall()
+
+        item_lines = []
+        subtotal = 0
+        for item in items:
+            item = dict(item)
+            qty = int(item.get("quantity") or 1)
+            unit = int(item.get("unit_price_cents") or 0)
+            subtotal += qty * unit
+            item_lines.append("  %s x%d @ %s = %s" % (
+                item.get("title") or "Book", qty, _notify_money(unit), _notify_money(qty * unit)))
+        total = int(order.get("total_cents") or 0)
+        shipping = total - subtotal
+
+        addr_lines = [
+            order.get("ship_name") or "",
+            order.get("ship_line1") or "",
+            order.get("ship_line2") or "",
+        ]
+        city_state = ", ".join(p for p in [order.get("ship_city") or "", order.get("ship_state") or ""] if p)
+        postal = order.get("ship_postal") or ""
+        if city_state and postal:
+            addr_lines.append("%s %s" % (city_state, postal))
+        elif city_state or postal:
+            addr_lines.append(city_state or postal)
+        if order.get("ship_country"):
+            addr_lines.append(order.get("ship_country"))
+        addr_lines = [line for line in addr_lines if line.strip()]
+
+        body = "\n".join([
+            "New book order #%s — %s" % (local_order_id, _notify_money(total)),
+            "Snyder Scriptorium",
+            "",
+            "Order #%s — %s" % (local_order_id, order.get("date_created") or ""),
+            "",
+            "Items:",
+        ] + item_lines + [
+            "",
+            "Subtotal: %s" % _notify_money(subtotal),
+            "Shipping (US Media Mail): %s" % _notify_money(shipping),
+            "Total captured: %s" % _notify_money(total),
+            "",
+            "Buyer:",
+            "  %s" % (order.get("customer_name") or ""),
+            "  %s" % (order.get("customer_email") or ""),
+            "",
+            "Ship to:",
+        ] + ["  %s" % line for line in addr_lines])
+
+        import json as _json
+        import urllib.request as _urlreq
+        resend_key = (os.environ.get("RESEND_API_KEY") or "").strip()
+        if not resend_key:
+            print("[store] order notification skipped: RESEND_API_KEY not set", flush=True)
+            return False
+        resend_from = (os.environ.get("NOTIFY_EMAIL_FROM") or "").strip() or "orders@snyderscriptorium.com"
+        payload = _json.dumps({
+            "from": resend_from,
+            "to": [notify_to],
+            "subject": "New book order #%s — %s" % (local_order_id, _notify_money(total)),
+            "text": body,
+        }).encode("utf-8")
+        req = _urlreq.Request(
+            "https://api.resend.com/emails",
+            data=payload,
+            headers={
+                "Authorization": "Bearer " + resend_key,
+                "Content-Type": "application/json",
+                "User-Agent": "SnyderScriptorium/1.0",
+            },
+            method="POST",
+        )
+        with _urlreq.urlopen(req, timeout=20) as resp:
+            resp_body = resp.read()[:200]
+        print("[store] order notification sent for order %s" % local_order_id, flush=True)
+        return True
+    except Exception as exc:
+        print("[store] order notification failed for order %s: %r" % (local_order_id, exc), flush=True)
+        return False
+
+
+def _notify_inbox_order(conn, local_order_id):
+    """Drop a 'new order' message into the admin inbox when an order is captured.
+
+    Credential-free companion to the email packing slip: the admin inbox's
+    unread badge fires the moment this lands, no SMTP setup needed.
+    Never raises: a notification failure must not break checkout.
+    """
+    try:
+        row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
+        if not row:
+            return False
+        order = dict(row)
+        items = conn.execute(
+            "SELECT p.title, oi.quantity, oi.unit_price_cents"
+            " FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
+            " WHERE oi.order_id = ? ORDER BY oi.id",
+            (local_order_id,),
+        ).fetchall()
+        lines = []
+        for item in items:
+            item = dict(item)
+            qty = int(item.get("quantity") or 1)
+            lines.append("%s x%d — %s" % (item.get("title") or "Book", qty, _notify_money(item.get("unit_price_cents"))))
+        total = _notify_money(order.get("total_cents"))
+        ship = " ".join(p for p in [
+            order.get("ship_name") or order.get("customer_name") or "",
+            order.get("ship_line1") or "",
+            order.get("ship_line2") or "",
+            order.get("ship_city") or "",
+            order.get("ship_state") or "",
+            order.get("ship_postal") or "",
+        ] if p).strip()
+        buyer_name = order.get("customer_name") or "Buyer"
+        buyer_email = order.get("customer_email") or ""
+        body = "New order #%s\n%s\nTotal: %s\nShip to: %s\nBuyer: %s <%s>" % (
+            local_order_id, "\n".join(lines), total, ship or "—", buyer_name, buyer_email)
+        conn.execute(
+            "INSERT INTO inbox_messages(message_type, name, email, subject, message) VALUES (?, ?, ?, ?, ?)",
+            ("order", buyer_name, buyer_email, "New order #%s — %s" % (local_order_id, total), body),
+        )
+        conn.commit()
+        try:
+            from push_notifications import send_push
+            send_push("New book order — %s" % total,
+                      "%s — %s" % (buyer_name, ", ".join(l.split(" — ")[0] for l in lines) or "book order"),
+                      url="/admin#tab-inbox", tag="order-%s" % local_order_id)
+        except Exception as exc:
+            print("[store] order push failed: %r" % (exc,), flush=True)
+        return True
+    except Exception as exc:
+        print("[store] inbox order notification failed: %r" % (exc,), flush=True)
+        return False
+
+
+def _capture_paypal_order(conn, local_order_id, paypal_order_id):
+    """Capture an approved PayPal order, verify the amount server-side, then
+    record payment and decrement stock. Idempotent: already-paid orders just
+    report success. Returns (True, None) or (False, error_message)."""
+    row = conn.execute("SELECT * FROM store_orders WHERE id = ?", (local_order_id,)).fetchone()
+    if not row:
+        return False, "Order not found."
+    order = dict(row)
+    if order.get("provider_order_id") != paypal_order_id or order.get("provider") != "paypal":
+        return False, "Order mismatch."
+    if order.get("payment_status") == "paid":
+        return True, None
+    try:
+        resp = paypal_request("POST", "/v2/checkout/orders/%s/capture" % paypal_order_id)
+    except Exception as exc:
+        return False, "Could not capture payment. (%s)" % exc
+    capture = resp.json() or {}
+    already_captured = (
+        resp.status_code == 422
+        and any((d or {}).get("issue") == "ORDER_ALREADY_CAPTURED"
+                for d in capture.get("details", []))
+    )
+    if already_captured:
+        # The money already moved (e.g. the buyer reloaded the return page
+        # after an earlier crash). Verify via the order itself, then record
+        # it locally exactly like a fresh capture.
+        try:
+            detail = paypal_request("GET", "/v2/checkout/orders/%s" % paypal_order_id)
+        except Exception as exc:
+            return False, "Could not verify payment. (%s)" % exc
+        if detail.status_code != 200:
+            return False, "The payment was not completed."
+        capture = detail.json() or {}
+    elif resp.status_code not in (200, 201):
+        return False, "The payment was not completed."
+    if capture.get("status") != "COMPLETED":
+        return False, "The payment was not completed."
+    captured_cents = 0
+    for unit in capture.get("purchase_units", []):
+        for cap in (unit.get("payments") or {}).get("captures", []):
+            amount = cap.get("amount") or {}
+            if amount.get("currency_code") == "USD":
+                try:
+                    captured_cents += int(round(float(amount.get("value", "0")) * 100))
+                except (TypeError, ValueError):
+                    pass
+    if captured_cents != int(order.get("total_cents") or 0):
+        return False, "The payment amount did not match the order."
+    payer = capture.get("payer") or {}
+    payer_name = payer.get("name") or {}
+    full_name = (str(payer_name.get("given_name", "")) + " " + str(payer_name.get("surname", ""))).strip()
+    # Shipping address comes back on the purchase unit when the order was
+    # created with shipping_preference GET_FROM_FILE.
+    shipping = {}
+    try:
+        shipping = (capture.get("purchase_units") or [{}])[0].get("shipping") or {}
+    except (IndexError, AttributeError, TypeError):
+        shipping = {}
+    ship_addr = shipping.get("address") or {}
+    ship_name = str((shipping.get("name") or {}).get("full_name", "") or "").strip()
+    now = now_string()
+    conn.execute(
+        "UPDATE store_orders SET payment_status = 'paid', order_status = 'processing',"
+        " customer_name = ?, customer_email = ?,"
+        " ship_name = ?, ship_line1 = ?, ship_line2 = ?, ship_city = ?,"
+        " ship_state = ?, ship_postal = ?, ship_country = ?,"
+        " date_updated = ? WHERE id = ?",
+        (full_name, payer.get("email_address", ""),
+         ship_name,
+         str(ship_addr.get("address_line_1", "") or ""),
+         str(ship_addr.get("address_line_2", "") or ""),
+         str(ship_addr.get("admin_area_2", "") or ""),
+         str(ship_addr.get("admin_area_1", "") or ""),
+         str(ship_addr.get("postal_code", "") or ""),
+         str(ship_addr.get("country_code", "") or ""),
+         now, local_order_id),
+    )
+    items = conn.execute(
+        "SELECT product_id, quantity FROM store_order_items WHERE order_id = ?",
+        (local_order_id,),
+    ).fetchall()
+    for item in items:
+        item = dict(item)
+        quantity = int(item.get("quantity") or 1)
+        # CASE WHEN keeps the floor at zero on both SQLite and PostgreSQL.
+        conn.execute(
+            "UPDATE store_products SET stock_quantity = CASE WHEN stock_quantity - ? < 0 THEN 0 ELSE stock_quantity - ? END,"
+            " date_updated = ? WHERE id = ?",
+            (quantity, quantity, now, item.get("product_id")),
+        )
+    conn.execute(
+        "UPDATE store_products SET status = 'archived', date_updated = ?"
+        " WHERE id IN (SELECT product_id FROM store_order_items WHERE order_id = ?)"
+        " AND stock_quantity <= 0 AND status = 'active'",
+        (now, local_order_id),
+    )
+    conn.commit()
+    try:
+        _send_order_notification(conn, local_order_id)
+    except Exception as exc:
+        # The sale is already recorded; a notification failure must not
+        # undo or break checkout.
+        print("[store] order notification failed: %r" % (exc,), flush=True)
+    try:
+        _notify_inbox_order(conn, local_order_id)
+    except Exception as exc:
+        print("[store] inbox order notification failed: %r" % (exc,), flush=True)
+    return True, None
+
+
+@store_bp.route("/store/checkout/return")
+def paypal_checkout_return():
+    """PayPal sends the buyer back here after approval. Capture the payment and
+    show the thank-you page."""
+    if not STORE_VISIBLE:
+        abort(404)
+    token = (request.args.get("token") or "").strip()
+    conn = get_db()
+    order = None
+    if token:
+        row = conn.execute(
+            "SELECT * FROM store_orders WHERE provider_order_id = ? AND provider = 'paypal'",
+            (token,),
+        ).fetchone()
+        order = dict(row) if row else None
+    title = "your book"
+    status = "error"
+    item_count = 0
+    message = "We couldn't find that order. If you were charged, contact us and we'll sort it out."
+    if order:
+        try:
+            ok, err = _capture_paypal_order(conn, order["id"], token)
+            rows = conn.execute(
+                "SELECT p.title FROM store_order_items oi JOIN store_products p ON p.id = oi.product_id"
+                " WHERE oi.order_id = ?",
+                (order["id"],),
+            ).fetchall()
+            # NOTE: rows are dicts on PostgreSQL and sqlite3.Row locally --
+            # always index by column name, never by position.
+            titles = [r["title"] for r in rows if r["title"]]
+            item_count = len(rows)
+            if len(titles) == 1:
+                title = titles[0]
+            elif titles:
+                title = "%d books" % len(titles)
+            if ok:
+                status = "success"
+                message = ""
+            else:
+                message = err or "The payment was not completed."
+        except Exception as exc:
+            print("[store] checkout return failed: %r" % (exc,), flush=True)
+            status = "error"
+            message = ("Something went wrong while confirming your payment. "
+                       "If you were charged, contact us and we'll sort it out.")
+    conn.close()
+    return render_template("store_checkout_result.html", status=status, title=title, message=message, item_count=item_count)
+
+
+@store_bp.route("/store/checkout/cancel")
+def paypal_checkout_cancel():
+    """Buyer cancelled on PayPal's site — no charge was made."""
+    if not STORE_VISIBLE:
+        abort(404)
+    token = (request.args.get("token") or "").strip()
+    if token:
+        conn = get_db()
+        conn.execute(
+            "UPDATE store_orders SET order_status = 'cancelled', date_updated = ?"
+            " WHERE provider_order_id = ? AND provider = 'paypal' AND payment_status = 'unpaid'",
+            (now_string(), token),
+        )
+        conn.commit()
+        conn.close()
+    return render_template("store_checkout_result.html", status="cancelled", title="", message="", item_count=0)
+
+
+# ---------------------------------------------------------------------------
+# Shopping cart (session-based). Buy Now stays the instant single-book
+# checkout; Add to Cart is the parallel option for buying several books.
+# ---------------------------------------------------------------------------
+
+def _get_cart():
+    """The cart from the Flask session: {str(product_id): qty}, sanitized."""
+    cart = session.get("store_cart")
+    if not isinstance(cart, dict):
+        return {}
+    clean = {}
+    for key, value in cart.items():
+        try:
+            pid = str(int(key))
+            qty = int(value)
+        except (TypeError, ValueError):
+            continue
+        if qty > 0:
+            clean[pid] = qty
+    return clean
+
+
+def _save_cart(cart):
+    session["store_cart"] = cart
+
+
+def _cart_line_items(conn, cart):
+    """Build priced line items for a cart dict.
+
+    Returns (lines, subtotal_cents, usable_cart). Lines are dicts with
+    id/title/price_cents/qty/cover_image_url/line_total_cents. Products that
+    vanished, went inactive, or hit zero stock are dropped from usable_cart
+    (and quantities are capped at stock). Callers re-save usable_cart.
+    """
+    lines = []
+    usable = {}
+    subtotal_cents = 0
+    for pid, qty in cart.items():
+        row = conn.execute(
+            "SELECT * FROM store_products WHERE id = ?", (int(pid),)
+        ).fetchone()
+        if not row:
+            continue
+        product = row_to_dict(row)
+        if product.get("status") != "active":
+            continue
+        stock = int(product.get("stock_quantity") or 0)
+        if stock < 1:
+            continue
+        qty = min(int(qty), stock)
+        usable[pid] = qty
+        line_total = int(product.get("price_cents") or 0) * qty
+        subtotal_cents += line_total
+        lines.append({
+            "id": product["id"],
+            "title": product.get("title") or "",
+            "price_cents": int(product.get("price_cents") or 0),
+            "price": product.get("price") or "0.00",
+            "qty": qty,
+            "line_total_cents": line_total,
+            "cover_image_url": product.get("cover_image_url") or "",
+        })
+    return lines, subtotal_cents, usable
+
+
+@store_bp.route("/store/cart")
+def store_cart_page():
+    """The cart page itself; line items load from the cart API."""
+    if not STORE_VISIBLE:
+        abort(404)
+    return render_template("store_cart.html")
+
+
+@store_bp.route("/api/store/cart")
+def api_cart():
+    """Current cart: line items, subtotal, shipping, and total item count."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    conn = get_db()
+    try:
+        cart = _get_cart()
+        lines, subtotal_cents, usable = _cart_line_items(conn, cart)
+        if usable != cart:
+            _save_cart(usable)
+    finally:
+        conn.close()
+    count = sum(usable.values())
+    ship_cents = shipping_cents(count)
+    return jsonify({
+        "items": lines,
+        "subtotal_cents": subtotal_cents,
+        "shipping_cents": ship_cents,
+        "total_cents": subtotal_cents + ship_cents,
+        "count": count,
+    })
+
+
+@store_bp.route("/api/store/cart/add", methods=["POST"])
+def api_cart_add():
+    """Add a book to the session cart, capping quantity at stock."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    data = _request_data()
+    try:
+        product_id = int(data.get("product_id") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid book."}), 400
+    try:
+        quantity = int(data.get("quantity") or 1)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid quantity."}), 400
+    if quantity < 1:
+        return jsonify({"error": "Quantity must be at least 1."}), 400
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM store_products WHERE id = ? AND status = 'active'",
+            (product_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return jsonify({"error": "That book is no longer available."}), 404
+    product = row_to_dict(row)
+    stock = int(product.get("stock_quantity") or 0)
+    if stock < 1:
+        return jsonify({"error": "That book is out of stock."}), 409
+    if int(product.get("price_cents") or 0) < 1:
+        return jsonify({"error": "That book has no price set."}), 409
+    cart = _get_cart()
+    pid = str(product_id)
+    requested = cart.get(pid, 0) + quantity
+    new_qty = min(requested, stock)
+    cart[pid] = new_qty
+    _save_cart(cart)
+    return jsonify({
+        "count": sum(cart.values()),
+        "quantity": new_qty,
+        "capped": new_qty < requested,
+    })
+
+
+@store_bp.route("/api/store/cart/remove", methods=["POST"])
+def api_cart_remove():
+    """Remove a book from the session cart entirely."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    data = _request_data()
+    try:
+        pid = str(int(data.get("product_id") or 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid book."}), 400
+    cart = _get_cart()
+    cart.pop(pid, None)
+    _save_cart(cart)
+    return jsonify({"count": sum(cart.values())})
+
+
+@store_bp.route("/api/store/cart/checkout", methods=["POST"])
+def api_cart_checkout():
+    """Start checkout for the whole cart: one local order, one order-item row
+    per line, one PayPal order with an itemized breakdown. The cart is cleared
+    only after PayPal returns an order. Prices are always read server-side."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    if not paypal_configured():
+        return jsonify({"error": "Checkout is not set up yet."}), 503
+    cart = _get_cart()
+    if not cart:
+        return jsonify({"error": "Your cart is empty."}), 400
+    conn = get_db()
+    lines, subtotal_cents, usable = _cart_line_items(conn, cart)
+    if usable != cart:
+        # Something changed under the buyer (sold out, archived, removed).
+        _save_cart(usable)
+        conn.close()
+        return jsonify({"error": "A book in your cart is no longer available. Your cart has been updated — please review it."}), 409
+    if subtotal_cents < 1:
+        conn.close()
+        return jsonify({"error": "Your cart has no priced items."}), 409
+    total_qty = sum(line["qty"] for line in lines)
+    ship_cents = shipping_cents(total_qty)
+    total_cents = subtotal_cents + ship_cents
+    now = now_string()
+    cursor = conn.execute(
+        "INSERT INTO store_orders (customer_name, customer_email, total_cents, payment_status, order_status, provider, provider_order_id, date_created, date_updated)"
+        " VALUES (?, ?, ?, 'unpaid', 'pending', 'paypal', '', ?, ?)",
+        ("", "", total_cents, now, now),
+    )
+    local_order_id = cursor.lastrowid
+    for line in lines:
+        conn.execute(
+            "INSERT INTO store_order_items (order_id, product_id, quantity, unit_price_cents) VALUES (?, ?, ?, ?)",
+            (local_order_id, line["id"], line["qty"], line["price_cents"]),
+        )
+    conn.commit()
+    if len(lines) == 1:
+        description = lines[0]["title"]
+    else:
+        description = "%s +%d more" % (lines[0]["title"], len(lines) - 1)
+    base = request.host_url.rstrip("/")
+    try:
+        resp = paypal_request("POST", "/v2/checkout/orders", {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": str(local_order_id),
+                "description": description[:120],
+                "amount": {
+                    "currency_code": "USD",
+                    "value": f"{total_cents / 100:.2f}",
+                    "breakdown": {
+                        "item_total": {
+                            "currency_code": "USD",
+                            "value": f"{subtotal_cents / 100:.2f}",
+                        },
+                        "shipping": {
+                            "currency_code": "USD",
+                            "value": f"{ship_cents / 100:.2f}",
+                        },
+                    },
+                },
+                "items": [
+                    {
+                        "name": (line["title"] or "Book")[:127],
+                        "unit_amount": {
+                            "currency_code": "USD",
+                            "value": f"{line['price_cents'] / 100:.2f}",
+                        },
+                        "quantity": str(line["qty"]),
+                    }
+                    for line in lines
+                ],
+            }],
+            "application_context": {
+                "brand_name": "Snyder Scriptorium",
+                "return_url": base + "/store/checkout/return",
+                "cancel_url": base + "/store/checkout/cancel",
+                "user_action": "PAY_NOW",
+                "shipping_preference": "GET_FROM_FILE",
+            },
+        })
+        body = resp.json()
+    except Exception as exc:
+        conn.close()
+        return jsonify({"error": "Could not start checkout. (%s)" % exc}), 502
+    if resp.status_code not in (200, 201):
+        detail = ""
+        try:
+            err = (body.get("details") or body.get("message")) if isinstance(body, dict) else ""
+            detail = (" — %s" % err) if err else ""
+        except Exception:
+            pass
+        conn.close()
+        return jsonify({"error": "Checkout was declined by PayPal (status %d%s)." % (resp.status_code, detail)}), 502
+    paypal_order_id = body.get("id", "") if isinstance(body, dict) else ""
+    approval_url = ""
+    try:
+        for link in body.get("links", []):
+            if link.get("rel") == "approve" and link.get("href"):
+                approval_url = link["href"]
+                break
+    except Exception:
+        approval_url = ""
+    if not paypal_order_id or not approval_url:
+        conn.close()
+        return jsonify({"error": "PayPal did not return an approval link. Please try again."}), 502
+    conn.execute(
+        "UPDATE store_orders SET provider_order_id = ?, date_updated = ? WHERE id = ?",
+        (paypal_order_id, now_string(), local_order_id),
+    )
+    conn.commit()
+    conn.close()
+    # Only clear the cart once the PayPal order exists.
+    _save_cart({})
+    return jsonify({"approval_url": approval_url})
