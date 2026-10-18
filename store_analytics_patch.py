@@ -117,8 +117,6 @@ def api_store_analytics_fixed():
     """Fresh Store-tab data, including every viewed book (up to 50)."""
     period = request.args.get("period", "30d")
     data = _store_data(period)
-    # Preserve the existing dashboard's posted/sold counters from the normal
-    # report, while replacing only the live store-view metrics.
     try:
         base = _original_report(period, 1, 1, None)
         books_posted = base.get("store_books_posted", 0)
@@ -136,7 +134,51 @@ def api_store_analytics_fixed():
     })
 
 
-# Replace the view function after analytics_dashboard_v3.register() has added
-# the route. This preserves the existing URL and existing Store-tab frontend.
+@admin_required
+def admin_product_stats_fixed():
+    """Accurate per-book counts using both content_id and canonical URL."""
+    raw_ids = (request.args.get("ids") or "").strip()
+    ids = []
+    for value in raw_ids.split(",")[:100] if raw_ids else []:
+        try:
+            pid = int(value)
+            if pid > 0 and pid not in ids:
+                ids.append(pid)
+        except (TypeError, ValueError):
+            continue
+
+    conn = get_db()
+    try:
+        if not ids:
+            return jsonify({"stats": {}})
+        placeholders = ",".join("?" for _ in ids)
+        rows = conn.execute(
+            """SELECT sp.id AS product_id, COUNT(*) AS views,
+                      COUNT(DISTINCT pv.visitor_key) AS uniques
+               FROM page_views pv
+               JOIN store_products sp
+                 ON sp.id = pv.content_id
+                 OR ('/store/book/' || sp.slug) = pv.path
+               WHERE pv.path LIKE '/store/book/%'
+                 AND sp.id IN (""" + placeholders + ")
+               GROUP BY sp.id""",
+            tuple(ids),
+        ).fetchall()
+        stats = {
+            str(r["product_id"]): {
+                "views": int(r["views"] or 0),
+                "uniques": int(r["uniques"] or 0),
+            }
+            for r in rows
+        }
+        return jsonify({"stats": stats})
+    finally:
+        conn.close()
+
+
+# Replace the view functions after analytics_dashboard_v3.register() and the
+# store blueprint have added their routes. Existing frontend URLs stay intact.
 if "api_store_analytics" in app.view_functions:
     app.view_functions["api_store_analytics"] = api_store_analytics_fixed
+if "admin_product_stats" in app.view_functions:
+    app.view_functions["admin_product_stats"] = admin_product_stats_fixed
