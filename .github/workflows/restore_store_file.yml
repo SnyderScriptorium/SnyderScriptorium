@@ -1,0 +1,37 @@
+name: Repair store.py after accidental truncation
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair-store-file:
+    if: ${{ !contains(github.event.head_commit.message, 'Restore full store.py') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore full store.py and add gallery sequence guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout d92249113d709b851e3adceee01dcf162c993d6c -- store.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('store.py')
+          s = p.read_text()
+          old = '''        conn.execute(\n            "INSERT INTO store_product_images(product_id, image_url, position, date_created) VALUES (?, ?, ?, ?)",\n            (product_id, url, position, now_string()),\n        )'''
+          new = '''        if using_postgres():\n            # Older imports can leave the BIGSERIAL sequence behind the actual\n            # highest image id. Repair it immediately before the insert so a\n            # new book can never fail with a duplicate store_product_images id.\n            conn.execute(\n                "SELECT pg_advisory_xact_lock(hashtext('snyderscriptorium_store_product_images_sequence'))"\n            )\n            conn.execute(\n                "SELECT setval(pg_get_serial_sequence('store_product_images', 'id'), "\n                "COALESCE((SELECT MAX(id) FROM store_product_images), 0), "\n                "CASE WHEN COALESCE((SELECT MAX(id) FROM store_product_images), 0) > 0 THEN true ELSE false END)"\n            )\n        conn.execute(\n            "INSERT INTO store_product_images(product_id, image_url, position, date_created) VALUES (?, ?, ?, ?)",\n            (product_id, url, position, now_string()),\n        )'''
+          if old not in s:
+              raise SystemExit('Expected gallery insert was not found; refusing to modify store.py')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add store.py
+          git commit -m "Restore full store.py and repair gallery image sequence"
+          git push
