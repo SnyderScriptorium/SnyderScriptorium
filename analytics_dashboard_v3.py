@@ -528,14 +528,15 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                     books_sold += int(rowval(row, 1, "quantity") or 0)
         except Exception:
             books_sold = 0
-        # Store views over time (for line graph)
+        # Store views over time (for line graph). DATE() works on both
+        # Postgres and SQLite; substr() on a timestamptz throws on Postgres.
         try:
             _chart_rows = conn.execute(
-                f"""SELECT substr(pv.viewed_at, 1, 10) AS day, COUNT(*) AS n
+                f"""SELECT DATE(pv.viewed_at) AS day, COUNT(*) AS n
                     FROM page_views pv{_store_where}{_store_filter}
                     GROUP BY day ORDER BY day""",
                 _store_params).fetchall()
-            store_daily = [{"date": rowval(r, 0, "day"), "views": int(rowval(r, 1, "n") or 0)} for r in _chart_rows]
+            store_daily = [{"date": str(rowval(r, 0, "day")), "views": int(rowval(r, 1, "n") or 0)} for r in _chart_rows]
         except Exception:
             store_daily = []
         # Per-book views (path-based, consistent with store_views filter).

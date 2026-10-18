@@ -316,7 +316,7 @@ ctx.textAlign="left";
 }
 async function loadStoreStats(period){period=period||window.statsPeriod||"30";window.statsPeriod=period;
 try{
-var pd=period==="1"?"day":period==="7"?"7d":period==="90"?"90d":period==="365"?"1y":period==="all"?"all":"30d";var d=await api("/api/analytics/store?period="+pd);
+var pd=period==="1"?"day":period==="7"?"7d":period==="90"?"90d":period==="365"?"1y":period==="all"?"all":"30d";var d=await api("/api/analytics/store?period="+pd+"&_="+Date.now(),{cache:"no-store"});
 if(!d)return;
 var sp=document.getElementById("statStorePosted");
 if(sp)sp.textContent=d.books_posted||0;
