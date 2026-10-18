@@ -59,9 +59,22 @@ def _store_data(period):
             for r in book_rows
         ]
 
+        path_rows = conn.execute(
+            f"""SELECT pv.path AS path, COUNT(*) AS n,
+                       COUNT(DISTINCT pv.visitor_key) AS uniques
+                FROM page_views pv{where}{extra} (pv.path = '/store' OR pv.path LIKE '/store/%')
+                GROUP BY pv.path ORDER BY n DESC LIMIT 15""", params
+        ).fetchall()
+        store_paths = [
+            {"path": r["path"] or "(unknown)", "views": int(r["n"] or 0),
+             "unique_visitors": int(r["uniques"] or 0)}
+            for r in path_rows
+        ]
+
         return {"period": normalized, "store_views": store_views,
                 "store_unique_visitors": store_unique_visitors,
-                "store_daily": store_daily, "store_books": store_books}
+                "store_daily": store_daily, "store_books": store_books,
+                "store_paths": store_paths}
     finally:
         conn.close()
 
@@ -99,7 +112,9 @@ def api_store_analytics_fixed():
                     "store_views": data["store_views"],
                     "unique_visitors": data["store_unique_visitors"],
                     "top_books": data["store_books"],
-                    "viewed_books": data["store_books"]})
+                    "viewed_books": data["store_books"],
+                    "store_daily": data.get("store_daily") or [],
+                    "store_paths": data.get("store_paths") or []})
 
 
 @admin_required
