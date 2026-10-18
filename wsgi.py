@@ -6,6 +6,15 @@ from store import store_bp, ensure_store_tables
 if "store" not in app.blueprints:
     app.register_blueprint(store_bp)
 
+# Customer reviews live in their own module so the store.py
+# auto-restore workflow can never touch them.
+from store_reviews import reviews_bp, ensure_review_tables
+
+if "reviews" not in app.blueprints:
+    app.register_blueprint(reviews_bp)
+
+ensure_review_tables()
+
 # Build the base schema first; the inbox module then adds its member/blocking
 # columns against tables that are guaranteed to exist.
 init_db()

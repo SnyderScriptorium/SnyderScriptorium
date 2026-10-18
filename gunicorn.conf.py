@@ -20,6 +20,13 @@ def post_worker_init(worker):
         app.register_blueprint(store_bp)
     ensure_store_tables()
 
+    # Customer reviews live in their own module so the store.py
+    # auto-restore workflow can never touch them.
+    from store_reviews import reviews_bp, ensure_review_tables
+    if "reviews" not in app.blueprints:
+        app.register_blueprint(reviews_bp)
+    ensure_review_tables()
+
     import inbox_admin_routes  # noqa: F401,E402
 
     from analytics_dashboard_v3 import register as register_analytics_v3

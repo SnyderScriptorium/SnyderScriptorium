@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Leave a review — Snyder Scriptorium{% endblock %}
+
+{% block head %}
+<style>
+.review-page{max-width:640px;margin:0 auto;padding:40px 20px 70px}
+.review-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:26px;box-shadow:0 4px 14px rgba(40,30,20,.07)}
+.review-card h1{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 8px;font-size:1.6rem}
+.review-card p.sub{color:#6F6257;margin:0 0 18px}
+.review-field{margin-bottom:14px}
+.review-field input,.review-field textarea{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924}
+.review-field textarea{resize:vertical;min-height:120px}
+.review-stars{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+.review-stars span[role="radio"]{cursor:pointer;touch-action:manipulation}
+.review-submit{padding:11px 26px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;font-size:1rem;cursor:pointer}
+.review-submit:disabled{opacity:.5;cursor:default}
+.review-msg{margin-top:12px;min-height:1.4em}
+.review-invalid{text-align:center;padding:60px 20px;color:#6F6257}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="review-page">
+{% if valid %}
+  <div class="review-card">
+    <h1>Leave a review</h1>
+    <p class="sub">Thanks for buying from Snyder Scriptorium{% if buyer_name %}, {{ buyer_name }}{% endif %} — tell future readers how it went.</p>
+    <div class="review-stars" id="rStars" role="radiogroup" aria-label="Star rating">
+      <span style="color:#6F6257;">Your rating:</span>
+    </div>
+    <div class="review-field">
+      <input id="rName" type="text" placeholder="Your name (as you'd like it shown)" aria-label="Display name" autocomplete="name" value="{{ buyer_name }}">
+    </div>
+    <div class="review-field">
+      <input id="rTitle" type="text" placeholder="Review headline (optional)" aria-label="Review headline">
+    </div>
+    <div class="review-field">
+      <textarea id="rBody" placeholder="How was your experience? Book condition, packing, shipping…" aria-label="Review text"></textarea>
+    </div>
+    <button class="review-submit" id="rSubmit" type="button">Submit review</button>
+    <p class="review-msg" id="rMsg"></p>
+  </div>
+<script>
+(function(){
+  var rating=5;
+  var TOKEN={{ token|tojson }};
+  function starSVG(filled){
+    return '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">'
+      + '<path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"'
+      + ' fill="'+(filled?'#C9962E':'none')+'" stroke="#C9962E" stroke-width="1.6"/></svg>';
+  }
+  function draw(){
+    var w=document.getElementById('rStars');
+    w.querySelectorAll('span[role="radio"]').forEach(function(s){s.remove();});
+    for(var i=1;i<=5;i++)(function(n){
+      var s=document.createElement('span');
+      s.innerHTML=starSVG(n<=rating);
+      s.setAttribute('role','radio');
+      s.setAttribute('aria-checked',n===rating?'true':'false');
+      s.setAttribute('aria-label',n+' star'+(n===1?'':'s'));
+      s.addEventListener('click',function(){rating=n;draw();});
+      w.appendChild(s);
+    })(i);
+  }
+  draw();
+  document.getElementById('rSubmit').addEventListener('click',function(){
+    var btn=this,msg=document.getElementById('rMsg');
+    msg.style.color='#6F6257';msg.textContent='Submitting…';btn.disabled=true;
+    fetch('/api/store/review/'+encodeURIComponent(TOKEN),{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        name:document.getElementById('rName').value.trim(),
+        rating:rating,
+        title:document.getElementById('rTitle').value.trim(),
+        body:document.getElementById('rBody').value.trim()
+      })
+    }).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||'Something went wrong.');return d;});})
+    .then(function(d){
+      msg.style.color='#405A32';
+      msg.textContent=d.message||'Thank you! Your review was received.';
+      btn.style.display='none';
+    }).catch(function(e){
+      msg.style.color='#7A2929';msg.textContent=e.message||'Something went wrong.';
+      btn.disabled=false;
+    });
+  });
+})();
+</script>
+{% else %}
+  <div class="review-invalid">
+    <h2 style="font-family:Georgia,serif;color:#5C4033;">This review link isn't valid.</h2>
+    <p>It may have already been used, or the link is incomplete. Review links come by email after your order ships.</p>
+    <p><a href="/store" style="color:#5C4033;">Back to the bookstore</a></p>
+  </div>
+{% endif %}
+</div>
+{% endblock %}
