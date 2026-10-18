@@ -19,20 +19,23 @@
 .alpha-button{min-width:30px;padding:6px 7px;border:1px solid #D3C3A5;border-radius:4px;background:#fff;color:#5C4033;font:inherit;cursor:pointer}
 .alpha-button:hover,.alpha-button.active{background:#5C4033;color:#fff;border-color:#5C4033}
 .store-filter-note{text-align:center;color:#6F6257;font-size:.9rem;margin:12px 0 0}
-.genre-nav{display:flex;flex-wrap:nowrap;justify-content:flex-start;gap:8px;margin:0 0 16px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;scrollbar-width:thin}.genre-nav .genre-pill{flex:0 0 auto;white-space:nowrap}
-.genre-pill{padding:7px 16px;border:1px solid #C9B78F;border-radius:999px;background:#FFFDF8;color:#5C4033;font:inherit;font-size:.9rem;cursor:pointer}
-.genre-pill:hover,.genre-pill.active{background:#5C4033;color:#fff;border-color:#5C4033}
 .store-layout{display:flex;gap:26px;align-items:flex-start}
-.genre-sidebar{flex:0 0 220px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:16px;box-shadow:0 4px 14px rgba(40,30,20,.05);position:sticky;top:18px}
-.genre-sidebar h3{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 10px;font-size:1.05rem}
-.genre-side-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.genre-side-btn{display:flex;justify-content:space-between;align-items:baseline;gap:8px;width:100%;text-align:left;padding:8px 10px;border:0;border-radius:5px;background:transparent;color:#5C4033;font:inherit;font-size:.92rem;cursor:pointer}
-.genre-side-btn:hover{background:#F5EEE3}
-.genre-side-btn.active{background:#5C4033;color:#fff}
-.genre-side-btn.active .genre-count{color:#E8DCC3}
-.genre-count{font-size:.82rem;color:#8A6D3B;white-space:nowrap}
+.filter-sidebar{flex:0 0 232px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:16px;box-shadow:0 4px 14px rgba(40,30,20,.05);position:sticky;top:18px;align-self:flex-start;max-height:calc(100vh - 36px);overflow-y:auto}
+.filter-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.filter-head h3{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0;font-size:1.05rem}
+.filter-clear{background:none;border:0;color:#8A6D3B;font:inherit;font-size:.85rem;cursor:pointer;text-decoration:underline;padding:6px}
+.filter-group{border-top:1px solid #EADFC8;padding:12px 0}
+.filter-group h4{margin:0 0 8px;font-size:.9rem;color:#5C4033}
+.filter-check{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:.9rem;color:#4A3F33;cursor:pointer;min-height:34px}
+.filter-check input{width:18px;height:18px;accent-color:#5C4033;flex:none;cursor:pointer;margin:0}
+.filter-count{margin-left:auto;color:#8A6D3B;font-size:.8rem}
+.filter-cond{display:flex;flex-wrap:wrap;gap:6px}
+.filter-cond-btn{padding:7px 13px;border:1px solid #C9B78F;border-radius:999px;background:#FFFDF8;color:#5C4033;font:inherit;font-size:.85rem;cursor:pointer}
+.filter-cond-btn.active{background:#5C4033;color:#fff;border-color:#5C4033}
+.filter-done{display:none;width:100%;margin-top:10px;padding:11px;border:0;border-radius:5px;background:#5C4033;color:#fff;font:inherit;font-size:1rem;cursor:pointer}
+.filter-open-btn{display:none}
+.filter-backdrop{display:none}
 .store-main{flex:1;min-width:0}
-@media(min-width:651px){.genre-nav{display:none!important}}
 .store-main-title{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 14px}
 .store-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px}
 .store-card{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:14px;box-shadow:0 4px 14px rgba(40,30,20,.07);display:flex;flex-direction:column}
@@ -60,7 +63,7 @@
 .store-request-row input{padding:10px 12px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924;min-width:200px}
 .store-request-btn{padding:10px 20px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;cursor:pointer}
 .store-request-btn:hover{filter:brightness(.94)}
-@media(max-width:650px){.store-layout{display:block}.genre-sidebar{display:none}.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 100%;border-right:0}.store-grid{grid-template-columns:repeat(2,1fr);gap:10px}.store-card{padding:8px 6px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-section{font-size:.7rem;margin-bottom:4px}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
+@media(max-width:650px){.store-layout{display:block}.filter-open-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border:1px solid #5C4033;border-radius:6px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer;width:100%}.filter-sidebar{display:none;position:fixed;top:0;left:0;bottom:0;width:min(85vw,320px);z-index:70;border-radius:0;border:0;border-right:1px solid #C9B78F;max-height:none}.filter-sidebar.open{display:block}.filter-done{display:block}.filter-backdrop.open{display:block;position:fixed;inset:0;background:rgba(40,30,20,.45);z-index:65}.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 30%;border-right:1px solid rgba(255,255,255,.2);border-bottom:1px solid rgba(255,255,255,.2);min-height:44px;padding:8px 6px;font-size:.9rem}.store-grid{grid-template-columns:repeat(2,1fr);gap:10px}.store-card{padding:8px 6px}.store-card h2{font-size:.92rem}.store-author{font-size:.8rem;margin-bottom:6px}.store-publine{font-size:.76rem}.store-section{font-size:.7rem;margin-bottom:4px}.store-condition{display:none}.store-price{font-size:1rem}.store-stock{font-size:.75rem}.store-button{padding:7px 6px;font-size:.85rem;margin-top:10px}}
 </style>
 {% endblock %}
 
@@ -81,13 +84,14 @@
         <button class="collection-link" type="button" data-section="Used">Used</button>
         <button class="collection-link" type="button" data-section="New">New</button>
         <button class="collection-link active" type="button" data-section="">All Books</button>
+        <button class="collection-link" type="button" id="reviewsTabBtn" data-tab="reviews">Reviews</button>
     </nav>
-    <div class="genre-nav" id="genreNav" aria-label="Browse books by genre" hidden></div>
 
     {% if products %}
-    <div class="store-controls" aria-label="Bookstore search and filters">
+    <div class="store-controls" id="storeControls" aria-label="Bookstore search and filters">
         <div class="store-search-row">
             <input id="storeSearch" class="store-search" type="search" placeholder="Search by title, author, or publisher…" aria-label="Search books">
+            <button id="filterOpenBtn" class="filter-open-btn" type="button" aria-label="Open filters">⚙ Filters <span id="filterCountBadge"></span></button>
             <button id="storeClear" class="store-clear" type="button">Clear</button>
         </div>
         <div class="alphabet" id="alphabet" aria-label="Browse books alphabetically">
@@ -99,10 +103,29 @@
         <p id="storeFilterNote" class="store-filter-note"></p>
     </div>
 
-    <div class="store-layout">
-    <aside class="genre-sidebar" id="genreSidebar" aria-label="Browse books by genre" hidden>
-        <h3 id="genreSidebarTitle">Genres</h3>
-        <ul class="genre-side-list" id="genreSidebarList"></ul>
+    <div class="store-layout" id="storeLayout">
+    <div class="filter-backdrop" id="filterBackdrop"></div>
+    <aside class="filter-sidebar" id="filterSidebar" aria-label="Filter books">
+        <div class="filter-head">
+            <h3>Filters</h3>
+            <button class="filter-clear" id="filterClearAll" type="button">Clear all</button>
+        </div>
+        <div class="filter-group" id="filterConditionGroup">
+            <h4>Condition</h4>
+            <div class="filter-cond" id="filterCondBtns" role="group" aria-label="Filter by condition"></div>
+        </div>
+        <div class="filter-group">
+            <h4>Genre</h4>
+            <div id="genreFilterList"></div>
+        </div>
+        <div class="filter-group">
+            <h4>Price</h4>
+            <div id="priceFilterList"></div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-check"><input type="checkbox" id="inStockOnly"> In stock only</label>
+        </div>
+        <button class="filter-done" id="filterDoneBtn" type="button">Show books</button>
     </aside>
     <div class="store-main">
     <h2 id="storeMainTitle" class="store-main-title">All Books</h2>
@@ -113,7 +136,7 @@
         {% else %}
             {% set detail_url = url_for('store.store_book', slug=p.slug) %}
         {% endif %}
-        <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-publisher="{{ (p.publisher or '')|lower }}" data-section="{{ p.section or '' }}" data-genre="{{ p.genre or '' }}">
+        <article class="store-card" data-title="{{ p.title|lower }}" data-author="{{ (p.author or '')|lower }}" data-publisher="{{ (p.publisher or '')|lower }}" data-section="{{ p.section or '' }}" data-genre="{{ p.genre or '' }}" data-price="{{ p.price or 0 }}" data-stock="{{ 1 if p.stock_quantity|int > 0 else 0 }}">
             {% if p.cover_image_url %}
                 <img class="store-cover" src="{{ p.cover_image_url }}" alt="Photograph of {{ p.title }}">
             {% else %}
@@ -132,7 +155,7 @@
     </div>
     <div id="storeNoResults" class="store-empty" hidden>
         <h2>No books found.</h2>
-        <p>Try another section, letter, or search term.</p>
+        <p>Try another filter, letter, or search term.</p>
     </div>
     <div id="storePages" class="store-pages" hidden></div>
     </div>
@@ -143,7 +166,7 @@
         <p>The Scriptorium's collection is being gathered, photographed, and described — new arrivals are on their way. Please check back soon.</p>
     </div>
     {% endif %}
-    <div class="store-request">
+    <div class="store-request" id="storeRequest">
         <h2>Looking for a particular book?</h2>
         <p>Tell us the author and title — if a copy turns up, we'll let you know.</p>
         <div class="store-request-row">
@@ -152,7 +175,7 @@
             <button id="requestBookBtn" class="store-request-btn" type="button">Request This Book</button>
         </div>
     </div>
-    <div class="store-subscribe" style="margin-top: 2rem; text-align: center;">
+    <div class="store-subscribe" id="storeSubscribe" style="margin-top: 2rem; text-align: center;">
         <h2>Get notified of new arrivals</h2>
         <p>One email a week — new books and new posts, nothing else.</p>
         <div class="store-request-row" style="justify-content: center;">
@@ -161,27 +184,12 @@
         </div>
         <p id="subscribeMsg" style="margin-top: 0.5rem;"></p>
     </div>
-    <div class="store-reviews" id="storeReviews" style="margin-top: 3rem;">
+    <div class="store-reviews" id="storeReviews" style="margin-top: 3rem;" hidden>
         <h2 style="text-align:center;">What buyers say</h2>
         <p style="text-align:center;color:#6F6257;">Only verified purchases — every review is tied to a completed order.</p>
         <div id="reviewsList" style="display:grid;gap:14px;max-width:760px;margin:18px auto;"></div>
-        <div class="store-review-form" style="max-width:760px;margin:26px auto;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:22px;">
-            <h3 style="margin-top:0;">Leave a review</h3>
-            <p style="color:#6F6257;font-size:.92rem;">Bought a book from us? Enter your order number and email from your confirmation to leave a verified review.</p>
-            <div style="display:grid;gap:10px;">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                    <input id="reviewOrderId" type="text" inputmode="numeric" placeholder="Order number" aria-label="Order number" style="padding:10px 12px;border:1px solid #C9B78F;border-radius:5px;font:inherit;">
-                    <input id="reviewEmail" type="email" placeholder="Email you ordered with" aria-label="Order email" autocomplete="email" style="padding:10px 12px;border:1px solid #C9B78F;border-radius:5px;font:inherit;">
-                </div>
-                <input id="reviewName" type="text" placeholder="Your name (as you'd like it shown)" aria-label="Display name" autocomplete="name" style="padding:10px 12px;border:1px solid #C9B78F;border-radius:5px;font:inherit;">
-                <div id="reviewStars" role="radiogroup" aria-label="Star rating" style="display:flex;gap:6px;align-items:center;">
-                    <span style="color:#6F6257;font-size:.92rem;">Your rating:</span>
-                </div>
-                <input id="reviewTitle" type="text" placeholder="Review headline (optional)" aria-label="Review headline" style="padding:10px 12px;border:1px solid #C9B78F;border-radius:5px;font:inherit;">
-                <textarea id="reviewBody" placeholder="How was your experience?" aria-label="Review text" rows="4" style="padding:10px 12px;border:1px solid #C9B78F;border-radius:5px;font:inherit;resize:vertical;"></textarea>
-                <button id="reviewSubmitBtn" class="store-request-btn" type="button" style="justify-self:start;">Submit review</button>
-                <p id="reviewMsg" style="margin:0;min-height:1.2em;"></p>
-            </div>
+        <div style="max-width:760px;margin:26px auto;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:22px;text-align:center;">
+            <p style="color:#6F6257;margin:0;">Bought a book from us? After your order arrives, watch your inbox — we'll send you a personal link to leave a verified review. Reviews can only be left through that email link, so every review here is from a real buyer.</p>
         </div>
     </div>
 </section>
@@ -198,16 +206,37 @@
   const title=document.getElementById('storeMainTitle');
   const pages=document.getElementById('storePages');
   const grid=document.getElementById('storeGrid');
-  const genreNav=document.getElementById('genreNav');
-  const genreSidebar=document.getElementById('genreSidebar');
-  const genreSidebarList=document.getElementById('genreSidebarList');
-  const genreSidebarTitle=document.getElementById('genreSidebarTitle');
+  const filterSidebar=document.getElementById('filterSidebar');
+  const filterBackdrop=document.getElementById('filterBackdrop');
+  const filterOpenBtn=document.getElementById('filterOpenBtn');
+  const filterDoneBtn=document.getElementById('filterDoneBtn');
+  const filterClearAll=document.getElementById('filterClearAll');
+  const filterCountBadge=document.getElementById('filterCountBadge');
+  const genreFilterList=document.getElementById('genreFilterList');
+  const priceFilterList=document.getElementById('priceFilterList');
+  const filterCondBtns=document.getElementById('filterCondBtns');
+  const inStockOnly=document.getElementById('inStockOnly');
+  const reviewsTabBtn=document.getElementById('reviewsTabBtn');
+  const storeControls=document.getElementById('storeControls');
+  const storeLayout=document.getElementById('storeLayout');
+  const storeRequest=document.getElementById('storeRequest');
+  const storeSubscribe=document.getElementById('storeSubscribe');
+  const storeReviews=document.getElementById('storeReviews');
   const PAGE_SIZE=20;
-  let section='', genre='', letter='', query='', page=1;
+  const PRICE_BANDS=[
+    {id:'u10',label:'Under $10',test:p=>p<10},
+    {id:'b1025',label:'$10 to $25',test:p=>p>=10&&p<=25},
+    {id:'b2550',label:'$25 to $50',test:p=>p>25&&p<=50},
+    {id:'o50',label:'Over $50',test:p=>p>50}
+  ];
+  const CONDITIONS=['','Antique','Vintage','Used','New'];
+  let section='', genres=new Set(), priceBands=new Set(), stockOnly=false;
+  let letter='', query='', page=1, onReviewsTab=false;
 
   function sectionLabel(){
     const base=section===''?'All Books':(section+' Books');
-    return genre?(base+' · '+genre):base;
+    const gl=[...genres].sort((a,b)=>a.localeCompare(b));
+    return gl.length?(base+' · '+gl.join(', ')):base;
   }
 
   const GENRE_GROUPS={
@@ -237,50 +266,78 @@
       .map(name=>({name:name,count:counts[name]}));
   }
 
-  function setGenre(g){
-    genre=g;page=1;buildGenreNav();apply();gridTop();
+  function setSection(s,scroll){
+    section=s;genres.clear();page=1;
+    sections.forEach(x=>{
+      if(x.hasAttribute('data-tab')){x.classList.remove('active');return;}
+      x.classList.toggle('active',x.dataset.section===s);
+    });
+    buildConditionBtns();buildGenreFilters();apply();showBooksView();
+    if(scroll!==false) gridTop();
   }
 
-  function buildGenreNav(){
-    if(!genreNav) return;
-    const genres=sectionGenres();
-    genreNav.innerHTML='';
-    if(genreSidebarList) genreSidebarList.innerHTML='';
-    if(genreSidebarTitle) genreSidebarTitle.textContent=(section||'All')+' Genres';
-    if(!genres.length){genreNav.hidden=true;if(genreSidebar) genreSidebar.hidden=true;return;}
-    genreNav.hidden=false;
-    if(genreSidebar) genreSidebar.hidden=false;
-    const all=document.createElement('button');
-    all.type='button';all.className='genre-pill'+(genre===''?' active':'');all.textContent='All Genres';
-    all.addEventListener('click',()=>setGenre(''));
-    genreNav.appendChild(all);
-    if(genreSidebarList){
-      const allLi=document.createElement('li');
-      const allBtn=document.createElement('button');
-      allBtn.type='button';allBtn.className='genre-side-btn'+(genre===''?' active':'');
-      const allLabel=document.createElement('span');allLabel.textContent='All Genres';
-      allBtn.appendChild(allLabel);
-      allBtn.addEventListener('click',()=>setGenre(''));
-      allLi.appendChild(allBtn);
-      genreSidebarList.appendChild(allLi);
-    }
-    genres.forEach(g=>{
+  function buildConditionBtns(){
+    if(!filterCondBtns) return;
+    filterCondBtns.innerHTML='';
+    CONDITIONS.forEach(c=>{
       const b=document.createElement('button');
-      b.type='button';b.className='genre-pill'+(genre===g.name?' active':'');b.textContent=g.name;
-      b.addEventListener('click',()=>setGenre(g.name));
-      genreNav.appendChild(b);
-      if(genreSidebarList){
-        const li=document.createElement('li');
-        const sb=document.createElement('button');
-        sb.type='button';sb.className='genre-side-btn'+(genre===g.name?' active':'');
-        const label=document.createElement('span');label.textContent=g.name;
-        const cnt=document.createElement('span');cnt.className='genre-count';cnt.textContent=g.count;
-        sb.appendChild(label);sb.appendChild(cnt);
-        sb.addEventListener('click',()=>setGenre(g.name));
-        li.appendChild(sb);
-        genreSidebarList.appendChild(li);
-      }
+      b.type='button';
+      b.className='filter-cond-btn'+(section===c?' active':'');
+      b.textContent=c===''?'All':c;
+      b.addEventListener('click',()=>setSection(c,false));
+      filterCondBtns.appendChild(b);
     });
+  }
+
+  function buildGenreFilters(){
+    if(!genreFilterList) return;
+    const valid=new Set(sectionGenres().map(g=>g.name));
+    genres.forEach(g=>{if(!valid.has(g)) genres.delete(g);});
+    genreFilterList.innerHTML='';
+    sectionGenres().forEach(g=>{
+      const lab=document.createElement('label');
+      lab.className='filter-check';
+      const cb=document.createElement('input');
+      cb.type='checkbox';cb.checked=genres.has(g.name);
+      cb.setAttribute('aria-label','Filter by genre '+g.name);
+      cb.addEventListener('change',()=>{
+        if(cb.checked) genres.add(g.name); else genres.delete(g.name);
+        page=1;apply();
+      });
+      const t=document.createElement('span');t.textContent=g.name;
+      const cnt=document.createElement('span');cnt.className='filter-count';cnt.textContent=g.count;
+      lab.appendChild(cb);lab.appendChild(t);lab.appendChild(cnt);
+      genreFilterList.appendChild(lab);
+    });
+  }
+
+  function buildPriceFilters(){
+    if(!priceFilterList) return;
+    priceFilterList.innerHTML='';
+    PRICE_BANDS.forEach(b=>{
+      const lab=document.createElement('label');
+      lab.className='filter-check';
+      const cb=document.createElement('input');
+      cb.type='checkbox';cb.checked=priceBands.has(b.id);
+      cb.setAttribute('aria-label','Filter by price '+b.label);
+      cb.addEventListener('change',()=>{
+        if(cb.checked) priceBands.add(b.id); else priceBands.delete(b.id);
+        page=1;apply();
+      });
+      const t=document.createElement('span');t.textContent=b.label;
+      lab.appendChild(cb);lab.appendChild(t);
+      priceFilterList.appendChild(lab);
+    });
+  }
+
+  function clearAllFilters(){
+    genres.clear();priceBands.clear();stockOnly=false;
+    if(inStockOnly) inStockOnly.checked=false;
+    buildPriceFilters();buildGenreFilters();page=1;apply();
+  }
+
+  function activeFilterCount(){
+    return genres.size+priceBands.size+(stockOnly?1:0)+(section?1:0);
   }
 
   function gridTop(){
@@ -330,10 +387,15 @@
     cards.forEach(card=>{
       const titleText=card.dataset.title||'', author=card.dataset.author||'', publisher=card.dataset.publisher||'';
       const sectionOK=!section||card.dataset.section===section;
-      const cgs=(card.dataset.genre||'').split(',').map(g=>groupGenre(g).toLowerCase());const genreOK=!genre||cgs.includes(genre.toLowerCase());
+      const cgs=cardGenres(card).map(g=>g.toLowerCase());
+      const selG=[...genres].map(g=>g.toLowerCase());
+      const genreOK=!selG.length||selG.some(g=>cgs.includes(g));
+      const price=parseFloat(card.dataset.price||'0')||0;
+      const priceOK=!priceBands.size||[...priceBands].some(id=>{const b=PRICE_BANDS.find(x=>x.id===id);return b&&b.test(price);});
+      const stockOK=!stockOnly||card.dataset.stock==='1';
       const letterOK=!letter||titleText.startsWith(letter.toLowerCase());
       const searchOK=!q||titleText.includes(q)||author.includes(q)||publisher.includes(q);
-      if(sectionOK&&genreOK&&letterOK&&searchOK) matched.push(card);
+      if(sectionOK&&genreOK&&priceOK&&stockOK&&letterOK&&searchOK) matched.push(card);
     });
     const totalPages=Math.max(1,Math.ceil(matched.length/PAGE_SIZE));
     if(page>totalPages) page=totalPages;
@@ -346,20 +408,53 @@
       const pieces=[sectionLabel()];
       if(letter) pieces.push(letter);
       if(q) pieces.push('“'+q+'”');
+      if(priceBands.size) pieces.push([...priceBands].map(id=>{const b=PRICE_BANDS.find(x=>x.id===id);return b?b.label:id;}).join(', '));
+      if(stockOnly) pieces.push('In stock');
       if(totalPages>1) pieces.push('Page '+page+' of '+totalPages);
       note.textContent=matched.length+' book'+(matched.length===1?'':'s')+' · '+pieces.join(' · ');
+    }
+    if(filterCountBadge){
+      const n=activeFilterCount();
+      filterCountBadge.textContent=n?('('+n+')'):'';
     }
     renderPages(totalPages);
   }
 
-  sections.forEach(btn=>btn.addEventListener('click',()=>{
-    section=btn.dataset.section||'';
-    genre='';
-    page=1;
-    sections.forEach(x=>x.classList.toggle('active',x===btn));
-    buildGenreNav();
-    apply();
-  }));
+  function showBooksView(){
+    onReviewsTab=false;
+    if(storeControls) storeControls.hidden=false;
+    if(storeLayout) storeLayout.hidden=false;
+    if(storeRequest) storeRequest.hidden=false;
+    if(storeSubscribe) storeSubscribe.hidden=false;
+    if(storeReviews) storeReviews.hidden=true;
+  }
+  function showReviewsView(){
+    onReviewsTab=true;
+    sections.forEach(x=>x.classList.remove('active'));
+    if(reviewsTabBtn) reviewsTabBtn.classList.add('active');
+    closeFilters();
+    if(storeControls) storeControls.hidden=true;
+    if(storeLayout) storeLayout.hidden=true;
+    if(storeRequest) storeRequest.hidden=true;
+    if(storeSubscribe) storeSubscribe.hidden=true;
+    if(storeReviews) storeReviews.hidden=false;
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function openFilters(){
+    if(onReviewsTab) return;
+    if(filterSidebar) filterSidebar.classList.add('open');
+    if(filterBackdrop) filterBackdrop.classList.add('open');
+  }
+  function closeFilters(){
+    if(filterSidebar) filterSidebar.classList.remove('open');
+    if(filterBackdrop) filterBackdrop.classList.remove('open');
+  }
+
+  sections.forEach(btn=>{
+    if(btn.hasAttribute('data-tab')) return;
+    btn.addEventListener('click',()=>setSection(btn.dataset.section||''));
+  });
+  if(reviewsTabBtn) reviewsTabBtn.addEventListener('click',showReviewsView);
   letters.forEach(btn=>btn.addEventListener('click',()=>{
     letter=btn.dataset.letter||'';
     page=1;
@@ -367,7 +462,13 @@
     apply();
   }));
   if(search) search.addEventListener('input',()=>{query=search.value;page=1;apply();});
-  if(clear) clear.addEventListener('click',()=>{search.value='';query='';page=1;apply();search.focus();});
+  if(clear) clear.addEventListener('click',()=>{search.value='';query='';letter='';page=1;letters.forEach(x=>x.classList.toggle('active',x.dataset.letter===''));clearAllFilters();search.focus();});
+  if(filterOpenBtn) filterOpenBtn.addEventListener('click',openFilters);
+  if(filterDoneBtn) filterDoneBtn.addEventListener('click',()=>{closeFilters();gridTop();});
+  if(filterBackdrop) filterBackdrop.addEventListener('click',closeFilters);
+  if(filterClearAll) filterClearAll.addEventListener('click',clearAllFilters);
+  if(inStockOnly) inStockOnly.addEventListener('change',()=>{stockOnly=inStockOnly.checked;page=1;apply();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape') closeFilters();});
   var reqBtn=document.getElementById('requestBookBtn');
   if(reqBtn) reqBtn.addEventListener('click',()=>{
     var a=(document.getElementById('requestAuthor').value||'').trim();
@@ -376,7 +477,10 @@
     var msg='Author: '+(a||'—')+'\nTitle: '+(t||'—')+'\n\n(Where should we reach you if a copy turns up?)';
     window.location.href='/contact?subject='+encodeURIComponent('Book Request')+'&message='+encodeURIComponent(msg);
   });
-  buildGenreNav();
+  buildConditionBtns();
+  buildGenreFilters();
+  buildPriceFilters();
+  showBooksView();
   apply();
   var subBtn=document.getElementById('subscribeBtn');
   if(subBtn) subBtn.addEventListener('click',function(){
@@ -393,30 +497,7 @@
       .catch(function(){msg.textContent='Something went wrong, try again.';});
   });
   initStoreReviews();
-  /* ---- Customer reviews ---- */
-  var reviewRating = 5;
-  function starSVG(filled) {
-    return '<svg viewBox="0 0 24 24" width="26" height="26" style="cursor:pointer;flex:none" aria-hidden="true">'
-      + '<path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"'
-      + ' fill="' + (filled ? '#C9962E' : 'none') + '" stroke="#C9962E" stroke-width="1.6"/></svg>';
-  }
-  function renderStarPicker() {
-    var wrap = document.getElementById('reviewStars');
-    if (!wrap) return;
-    wrap.querySelectorAll('span[role="radio"]').forEach(function (s) { s.remove(); });
-    for (var i = 1; i <= 5; i++) {
-      (function (n) {
-        var span = document.createElement('span');
-        span.innerHTML = starSVG(n <= reviewRating);
-        span.setAttribute('role', 'radio');
-        span.setAttribute('aria-checked', n === reviewRating ? 'true' : 'false');
-        span.setAttribute('aria-label', n + ' star' + (n === 1 ? '' : 's'));
-        span.style.touchAction = 'manipulation';
-        span.addEventListener('click', function () { reviewRating = n; renderStarPicker(); });
-        wrap.appendChild(span);
-      })(i);
-    }
-  }
+  /* ---- Customer reviews (read-only list; reviews arrive via emailed buyer links) ---- */
   function escHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -426,7 +507,7 @@
     var box = document.getElementById('reviewsList');
     if (!box) return;
     if (!list.length) {
-      box.innerHTML = '<p style="text-align:center;color:#6F6257;">No reviews yet — be the first.</p>';
+      box.innerHTML = '<p style="text-align:center;color:#6F6257;">No reviews yet — after your order arrives, watch your inbox for your personal review link.</p>';
       return;
     }
     var total = list.reduce(function (a, r) { return a + (Number(r.rating) || 0); }, 0);
@@ -449,51 +530,13 @@
     box.innerHTML = html;
   }
   function initStoreReviews() {
-    renderStarPicker();
     var box = document.getElementById('reviewsList');
-    if (box) {
-      fetch('/api/store/reviews').then(function (r) { return r.json(); })
-        .then(function (d) { renderReviews(Array.isArray(d) ? d : []); })
-        .catch(function () { box.innerHTML = ''; });
-    }
-    var btn = document.getElementById('reviewSubmitBtn');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-      var msg = document.getElementById('reviewMsg');
-      var payload = {
-        order_id: (document.getElementById('reviewOrderId').value || '').trim(),
-        email: (document.getElementById('reviewEmail').value || '').trim(),
-        name: (document.getElementById('reviewName').value || '').trim(),
-        rating: reviewRating,
-        title: (document.getElementById('reviewTitle').value || '').trim(),
-        body: (document.getElementById('reviewBody').value || '').trim()
-      };
-      msg.style.color = '#6F6257';
-      msg.textContent = 'Submitting…';
-      btn.disabled = true;
-      fetch('/api/store/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).then(function (r) {
-        return r.json().then(function (d) {
-          if (!r.ok) throw new Error(d.error || 'Something went wrong.');
-          return d;
-        });
-      }).then(function (d) {
-        msg.style.color = '#405A32';
-        msg.textContent = d.message || 'Thank you! Your review is awaiting approval.';
-        document.getElementById('reviewOrderId').value = '';
-        document.getElementById('reviewEmail').value = '';
-        document.getElementById('reviewName').value = '';
-        document.getElementById('reviewTitle').value = '';
-        document.getElementById('reviewBody').value = '';
-        reviewRating = 5; renderStarPicker();
-      }).catch(function (e) {
-        msg.style.color = '#7A2929';
-        msg.textContent = e.message || 'Something went wrong.';
-      }).finally(function () { btn.disabled = false; });
-    });
+    if (!box) return;
+    fetch('/api/store/reviews').then(function (r) {
+      if (!r.ok) throw new Error('no reviews API');
+      return r.json();
+    }).then(function (d) { renderReviews(Array.isArray(d) ? d : []); })
+      .catch(function () { renderReviews([]); });
   }
 })();
 </script>
