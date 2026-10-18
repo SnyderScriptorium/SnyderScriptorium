@@ -538,7 +538,9 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             store_daily = [{"date": rowval(r, 0, "day"), "views": int(rowval(r, 1, "n") or 0)} for r in _chart_rows]
         except Exception:
             store_daily = []
-        # Per-book views (path-based, consistent with store_views filter)
+        # Per-book views (path-based, consistent with store_views filter).
+        # Join on content_id first, falling back to the slug in the path so a
+        # missed tracker lookup can never hide a book from this list.
         try:
             _book_where = " WHERE pv.viewed_at >= ?" if start else ""
             _book_and = " AND" if _book_where else " WHERE"
@@ -546,6 +548,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                 f"""SELECT sp.title, sp.author, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
                     FROM page_views pv
                     LEFT JOIN store_products sp ON sp.id = pv.content_id
+                        OR (pv.content_id IS NULL AND '/store/book/' || sp.slug = RTRIM(pv.path, '/'))
                     {_book_where}{_book_and} pv.path LIKE '/store/book/%'
                     GROUP BY sp.id, sp.title, sp.author
                     ORDER BY views DESC LIMIT 50""",
