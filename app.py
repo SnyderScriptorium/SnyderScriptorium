@@ -165,6 +165,8 @@ def the_hearth():
             'a-thief-of-time',
             'city-of-bones',
             'you-ll-be-the-death-of-me',
+            'vision-in-white',
+            'timeline',
         ]
         placeholders = ','.join('?' for _ in featured_slugs)
         rows = conn.execute(

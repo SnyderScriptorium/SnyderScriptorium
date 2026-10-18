@@ -247,6 +247,13 @@ The Hearth — Snyder Scriptorium
         display: flex; justify-content: center; gap: 22px;
         flex-wrap: wrap; margin-bottom: 16px;
     }
+    .hearth-carousel { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .carousel-viewport { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -ms-overflow-style: none; flex: 1 1 auto; }
+    .carousel-viewport::-webkit-scrollbar { display: none; }
+    .carousel-track { display: flex; gap: 22px; }
+    .carousel-card { scroll-snap-align: start; flex: 0 0 auto; }
+    .carousel-arrow { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 1px solid #C9B78F; background: #FFFDF8; color: #5C4033; font-size: 1.4rem; line-height: 1; cursor: pointer; touch-action: manipulation; }
+    .carousel-arrow:active { background: #5C4033; color: #fff; }
     .hearth-shelf-book {
         width: 150px; text-decoration: none; color: inherit;
         display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -302,22 +309,60 @@ The Hearth — Snyder Scriptorium
     {% if shelf_books %}
     <div class="hearth-divider" aria-hidden="true"><span></span>&#10086;<span></span></div>
 
-    <section class="hearth-shelf" aria-label="From the Scriptorium's shelves">
+    <section class="hearth-shelf" aria-label="In demand now">
         <p class="hearth-shelf-kicker">In Demand Now</p>
-        <div class="hearth-shelf-books">
-            {% for b in shelf_books %}
-            <a class="hearth-shelf-book" href="{{ url_for('store.store_book', slug=b.slug) }}">
-                {% if b.cover_image_url %}
-                <img src="{{ b.cover_image_url }}" alt="{{ b.title|e }}" loading="lazy">
-                {% endif %}
-                <span class="hearth-shelf-title">{{ b.title|e }}</span>
-                <span class="hearth-shelf-author">{{ b.author|e }}</span>
-                {% if b.price_cents %}<span class="hearth-shelf-price">${{ "%.2f"|format(b.price_cents/100) }}</span>{% endif %}
-            </a>
-            {% endfor %}
+        <div class="hearth-carousel">
+            <button class="carousel-arrow" id="hotPrev" type="button" aria-label="Previous book">&#8249;</button>
+            <div class="carousel-viewport" id="hotViewport">
+                <div class="carousel-track" id="hotTrack">
+                    {% for b in shelf_books %}
+                    <a class="hearth-shelf-book carousel-card" href="{{ url_for('store.store_book', slug=b.slug) }}">
+                        {% if b.cover_image_url %}
+                        <img src="{{ b.cover_image_url }}" alt="{{ b.title|e }}" loading="lazy">
+                        {% endif %}
+                        <span class="hearth-shelf-title">{{ b.title|e }}</span>
+                        <span class="hearth-shelf-author">{{ b.author|e }}</span>
+                        {% if b.price_cents %}<span class="hearth-shelf-price">${{ "%.2f"|format(b.price_cents/100) }}</span>{% endif %}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <button class="carousel-arrow" id="hotNext" type="button" aria-label="Next book">&#8250;</button>
         </div>
         <p class="hearth-shelf-cta"><a href="{{ url_for('store.store_home') }}">Step into the shop &rarr;</a></p>
     </section>
+<script>
+(function(){
+  var vp=document.getElementById('hotViewport'), track=document.getElementById('hotTrack');
+  if(!vp||!track) return;
+  var paused=false, timer=null;
+  function step(){
+    var card=track.querySelector('.carousel-card');
+    if(!card) return 0;
+    var gap=parseFloat(getComputedStyle(track).gap)||0;
+    return card.offsetWidth+gap;
+  }
+  function advance(){
+    if(paused||document.hidden) return;
+    var s=step(); if(!s) return;
+    var max=track.scrollWidth-vp.clientWidth;
+    if(vp.scrollLeft+s>=max-4){ vp.scrollTo({left:0,behavior:'smooth'}); }
+    else { vp.scrollBy({left:s,behavior:'smooth'}); }
+  }
+  function start(){ stop(); timer=setInterval(advance,2000); }
+  function stop(){ if(timer){clearInterval(timer);timer=null;} }
+  function hold(){ paused=true; }
+  function release(){ setTimeout(function(){paused=false;},4000); }
+  vp.addEventListener('pointerenter',hold);
+  vp.addEventListener('pointerleave',function(){paused=false;});
+  vp.addEventListener('touchstart',hold,{passive:true});
+  vp.addEventListener('touchend',release,{passive:true});
+  var prev=document.getElementById('hotPrev'), next=document.getElementById('hotNext');
+  if(prev) prev.addEventListener('click',function(){hold();vp.scrollBy({left:-step(),behavior:'smooth'});release();});
+  if(next) next.addEventListener('click',function(){hold();vp.scrollBy({left:step(),behavior:'smooth'});release();});
+  start();
+})();
+</script>
     {% endif %}
 
     <div class="hearth-divider" aria-hidden="true"><span></span>&#10086;<span></span></div>
