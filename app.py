@@ -793,6 +793,27 @@ def create_published():
     return jsonify({"success": True, "id": post_id}), 201
 
 
+@app.route("/api/blog/upload-image", methods=["POST"])
+@admin_required
+def blog_upload_image():
+    """Upload a photo from the admin blog editor. Stores in DB (survives redeploys)."""
+    from store import _validate_upload, store_image_data
+    storage = request.files.get("photo") or request.files.get("image") or request.files.get("file")
+    if not storage:
+        return jsonify({"error": "No photo was attached."}), 400
+    try:
+        data, mime = _validate_upload(storage)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    conn = get_db()
+    try:
+        url = store_image_data(conn, data, mime)
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"success": True, "url": url}), 201
+
+
 @app.route("/api/published/<int:post_id>", methods=["GET"])
 @admin_required
 def get_published_post(post_id):
