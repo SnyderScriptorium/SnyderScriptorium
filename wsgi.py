@@ -16,9 +16,9 @@ import inbox_admin_routes  # noqa: F401,E402
 
 ensure_store_tables()
 
-# Repair bookstore image sequences after the tables exist. This is deliberately
-# in the production WSGI path rather than relying on sitecustomize, so the
-# repair is guaranteed to run on the live workers before image uploads.
+# Repair bookstore ID sequences after the tables exist. This is deliberately
+# in the production WSGI path so stale PostgreSQL sequences cannot block a new
+# book, image, order, or gallery insert.
 import repair_store_sequences  # noqa: F401,E402
 
 # Register analytics in the WSGI entry point so the routes exist both in
@@ -26,3 +26,7 @@ import repair_store_sequences  # noqa: F401,E402
 from analytics_dashboard_v3 import register as register_analytics_v3  # noqa: E402
 register_analytics_v3(app)
 
+# Apply the live storefront analytics corrections after the dashboard routes
+# exist. This keeps the shared dashboard intact while making Store metrics
+# fresh and book-level reporting reliable.
+import store_analytics_patch  # noqa: F401,E402
