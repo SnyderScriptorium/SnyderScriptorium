@@ -38,6 +38,7 @@
 <div class="card"><div><h3>Books Sold</h3></div><strong id="statStoreSold">0</strong></div>
 <div class="card"><div><h3>Store Views</h3></div><strong id="statStoreViews">0</strong></div>
 </div>
+<div class="preview" style="margin-top:18px"><h3 class="section-title">Store Views Over Time</h3><canvas id="storeViewsChart" height="220" style="width:100%;display:block"></canvas></div>
 <div class="preview" style="margin-top:18px"><h3 class="section-title">Most Viewed Books</h3><div id="storeTopBooks" class="list"></div></div>
 </div>
 <div class="preview" style="margin-top:18px"><h3 class="section-title">Views by Post</h3><div id="analyticsPostViews" class="list"></div></div><p class="note" style="margin-top:18px">Visitor analytics are stored in the database and do not depend on browser storage.</p></section>
@@ -294,7 +295,26 @@ if(btn){btn.classList.add('active');btn.style.background='var(--gold,#C9B78F)';b
 }catch(_){}
 var t="overview";try{t=localStorage.getItem("statsAdminTab")||"overview"}catch(_){};
 if(t==="store"){loadStoreStats(p)}else{loadStats(p)}}
-(function(){const bo=document.getElementById("statsTabOverview"),bs=document.getElementById("statsTabSources"),bt=document.getElementById("statsTabStore");if(bo)bo.addEventListener("click",function(){setStatsTab("overview")});if(bs)bs.addEventListener("click",function(){setStatsTab("sources")});if(bt)bt.addEventListener("click",function(){setStatsTab("store")});try{const t=localStorage.getItem("statsAdminTab");if(t==="sources")setStatsTab("sources");else if(t==="store")setStatsTab("store")}catch(_){}})();async function loadStoreStats(period){period=period||window.statsPeriod||"30";window.statsPeriod=period;
+(function(){const bo=document.getElementById("statsTabOverview"),bs=document.getElementById("statsTabSources"),bt=document.getElementById("statsTabStore");if(bo)bo.addEventListener("click",function(){setStatsTab("overview")});if(bs)bs.addEventListener("click",function(){setStatsTab("sources")});if(bt)bt.addEventListener("click",function(){setStatsTab("store")});try{const t=localStorage.getItem("statsAdminTab");if(t==="sources")setStatsTab("sources");else if(t==="store")setStatsTab("store")}catch(_){}})();function drawStoreChart(canvas,points){
+if(!canvas)return;var ctx=canvas.getContext("2d"),ratio=window.devicePixelRatio||1;
+var w=Math.max(320,canvas.clientWidth||700),h=220;canvas.width=w*ratio;canvas.height=h*ratio;
+ctx.setTransform(ratio,0,0,ratio,0,0);ctx.clearRect(0,0,w,h);
+var dataMax=Math.max(1,...points.map(function(x){return Number(x.views)||0}));
+var left=42,right=12,top=15,bottom=32,cw=w-left-right,ch=h-top-bottom;
+ctx.strokeStyle="#C9B78F";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(left,top);ctx.lineTo(left,h-bottom);ctx.lineTo(w-right,h-bottom);ctx.stroke();
+if(!points.length){ctx.fillStyle="#6F6257";ctx.font="15px Georgia";ctx.fillText("No store views recorded for this period yet.",left,top+40);return;}
+ctx.strokeStyle="#EDE3CB";ctx.fillStyle="#6F6257";ctx.font="10px Georgia";ctx.textAlign="right";
+[0,Math.round(dataMax/2),dataMax].forEach(function(v){var yy=top+ch-(v/dataMax)*ch;ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(w-right,yy);ctx.stroke();ctx.fillText(String(v),left-6,yy+3);});
+ctx.strokeStyle="#5C4033";ctx.lineWidth=2;ctx.beginPath();
+points.forEach(function(p,i){var x=left+(points.length===1?cw/2:(i/(points.length-1))*cw),y=top+ch-(Number(p.views)/dataMax)*ch;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+ctx.stroke();ctx.fillStyle="#5C4033";
+points.forEach(function(p,i){var x=left+(points.length===1?cw/2:(i/(points.length-1))*cw),y=top+ch-(Number(p.views)/dataMax)*ch;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();});
+ctx.fillStyle="#6F6257";ctx.textAlign="center";
+var stride=Math.max(1,Math.ceil(points.length/8));
+points.forEach(function(p,i){if(i%stride===0||i===points.length-1){var x=left+(points.length===1?cw/2:(i/(points.length-1))*cw);ctx.fillText(String(p.date||"").slice(5),x,h-8);}});
+ctx.textAlign="left";
+}
+async function loadStoreStats(period){period=period||window.statsPeriod||"30";window.statsPeriod=period;
 try{
 var pd=period==="1"?"day":period==="7"?"7d":period==="90"?"90d":period==="365"?"1y":period==="all"?"all":"30d";var d=await api("/api/analytics/store?period="+pd);
 if(!d)return;
@@ -304,6 +324,7 @@ var ss=document.getElementById("statStoreSold");
 if(ss)ss.textContent=d.books_sold||0;
 var sv=document.getElementById("statStoreViews");
 if(sv)sv.textContent=d.store_views||0;
+drawStoreChart(document.getElementById("storeViewsChart"),d.store_daily||[]);
 var tb=document.getElementById("storeTopBooks");
 if(tb){
 if(d.top_books&&d.top_books.length){

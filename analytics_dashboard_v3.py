@@ -630,6 +630,7 @@ def register(app):
             "unique_visitors": data.get("store_unique_visitors", 0),
             "top_books": top_books,
             "store_paths": data.get("store_paths") or [],
+            "store_daily": data.get("store_daily") or [],
         })
 
     @app.get("/admin/analytics-audit")
