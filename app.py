@@ -168,6 +168,17 @@ def the_hearth():
             (cutoff,),
         ).fetchall()
         shelf_books = [dict(r) for r in rows]
+        # Dedupe by title: a double-listed book must never occupy two shelf spots.
+        def _norm_title(b):
+            return (b.get("title") or "").strip().lower()
+        seen_titles = set()
+        deduped = []
+        for b in shelf_books:
+            t = _norm_title(b)
+            if t not in seen_titles:
+                seen_titles.add(t)
+                deduped.append(b)
+        shelf_books = deduped
         if len(shelf_books) < 5:
             have_ids = {b["id"] for b in shelf_books}
             extra = conn.execute(
@@ -175,8 +186,10 @@ def the_hearth():
                 "WHERE status = 'active' ORDER BY id DESC LIMIT 20"
             ).fetchall()
             for r in extra:
-                if r["id"] not in have_ids:
-                    shelf_books.append(dict(r))
+                d = dict(r)
+                if d["id"] not in have_ids and _norm_title(d) not in seen_titles:
+                    seen_titles.add(_norm_title(d))
+                    shelf_books.append(d)
                 if len(shelf_books) >= 5:
                     break
         conn.close()
@@ -205,15 +218,40 @@ def go_redirect(source):
     return redirect(f"/?utm_source={src}", code=302)
 
 
+# Static index of the site's main pages so /search works like a
+# site-wide engine: posts, books, and pages in one box.
+_SITE_PAGES = [
+    {"url": "/", "title": "The Hearth", "keywords": "home homepage welcome"},
+    {"url": "/about", "title": "About", "keywords": "about who is k.w. snyder story"},
+    {"url": "/blog", "title": "The Blog", "keywords": "blog posts essays writing"},
+    {"url": "/blog/bookreviews", "title": "Book Reviews", "keywords": "book reviews review"},
+    {"url": "/blog/bookcurations", "title": "Book Curations", "keywords": "curations lists recommendations"},
+    {"url": "/blog/curiosity_cabinet", "title": "Curiosity Cabinet", "keywords": "curiosity cabinet oddities"},
+    {"url": "/store", "title": "The Book Store", "keywords": "store shop books buy antique vintage used new bookstore"},
+    {"url": "/store/cart", "title": "Cart", "keywords": "cart checkout basket"},
+    {"url": "/find-us", "title": "Find Us", "keywords": "find us location events vendor market where"},
+    {"url": "/contact", "title": "Contact", "keywords": "contact email message request a book"},
+    {"url": "/kwsnyderwriting", "title": "K.W. Snyder Writing", "keywords": "writing fiction membership stories novels"},
+]
+
+
 @app.route("/search")
 def site_search():
     q = (request.args.get("q") or "").strip()
     post_results = []
     book_results = []
+    page_results = []
     # Split into words so "book reviews" finds the review category and
     # "A big nap" finds "A Big Nap" — any single word can match.
     words = [w for w in q.split() if len(w) >= 2]
     if words:
+        # --- site pages: match any word in the title or keywords ---
+        for p in _SITE_PAGES:
+            hay = (p["title"] + " " + p["keywords"]).lower()
+            hits = sum(1 for w in words if w.lower() in hay)
+            if hits:
+                page_results.append({"url": p["url"], "title": p["title"], "relevance": hits})
+        page_results.sort(key=lambda p: -p["relevance"])
         conn = get_db()
         # Postgres LIKE is case-sensitive; ILIKE is not. SQLite LIKE is
         # already case-insensitive.
@@ -229,12 +267,16 @@ def site_search():
             sparams.append(pat)
             score.append("(CASE WHEN content {o} ? OR category {o} ? THEN 1 ELSE 0 END)".format(o=op))
             sparams.extend([pat, pat])
-        post_rows = conn.execute(
-            "SELECT id, title, category, date_published, (" + "+".join(score) + ") AS relevance "
-            "FROM published_posts WHERE access_level = 'public' AND (" + " OR ".join(ors) + ") "
-            "ORDER BY relevance DESC, date_published DESC LIMIT 20",
-            sparams + params,
-        ).fetchall()
+        post_rows = []
+        try:
+            post_rows = conn.execute(
+                "SELECT id, title, category, date_published, (" + "+".join(score) + ") AS relevance "
+                "FROM published_posts WHERE access_level = 'public' AND (" + " OR ".join(ors) + ") "
+                "ORDER BY relevance DESC, date_published DESC LIMIT 20",
+                sparams + params,
+            ).fetchall()
+        except Exception:
+            post_rows = []
         post_results = [dict(r) for r in post_rows]
         # --- store books: match any word in title/author/description/publisher ---
         bors, bparams = [], []
@@ -258,7 +300,7 @@ def site_search():
         except Exception:
             book_results = []
         conn.close()
-    return render_template("search.html", q=q, posts=post_results, books=book_results)
+    return render_template("search.html", q=q, posts=post_results, books=book_results, pages=page_results)
 
 @app.route("/about")
 def about():

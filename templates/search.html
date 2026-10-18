@@ -9,8 +9,21 @@
   </form>
 
   {% if q %}
-    {% if not posts and not books %}
+    {% if not posts and not books and not pages %}
       <p class="note">No results for "{{ q|e }}". Try a different search.</p>
+    {% endif %}
+
+    {% if pages %}
+      <h2>Pages ({{ pages|length }})</h2>
+      <div class="list">
+      {% for p in pages %}
+        <div class="card">
+          <div>
+            <h3><a href="{{ p.url }}">{{ p.title|e }}</a></h3>
+          </div>
+        </div>
+      {% endfor %}
+      </div>
     {% endif %}
 
     {% if posts %}
