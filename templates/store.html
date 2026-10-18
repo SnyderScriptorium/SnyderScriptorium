@@ -50,6 +50,9 @@
 .store-page-btn{padding:9px 18px;border:1px solid #5C4033;border-radius:5px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer}
 .store-page-btn:disabled{opacity:.4;cursor:default}
 .store-page-info{color:#6F6257}
+.store-page-num{min-width:40px;padding:9px 10px;border:1px solid #5C4033;border-radius:5px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer}
+.store-page-num.active{background:#5C4033;color:#fff;font-weight:bold}
+.store-page-dots{padding:9px 12px;font-weight:bold;letter-spacing:2px}
 .store-request{margin-top:34px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:24px;box-shadow:0 4px 14px rgba(40,30,20,.05);text-align:center}
 .store-request h2{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0 0 8px;font-size:1.3rem}
 .store-request p{color:#6F6257;margin:0 0 14px}
@@ -289,15 +292,36 @@
     if(total<=1){pages.hidden=true;pages.innerHTML='';return;}
     pages.hidden=false;
     pages.innerHTML='';
+    const go=p=>{page=Math.min(Math.max(1,p),total);apply();gridTop();};
     const prev=document.createElement('button');
     prev.type='button';prev.className='store-page-btn';prev.textContent='← Prev';prev.disabled=page<=1;
-    prev.addEventListener('click',()=>{if(page>1){page--;apply();gridTop();}});
-    const info=document.createElement('span');
-    info.className='store-page-info';info.textContent='Page '+page+' of '+total;
+    prev.addEventListener('click',()=>go(page-1));
+    pages.appendChild(prev);
+    const winStart=Math.floor((page-1)/5)*5+1;
+    const winEnd=Math.min(winStart+4,total);
+    if(winStart>1){
+      const back=document.createElement('button');
+      back.type='button';back.className='store-page-btn store-page-dots';back.textContent='…';back.title='Previous pages';
+      back.addEventListener('click',()=>go(winStart-1));
+      pages.appendChild(back);
+    }
+    for(let p=winStart;p<=winEnd;p++){
+      const b=document.createElement('button');
+      b.type='button';b.className='store-page-num'+(p===page?' active':'');b.textContent=String(p);
+      b.setAttribute('aria-label','Page '+p);
+      b.addEventListener('click',()=>go(p));
+      pages.appendChild(b);
+    }
+    if(winEnd<total){
+      const fwd=document.createElement('button');
+      fwd.type='button';fwd.className='store-page-btn store-page-dots';fwd.textContent='…';fwd.title='More pages';
+      fwd.addEventListener('click',()=>go(winEnd+1));
+      pages.appendChild(fwd);
+    }
     const next=document.createElement('button');
     next.type='button';next.className='store-page-btn';next.textContent='Next →';next.disabled=page>=total;
-    next.addEventListener('click',()=>{if(page<total){page++;apply();gridTop();}});
-    pages.appendChild(prev);pages.appendChild(info);pages.appendChild(next);
+    next.addEventListener('click',()=>go(page+1));
+    pages.appendChild(next);
   }
 
   function apply(){
