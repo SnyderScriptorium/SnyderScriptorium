@@ -9,6 +9,7 @@ PUBLIC_CATEGORIES = {
     'curations': 'Book Curations',
     'reviews': 'Book Reviews',
     'curiosity': 'Curiosity Cabinet',
+    'kwsnyderwriting': 'K. W. Snyder Writing',
 }
 
 # Known crawlers, bots, link-preview clients, and monitoring agents should be
@@ -57,14 +58,14 @@ def _visitor_key():
 def _classify(path):
     """Classify a path via analytics_common, with a lazy store-slug lookup."""
     store_slug_to_id = None
-    if (path or "").startswith("/store/book/"):
+    if (path or '').startswith('/store/book/'):
         try:
             conn = get_db()
-            rows = conn.execute("SELECT slug, id FROM store_products").fetchall()
+            rows = conn.execute('SELECT slug, id FROM store_products').fetchall()
             store_slug_to_id = {}
             for row in rows:
                 try:
-                    slug, pid = row["slug"], row["id"]
+                    slug, pid = row['slug'], row['id']
                 except (TypeError, KeyError):
                     slug, pid = row[0], row[1]
                 store_slug_to_id[slug] = pid
@@ -74,11 +75,23 @@ def _classify(path):
     return classify_path(path, store_slug_to_id)
 
 
+def _is_trackable_page(path):
+    """Return False for storefront assets/actions that are not page views."""
+    path = path or '/'
+    if path.startswith('/store/image/'):
+        return False
+    if path in ('/store/subscribe', '/store/unsubscribe'):
+        return False
+    return True
+
+
 def register(app):
     @app.before_request
     def canonical_analytics_tracker():
         path = request.path
         if path.startswith(('/static/', '/api/', '/admin')):
+            return None
+        if not _is_trackable_page(path):
             return None
 
         # Admins should be able to browse/test the public site without
@@ -124,7 +137,7 @@ def register(app):
 
     @app.after_request
     def canonical_analytics_cookie(response):
-        if not request.path.startswith(('/static/', '/api/', '/admin')) and not request.cookies.get('snyder_visitor_key'):
+        if _is_trackable_page(request.path) and not request.path.startswith(('/static/', '/api/', '/admin')) and not request.cookies.get('snyder_visitor_key'):
             response.set_cookie(
                 'snyder_visitor_key', _visitor_key(), max_age=31536000,
                 httponly=True, samesite='Lax', secure=True

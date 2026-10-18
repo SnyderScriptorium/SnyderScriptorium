@@ -2,7 +2,7 @@
   'use strict';
   let editingId=null;
   let allProducts=[];
-  let productPage=1, productPages=1, productTotal=0;
+  let productPage=1, productPages=1, productTotal=0, allGenres=[], loadSequence=0, searchTimer=null;
   const filters={q:'',genre:'all',letter:'all',status:'all'};
   const esc=v=>{const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML;};
   async function api(url,options={}){
@@ -49,7 +49,7 @@
           <label>Cover Image URL <span class="note">(optional — paste a link instead of uploading)</span></label><input id="storeCover" type="url" placeholder="https://...">
           <div class="two"><div><label>Section</label><select id="storeCategory"><option>Antique</option><option selected>Vintage</option><option>Used</option><option>New</option></select></div><div><label>Genre <span class="note">(used under New — e.g. Mystery)</span></label><input id="storeGenre" type="text" list="storeGenreList" placeholder="e.g. Mystery"><datalist id="storeGenreList"></datalist></div></div>
           <label>Status</label><select id="storeStatus"><option value="draft">Draft</option><option value="active">Active — show on the store</option><option value="archived">Archived</option></select>
-          <div class="actions"><button type="button" id="storeSaveButton" onclick="window.saveStoreProduct()">Add Book</button><button type="button" class="light" onclick="window.clearStoreForm()">Clear</button></div>
+          <div class="actions"><button type="button" id="storeSaveButton">Add Book</button><button type="button" class="light" id="storeClearButton">Clear</button></div>
         </div>
         </div>
       <div id="storeBookPaneList" style="display:none">
@@ -102,7 +102,9 @@
       });
     });
     const searchInput=document.getElementById('storeSearch');
-    searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();productPage=1;renderList();});
+    searchInput.addEventListener('input',()=>{filters.q=searchInput.value.trim().toLowerCase();productPage=1;clearTimeout(searchTimer);searchTimer=setTimeout(()=>load(1),220);});
+    document.getElementById('storeSaveButton').addEventListener('click',save);
+    document.getElementById('storeClearButton').addEventListener('click',clearForm);
     document.getElementById('storeTabBooks').addEventListener('click',()=>setStoreTab('books'));
     document.getElementById('storeTabEmail').addEventListener('click',()=>setStoreTab('email'));
     const bta=document.getElementById('storeBookTabAdd'), btl=document.getElementById('storeBookTabList');
@@ -273,7 +275,7 @@
       statusWrap.innerHTML='';
       [['all','All'],['draft','Drafts'],['active','Published'],['archived','Archived']].forEach(pair=>{
         const b=pillButton(pair[1],filters.status===pair[0]);
-        b.addEventListener('click',()=>{filters.status=pair[0];filters.genre='all';filters.letter='all';filters.q='';const si=document.getElementById('storeSearch');if(si)si.value='';productPage=1;buildFilterControls();load();});
+        b.addEventListener('click',()=>{filters.status=pair[0];filters.genre='all';filters.letter='all';filters.q='';const si=document.getElementById('storeSearch');if(si)si.value='';productPage=1;load(1);});
         statusWrap.appendChild(b);
       });
     }
@@ -281,10 +283,9 @@
     if(genreWrap){
       genreWrap.innerHTML='';
       genreWrap.style.cssText='columns:130px;column-gap:14px;margin-bottom:8px';
-      const genres=[...new Set(allProducts.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-      [['all','All']].concat(genres.map(g=>[g,g])).forEach(pair=>{
+      [['all','All']].concat(allGenres.map(g=>[g,g])).forEach(pair=>{
         const b=linkButton(pair[1],filters.genre===pair[0]);
-        b.addEventListener('click',()=>{filters.genre=pair[0];productPage=1;buildFilterControls();renderList();});
+        b.addEventListener('click',()=>{filters.genre=pair[0];productPage=1;load(1);});
         genreWrap.appendChild(b);
       });
     }
@@ -298,49 +299,41 @@
         const b=document.createElement('button');
         b.type='button'; b.textContent=pair[1];
         b.style.cssText='background:'+(active?'#8a6d3b':'none')+';border:0;border-radius:4px;padding:3px 7px;margin:0;color:'+(active?'#fff':'#5C4033')+';cursor:pointer;font-size:.85rem;text-decoration:'+(active?'none':'underline')+';text-underline-offset:2px';
-        b.addEventListener('click',()=>{filters.letter=pair[0];productPage=1;buildFilterControls();renderList();});
+        b.addEventListener('click',()=>{filters.letter=pair[0];productPage=1;load(1);});
         letterWrap.appendChild(b);
       });
     }
   }
   function renderList(){
     const list=document.getElementById('storeProductList'); if(!list)return;
-    const q=filters.q;
-    const items=allProducts.filter(p=>{
-      if(filters.status!=='all'&&(p.status||'draft')!==filters.status)return false;
-      if(filters.genre!=='all'&&(p.genre||'').trim()!==filters.genre)return false;
-      if(filters.letter!=='all'&&(p.title||'').trim().toUpperCase().charAt(0)!==filters.letter)return false;
-      if(q){
-        const hay=((p.title||'')+' '+(p.author||'')+' '+(p.isbn||'')).toLowerCase();
-        if(hay.indexOf(q)<0)return false;
-      }
-      return true;
-    });
+    const items=allProducts;
     const count=document.getElementById('storeFilterCount');
-    if(count)count.textContent=productTotal?(items.length+' of '+productTotal+' books'):'';
-    const perPage=15;
-    const pages=Math.max(1,Math.ceil(items.length/perPage));
-    if(productPage>pages)productPage=pages;
-    if(productPage<1)productPage=1;
-    const pageItems=items.slice((productPage-1)*perPage,productPage*perPage);
-    list.innerHTML=items.length?'':'<p class="note">'+(allProducts.length?'No books match these filters.':'No books have been added to the store yet. Add your first finished book on the left.')+'</p>';
-    pageItems.forEach(p=>{
+    if(count)count.textContent=productTotal+' matching book'+(productTotal===1?'':'s')+' · Page '+productPage+' of '+productPages;
+    list.innerHTML=productTotal?'':'<p class="note">'+(filters.q||filters.genre!=='all'||filters.letter!=='all'||filters.status!=='all'?'No books match these filters.':'No books have been added to the store yet. Add your first finished book on the left.')+'</p>';
+    items.forEach(p=>{
       const card=document.createElement('div'); card.className='card';
       const status=p.status||'draft';
-      card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)} · 👁 ${esc(p.view_count??0)} views / ${esc(p.unique_visitors??0)} visitors</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct(${p.id})">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct(${p.id})">Delete</button></div>`;
+      card.innerHTML=`<div style="flex:1"><h3>${esc(p.title)}</h3><small>${esc(p.author||'')} · ${esc(p.format||'')} · $${esc(p.price||'0.00')} · <strong>${esc(status)}</strong> · Section: ${esc(p.section||p.category||'—')}${p.genre?(' · Genre: '+esc(p.genre)):''}</small><p>${esc((p.description||'').slice(0,180))}${(p.description||'').length>180?'…':''}</p><small>ISBN: ${esc(p.isbn||'—')} · Stock: ${esc(p.stock_quantity??0)} · 👁 ${esc(p.view_count??0)} views / ${esc(p.unique_visitors??0)} visitors</small></div><div class="small-actions"><button type="button" onclick="window.editStoreProduct(${p.id})">Edit</button><button type="button" class="gold" onclick="window.viewStoreProduct('${esc(p.slug)}')">View</button>${status!=='archived'?'<button type="button" class="danger" onclick="window.archiveStoreProduct('+p.id+')">Archive</button>':''}<button type="button" class="danger" onclick="window.deleteStoreProduct(${p.id})">Delete</button></div>`;
       list.appendChild(card);
     });
-    if(pages>1){
+    if(productPages>1){
       const nav=document.createElement('div');
       nav.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;align-items:center';
-      for(let i=1;i<=pages;i++){
-        const b=pillButton(String(i),productPage===i);
-        b.addEventListener('click',()=>{productPage=i;renderList();window.scrollTo({top:0,behavior:'smooth'});});
+      const addPageButton=(label,page,disabled,active)=>{
+        const b=pillButton(label,active);
+        b.disabled=!!disabled;
+        if(disabled)b.style.opacity='.45';
+        b.addEventListener('click',()=>{if(!disabled){productPage=page;load(page);window.scrollTo({top:0,behavior:'smooth'});}});
         nav.appendChild(b);
-      }
+      };
+      addPageButton('‹ Previous',Math.max(1,productPage-1),productPage===1,false);
+      const start=Math.max(1,Math.min(productPage-2,productPages-4));
+      const end=Math.min(productPages,Math.max(5,productPage+2));
+      for(let i=start;i<=end;i++)addPageButton(String(i),i,false,productPage===i);
+      addPageButton('Next ›',Math.min(productPages,productPage+1),productPage===productPages,false);
       const info=document.createElement('span');
       info.className='note';
-      info.textContent=productTotal+' books total';
+      info.textContent=productTotal+' matching books';
       info.style.marginLeft='8px';
       nav.appendChild(info);
       list.appendChild(nav);
@@ -350,21 +343,34 @@
     if(page)productPage=page;
     mount();
     const list=document.getElementById('storeProductList'); if(!list)return;
+    const requestId=++loadSequence;
     list.innerHTML='<p class="note">Loading books...</p>';
     try{
-      const statusParam=filters.status!=='all'?'&status='+encodeURIComponent(filters.status):'';
-      const res=await api('/api/store/admin/products?per_page=50'+statusParam);
+      const params=new URLSearchParams({page:String(productPage),per_page:'15',status:filters.status});
+      if(filters.q)params.set('q',filters.q);
+      if(filters.genre!=='all')params.set('genre',filters.genre);
+      if(filters.letter!=='all')params.set('letter',filters.letter);
+      const res=await api('/api/store/admin/products?'+params.toString());
+      if(requestId!==loadSequence)return;
       allProducts=res.products||res;
-      productPages=res.pages||1;
-      productTotal=res.total||allProducts.length;
+      productPage=Number(res.page)||1;
+      productPages=Math.max(1,Number(res.pages)||1);
+      productTotal=Number(res.total)||0;
+      allGenres=Array.isArray(res.genres)?res.genres:[...new Set(allProducts.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
       const dl=document.getElementById('storeGenreList');
-      if(dl){
-        const genres=[...new Set(allProducts.map(p=>(p.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-        dl.innerHTML=genres.map(g=>`<option value="${esc(g)}">`).join('');
-      }
+      if(dl)dl.innerHTML=allGenres.map(g=>`<option value="${esc(g)}">`).join('');
       buildFilterControls();
       renderList();
-    }catch(e){list.innerHTML=`<p class="note">${esc(e.message)}</p>`;}
+      if(allProducts.length){
+        const ids=allProducts.map(p=>p.id).filter(Boolean).join(',');
+        api('/api/store/admin/product-stats?ids='+encodeURIComponent(ids)).then(statsRes=>{
+          if(requestId!==loadSequence)return;
+          const stats=statsRes.stats||{};
+          allProducts=allProducts.map(p=>{const s=stats[String(p.id)]||{};return {...p,view_count:s.views||0,unique_visitors:s.uniques||0};});
+          renderList();
+        }).catch(()=>{});
+      }
+    }catch(e){if(requestId===loadSequence)list.innerHTML=`<p class="note">${esc(e.message)}</p>`;}
   }
   async function fileToUpload(file){
     // Shrink phone photos so they clear the 5 MB server limit.
@@ -383,41 +389,43 @@
     return new File([blob],String(file.name||'photo').replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
   }
   async function save(){
-    const titleEl=document.getElementById('storeTitle');
-    const priceEl=document.getElementById('storePrice');
-    if(!titleEl||!priceEl){return window.showStatus&&window.showStatus('Form not loaded properly — refresh the page and try again.',true);}
-    const title=titleEl.value.trim();
-    if(!title){return window.showStatus&&window.showStatus('Give the book a title first.',true);}
-    const priceVal=priceEl.value.replace(/[$,\s]/g,'').trim();
-    if(!priceVal){return window.showStatus&&window.showStatus('Put a price in the Price field first.',true);}
-    if(isNaN(parseFloat(priceVal))||parseFloat(priceVal)<0){return window.showStatus&&window.showStatus('Price must be a number, like 9.25.',true);}
-    const fd=new FormData();
-    fd.append('title',title);
-    fd.append('price',priceVal);
-    fd.append('author',document.getElementById('storeAuthor').value.trim());
-    fd.append('description',document.getElementById('storeDescription').value.trim());
-    fd.append('format',document.getElementById('storeFormat').value);
-    fd.append('isbn',document.getElementById('storeIsbn').value.trim());
-    fd.append('stock_quantity',document.getElementById('storeStock').value);
-    const url=document.getElementById('storeCover').value.trim();
-    if(url)fd.append('cover_image_url',url);
-    fd.append('category',document.getElementById('storeCategory').value.trim()||'Vintage');
-    fd.append('genre',document.getElementById('storeGenre').value.trim());
-    fd.append('status',document.getElementById('storeStatus').value);
-    const f=document.getElementById('storePhoto').files[0];
-    if(f)fd.append('photo',await fileToUpload(f));
-    const extras=[...document.getElementById('storePhotos').files];
-    for(const g of extras){fd.append('photos',await fileToUpload(g));}
+    const button=document.getElementById('storeSaveButton');
+    if(button&&button.disabled)return;
+    if(button){button.disabled=true;button.textContent='Saving…';}
     try{
-      const r=await fetch(editingId?`/api/store/admin/products/${editingId}`:'/api/store/admin/products',{method:editingId?'PUT':'POST',credentials:'same-origin',body:fd});
+      const titleEl=document.getElementById('storeTitle'),priceEl=document.getElementById('storePrice');
+      if(!titleEl||!priceEl)throw new Error('Form not loaded properly — refresh the page and try again.');
+      const title=titleEl.value.trim(); if(!title)throw new Error('Give the book a title first.');
+      const priceVal=priceEl.value.replace(/[$,\\s]/g,'').trim();
+      if(!priceVal)throw new Error('Put a price in the Price field first.');
+      if(!Number.isFinite(Number(priceVal))||Number(priceVal)<0)throw new Error('Price must be a number, like 9.25.');
+      const fd=new FormData();
+      fd.append('title',title);fd.append('price',priceVal);
+      fd.append('author',document.getElementById('storeAuthor').value.trim());
+      fd.append('description',document.getElementById('storeDescription').value.trim());
+      fd.append('format',document.getElementById('storeFormat').value);
+      fd.append('isbn',document.getElementById('storeIsbn').value.trim());
+      fd.append('stock_quantity',document.getElementById('storeStock').value);
+      const url=document.getElementById('storeCover').value.trim();if(url)fd.append('cover_image_url',url);
+      fd.append('category',document.getElementById('storeCategory').value.trim()||'Vintage');
+      fd.append('genre',document.getElementById('storeGenre').value.trim());
+      fd.append('status',document.getElementById('storeStatus').value);
+      const f=document.getElementById('storePhoto').files[0];if(f)fd.append('photo',await fileToUpload(f));
+      for(const g of [...document.getElementById('storePhotos').files])fd.append('photos',await fileToUpload(g));
+      const wasEditing=!!editingId;
+      const r=await fetch(wasEditing?'/api/store/admin/products/'+editingId:'/api/store/admin/products',{method:wasEditing?'PUT':'POST',credentials:'same-origin',body:fd});
       const ct=r.headers.get('content-type')||'';
-      if(!ct.includes('application/json'))
-        throw new Error('Your admin login expired — refresh the page and log in again, then retry.');
+      if(!ct.includes('application/json'))throw new Error('Your admin login may have expired — refresh the page and log in again, then retry.');
       const data=await r.json();
-      if(!r.ok||data.success===false)throw new Error(data.error||`Could not save the book (${r.status}).`);
-      clearForm(); await load();
-      if(window.showStatus)window.showStatus(data.photo_warning?('Book saved, but the photo was not: '+data.photo_warning):(editingId?'Book updated.':'Book added to The Scriptorium Store.'));
-    }catch(e){if(window.showStatus)window.showStatus(e.message,true);}
+      if(!r.ok||data.success===false)throw new Error(data.error||'Could not save the book ('+r.status+').');
+      clearForm();await load();
+      if(window.showStatus)window.showStatus(data.photo_warning?'Book saved, but the photo was not: '+data.photo_warning:(wasEditing?'Book updated.':'Book added to The Scriptorium Store.'));
+    }catch(e){
+      const message=e&&e.message?e.message:'The book could not be saved. Please try again.';
+      if(window.showStatus)window.showStatus(message,true);else alert(message);
+    }finally{
+      if(button){button.disabled=false;button.textContent=editingId?'Save Changes':'Add Book';}
+    }
   }
   async function edit(id){try{fill(await api(`/api/store/admin/products/${id}`));}catch(e){window.showStatus&&window.showStatus(e.message,true);}}
   async function archive(id){if(!confirm('Archive this book? It will no longer appear on the public store.'))return;try{await api(`/api/store/admin/products/${id}`,{method:'DELETE'});await load();window.showStatus&&window.showStatus('Book archived.');}catch(e){window.showStatus&&window.showStatus(e.message,true);}}

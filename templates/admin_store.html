@@ -52,7 +52,7 @@
 </div></div></div>
 <script>
 const $=id=>document.getElementById(id);
-function showStatus(message,error=false){const s=$('status');s.textContent=message;s.className='status'+(error?' error':'');s.style.display='block';setTimeout(()=>s.style.display='none',6000)}
+let statusMessageTimer=null;function showStatus(message,error=false){const s=$('status');if(!s)return;if(statusMessageTimer){clearTimeout(statusMessageTimer);statusMessageTimer=null;}s.textContent=message;s.className='status'+(error?' error':'');s.style.display='block';s.title=error?'Click to dismiss':'';s.onclick=error?()=>{s.style.display='none';}:null;if(!error){statusMessageTimer=setTimeout(()=>{s.style.display='none';statusMessageTimer=null;},7000);}}
 function money(v){return Number(v||0).toFixed(2)}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function resetForm(){$('productId').value='';$('formHeading').textContent='Add a Book';['title','author','publisher','publication_year','edition','condition_notes','description','notes','genre'].forEach(id=>$(id).value='');$('category').value='Antique';$('price').value='';$('format').value='Hardcover';$('stock_quantity').value='1';$('statusField').value='draft';$('photo').value='';$('photos').value='';$('photoPreview').style.display='none';$('photoPreview').src='';}
