@@ -151,47 +151,30 @@ def route_kw_domain():
 
 @app.route("/")
 def the_hearth():
-    # Featured shelf: the 5 most-viewed active books over the last 30 days.
-    # Backfilled with the newest arrivals if fewer than 5 have views yet.
+    # Featured shelf: top 5 by researched current market demand (Oct 2026).
+    # Picks: King (It: Welcome to Derry + new book wave), Sandford (new Prey
+    # novel + Rules of Prey TV series), Hillerman (Dark Winds on Netflix),
+    # Connelly (new Bosch novel + Ballard S2), McManus (fresh paperback +
+    # BookTok buzz). Re-research periodically as demand shifts.
     shelf_books = []
     try:
         conn = get_db()
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        featured_slugs = [
+            'you-like-it-darker',
+            'the-devil-s-code',
+            'a-thief-of-time',
+            'city-of-bones',
+            'you-ll-be-the-death-of-me',
+        ]
+        placeholders = ','.join('?' for _ in featured_slugs)
         rows = conn.execute(
-            "SELECT sp.id, sp.title, sp.slug, sp.author, sp.price_cents, sp.cover_image_url, "
-            "COUNT(*) AS views "
-            "FROM page_views pv "
-            "JOIN store_products sp ON (sp.id = pv.content_id OR ('/store/book/' || sp.slug) = pv.path) "
-            "WHERE pv.path LIKE '/store/book/%' AND pv.viewed_at >= ? AND sp.status = 'active' "
-            "GROUP BY sp.id, sp.title, sp.slug, sp.author, sp.price_cents, sp.cover_image_url "
-            "ORDER BY views DESC LIMIT 5",
-            (cutoff,),
+            f"SELECT id, title, slug, author, price_cents, cover_image_url FROM store_products "
+            f"WHERE status = 'active' AND slug IN ({placeholders})",
+            featured_slugs
         ).fetchall()
-        shelf_books = [dict(r) for r in rows]
-        # Dedupe by title: a double-listed book must never occupy two shelf spots.
-        def _norm_title(b):
-            return (b.get("title") or "").strip().lower()
-        seen_titles = set()
-        deduped = []
-        for b in shelf_books:
-            t = _norm_title(b)
-            if t not in seen_titles:
-                seen_titles.add(t)
-                deduped.append(b)
-        shelf_books = deduped
-        if len(shelf_books) < 5:
-            have_ids = {b["id"] for b in shelf_books}
-            extra = conn.execute(
-                "SELECT id, title, slug, author, price_cents, cover_image_url FROM store_products "
-                "WHERE status = 'active' ORDER BY id DESC LIMIT 20"
-            ).fetchall()
-            for r in extra:
-                d = dict(r)
-                if d["id"] not in have_ids and _norm_title(d) not in seen_titles:
-                    seen_titles.add(_norm_title(d))
-                    shelf_books.append(d)
-                if len(shelf_books) >= 5:
-                    break
+        # Preserve the featured order
+        by_slug = {r['slug']: dict(r) for r in rows}
+        shelf_books = [by_slug[sl] for sl in featured_slugs if sl in by_slug]
         conn.close()
     except Exception:
         shelf_books = []
