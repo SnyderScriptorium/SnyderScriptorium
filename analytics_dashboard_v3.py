@@ -561,6 +561,25 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             } for r in store_book_rows]
         except Exception:
             store_books = []
+        # Raw store path breakdown (transparency: shows exactly which store
+        # pages the views came from, e.g. /store vs /store/book/*)
+        try:
+            _path_where = " WHERE pv.viewed_at >= ?" if start else ""
+            _path_and = " AND" if _path_where else " WHERE"
+            store_path_rows = conn.execute(
+                f"""SELECT pv.path AS path, COUNT(*) AS views,
+                    COUNT(DISTINCT pv.visitor_key) AS uniques
+                    FROM page_views pv
+                    {_path_where}{_path_and} (pv.path = '/store' OR pv.path LIKE '/store/%')
+                    GROUP BY pv.path ORDER BY views DESC LIMIT 15""",
+                _store_params).fetchall()
+            store_paths = [{
+                "path": rowval(r, 0, "path") or "(unknown)",
+                "views": int(rowval(r, 1, "views") or 0),
+                "unique_visitors": int(rowval(r, 2, "uniques") or 0),
+            } for r in store_path_rows]
+        except Exception:
+            store_paths = []
 
         return {
             "period": period, "total_views": total, "total_views_today": total if period == "day" else None,
@@ -580,6 +599,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             "store_views": store_views, "store_unique_visitors": store_uniques,
             "store_books_posted": books_posted, "store_books_sold": books_sold,
             "store_daily": store_daily, "store_books": store_books,
+            "store_paths": store_paths,
         }
     finally:
         conn.close()
@@ -609,6 +629,7 @@ def register(app):
             "store_views": data.get("store_views", 0),
             "unique_visitors": data.get("store_unique_visitors", 0),
             "top_books": top_books,
+            "store_paths": data.get("store_paths") or [],
         })
 
     @app.get("/admin/analytics-audit")

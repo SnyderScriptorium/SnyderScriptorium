@@ -314,7 +314,15 @@ html+='<div class="card"><div><strong>'+esc(b.title)+'</strong><br><small>'+esc(
 }
 tb.innerHTML=html;
 }else{
-tb.innerHTML="<p class='note'>No book page views in this period yet. Note: your own visits don't count while you're logged in as admin.</p>";
+var ph="<p class='note'>No book page views in this period yet. Note: your own visits don't count while you're logged in as admin.</p>";
+if(d.store_paths&&d.store_paths.length){
+ph+="<p class='note' style='margin-top:10px'>Where the store views went:</p>";
+for(var j=0;j<d.store_paths.length;j++){
+var sp=d.store_paths[j];
+ph+='<div class="card"><div><small>'+esc(sp.path)+'</small></div><strong>'+sp.views+'</strong></div>';
+}
+}
+tb.innerHTML=ph;
 }
 }
 }catch(e){}
