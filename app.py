@@ -1,11 +1,11 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, g, Response, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import get_db as database_get_db, init_db as database_init_db, IntegrityError
+from database import get_db as database_get_db, init_db as database_init_db, IntegrityError, using_postgres
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -151,19 +151,34 @@ def route_kw_domain():
 
 @app.route("/")
 def the_hearth():
+    # Featured shelf: the 5 most-viewed active books over the last 30 days.
+    # Backfilled with the newest arrivals if fewer than 5 have views yet.
     shelf_books = []
     try:
         conn = get_db()
-        featured_slugs = ['city-of-bones', 'the-devil-s-code', 'cover-her-face', 'a-thief-of-time']
-        placeholders = ','.join('?' for _ in featured_slugs)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
         rows = conn.execute(
-            f"SELECT id, title, slug, author, price_cents, cover_image_url FROM store_products "
-            f"WHERE status = 'active' AND slug IN ({placeholders})",
-            featured_slugs
+            "SELECT sp.id, sp.title, sp.slug, sp.author, sp.price_cents, sp.cover_image_url, "
+            "COUNT(*) AS views "
+            "FROM page_views pv "
+            "JOIN store_products sp ON (sp.id = pv.content_id OR ('/store/book/' || sp.slug) = pv.path) "
+            "WHERE pv.path LIKE '/store/book/%' AND pv.viewed_at >= ? AND sp.status = 'active' "
+            "GROUP BY sp.id, sp.title, sp.slug, sp.author, sp.price_cents, sp.cover_image_url "
+            "ORDER BY views DESC LIMIT 5",
+            (cutoff,),
         ).fetchall()
-        # Preserve the featured order
-        by_slug = {r['slug']: dict(r) for r in rows}
-        shelf_books = [by_slug[sl] for sl in featured_slugs if sl in by_slug]
+        shelf_books = [dict(r) for r in rows]
+        if len(shelf_books) < 5:
+            have_ids = {b["id"] for b in shelf_books}
+            extra = conn.execute(
+                "SELECT id, title, slug, author, price_cents, cover_image_url FROM store_products "
+                "WHERE status = 'active' ORDER BY id DESC LIMIT 20"
+            ).fetchall()
+            for r in extra:
+                if r["id"] not in have_ids:
+                    shelf_books.append(dict(r))
+                if len(shelf_books) >= 5:
+                    break
         conn.close()
     except Exception:
         shelf_books = []
@@ -195,23 +210,50 @@ def site_search():
     q = (request.args.get("q") or "").strip()
     post_results = []
     book_results = []
-    if q and len(q) >= 2:
-        like = "%" + q + "%"
+    # Split into words so "book reviews" finds the review category and
+    # "A big nap" finds "A Big Nap" — any single word can match.
+    words = [w for w in q.split() if len(w) >= 2]
+    if words:
         conn = get_db()
-        # Public blog posts only — never member-only, drafts, or unpublished
+        # Postgres LIKE is case-sensitive; ILIKE is not. SQLite LIKE is
+        # already case-insensitive.
+        op = "ILIKE" if using_postgres() else "LIKE"
+        # --- blog posts: match any word in title/content/category; title hits rank first ---
+        ors, params = [], []
+        score, sparams = [], []
+        for w in words:
+            pat = "%" + w + "%"
+            ors.append("(title {o} ? OR content {o} ? OR category {o} ?)".format(o=op))
+            params.extend([pat, pat, pat])
+            score.append("(CASE WHEN title {o} ? THEN 2 ELSE 0 END)".format(o=op))
+            sparams.append(pat)
+            score.append("(CASE WHEN content {o} ? OR category {o} ? THEN 1 ELSE 0 END)".format(o=op))
+            sparams.extend([pat, pat])
         post_rows = conn.execute(
-            "SELECT id, title, category, date_published FROM published_posts "
-            "WHERE access_level = 'public' AND (title LIKE ? OR content LIKE ?) "
-            "ORDER BY date_published DESC LIMIT 20",
-            (like, like)).fetchall()
+            "SELECT id, title, category, date_published, (" + "+".join(score) + ") AS relevance "
+            "FROM published_posts WHERE access_level = 'public' AND (" + " OR ".join(ors) + ") "
+            "ORDER BY relevance DESC, date_published DESC LIMIT 20",
+            sparams + params,
+        ).fetchall()
         post_results = [dict(r) for r in post_rows]
-        # Active store books only
+        # --- store books: match any word in title/author/description/publisher ---
+        bors, bparams = [], []
+        bscore, bsparams = [], []
+        for w in words:
+            pat = "%" + w + "%"
+            bors.append("(title {o} ? OR author {o} ? OR description {o} ? OR publisher {o} ?)".format(o=op))
+            bparams.extend([pat, pat, pat, pat])
+            bscore.append("(CASE WHEN title {o} ? THEN 2 ELSE 0 END)".format(o=op))
+            bsparams.append(pat)
+            bscore.append("(CASE WHEN author {o} ? OR description {o} ? OR publisher {o} ? THEN 1 ELSE 0 END)".format(o=op))
+            bsparams.extend([pat, pat, pat])
         try:
             book_rows = conn.execute(
-                "SELECT id, title, slug, author, price_cents FROM store_products "
-                "WHERE status = 'active' AND (title LIKE ? OR author LIKE ? OR description LIKE ?) "
-                "ORDER BY title LIMIT 20",
-                (like, like, like)).fetchall()
+                "SELECT id, title, slug, author, price_cents, (" + "+".join(bscore) + ") AS relevance "
+                "FROM store_products WHERE status = 'active' AND (" + " OR ".join(bors) + ") "
+                "ORDER BY relevance DESC, title LIMIT 20",
+                bsparams + bparams,
+            ).fetchall()
             book_results = [dict(r) for r in book_rows]
         except Exception:
             book_results = []
