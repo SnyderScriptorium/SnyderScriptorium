@@ -343,6 +343,35 @@ def view_post(post_id):
     return render_template("post.html", post=post, back_url=url_for("the_blog"))
 
 
+@app.route("/sitemap-blog.xml")
+def sitemap_blog():
+    """Search-engine sitemap for the blog: section pages plus every public post.
+    Lives here (not in store.py) so the store restore workflow can't wipe it.
+    Submit this URL in Search Console alongside /sitemap.xml."""
+    def esc(s):
+        return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace('"', "&quot;"))
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id FROM published_posts WHERE access_level = 'public' ORDER BY id"
+    ).fetchall()
+    conn.close()
+    urls = [url_for("the_blog", _external=True),
+            url_for("book_curations", _external=True),
+            url_for("bookreviews", _external=True),
+            url_for("curiosity_cabinet", _external=True)]
+    for row in rows:
+        urls.append(url_for("view_post", post_id=row["id"], _external=True))
+    seen = set()
+    unique = [u for u in urls if not (u in seen or seen.add(u))]
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u in unique:
+        lines.append("  <url><loc>%s</loc></url>" % esc(u))
+    lines.append("</urlset>")
+    return Response("\n".join(lines), mimetype="application/xml")
+
+
 @app.route("/kwsnyderwriting/membership")
 def kwsnyderwriting_membership():
     # Public page: visitors can browse what the membership is before signing up.
