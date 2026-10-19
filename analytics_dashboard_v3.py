@@ -528,15 +528,21 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                     books_sold += int(rowval(row, 1, "quantity") or 0)
         except Exception:
             books_sold = 0
-        # Store views over time (for line graph). DATE() works on both
-        # Postgres and SQLite; substr() on a timestamptz throws on Postgres.
+        # Store views over time (for line graph). Bucketed in Python by Eastern
+        # date: the Postgres session runs in UTC, so SQL DATE() would put
+        # evening views on the next day.
         try:
-            _chart_rows = conn.execute(
-                f"""SELECT DATE(pv.viewed_at) AS day, COUNT(*) AS n
-                    FROM page_views pv{_store_where}{_store_filter}
-                    GROUP BY day ORDER BY day""",
+            _ts_rows = conn.execute(
+                f"""SELECT pv.viewed_at AS ts
+                    FROM page_views pv{_store_where}{_store_filter}""",
                 _store_params).fetchall()
-            store_daily = [{"date": str(rowval(r, 0, "day")), "views": int(rowval(r, 1, "n") or 0)} for r in _chart_rows]
+            from collections import Counter
+            _day_counts = Counter()
+            for _r in _ts_rows:
+                _dt = _parse_view_time(rowval(_r, 0, "ts"))
+                if _dt is not None:
+                    _day_counts[_dt.astimezone(EASTERN).date().isoformat()] += 1
+            store_daily = [{"date": _d, "views": _day_counts[_d]} for _d in sorted(_day_counts)]
         except Exception:
             store_daily = []
         # Per-book views (path-based, consistent with store_views filter).
@@ -652,13 +658,27 @@ def register(app):
             single_hit = int(rowval(br, 0) or 0)
             multi_hit = int(rowval(br, 1) or 0)
             fp_keys = one("SELECT COUNT(DISTINCT visitor_key) FROM page_views WHERE visitor_key LIKE 'fp-%'")
-            daily = conn.execute(
-                "SELECT DATE(viewed_at) AS d, COUNT(DISTINCT visitor_key) AS v, COUNT(*) AS hits "
-                "FROM page_views GROUP BY d ORDER BY d DESC LIMIT 14"
+            # Daily buckets computed in Python by Eastern date: the Postgres
+            # session runs in UTC, so SQL DATE() would shift evening views.
+            _all_ts = conn.execute(
+                "SELECT viewed_at, visitor_key FROM page_views WHERE viewed_at >= ?",
+                [(datetime.now(EASTERN) - timedelta(days=15)).isoformat()],
             ).fetchall()
+            from collections import Counter, defaultdict
+            _d_views = Counter()
+            _d_visitors = defaultdict(set)
+            for _r in _all_ts:
+                _dt = _parse_view_time(rowval(_r, 0, "viewed_at"))
+                if _dt is None:
+                    continue
+                _dk = _dt.astimezone(EASTERN).date().isoformat()
+                _d_views[_dk] += 1
+                _vk = rowval(_r, 1, "visitor_key")
+                if _vk:
+                    _d_visitors[_dk].add(_vk)
             daily_rows = [
-                {"day": str(rowval(r, 0, "d")), "visitors": int(rowval(r, 1, "v") or 0), "views": int(rowval(r, 2, "hits") or 0)}
-                for r in daily
+                {"day": _dk, "visitors": len(_d_visitors[_dk]), "views": _d_views[_dk]}
+                for _dk in sorted(_d_views, reverse=True)[:14]
             ]
         finally:
             try:
