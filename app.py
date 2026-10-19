@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import get_db as database_get_db, init_db as database_init_db, IntegrityError, using_postgres
+from analytics_common import is_spam_referrer
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -136,6 +137,16 @@ def kw_site_url(path="/"):
 @app.context_processor
 def domain_urls():
     return {"main_site_url": main_site_url, "kw_site_url": kw_site_url, "is_kw_domain": is_kw_domain}
+
+
+@app.before_request
+def block_referrer_spam():
+    # Referrer-spam bots forge their domain into the Referer header so it
+    # shows up in traffic reports. No real visitor ever sends one of these,
+    # so bounce them before they touch anything (approved by K_W. 2026-10-19).
+    if is_spam_referrer(request.referrer or ""):
+        return ("", 403)
+    return None
 
 
 @app.before_request

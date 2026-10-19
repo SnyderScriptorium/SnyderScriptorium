@@ -425,6 +425,8 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
         import urllib.parse as _up
         for row in source_rows:
             name = source_label(rowval(row, 0, "source"), rowval(row, 1, "referrer"))
+            if name == "Spam":
+                continue  # referrer spam: stripped from the sources display
             raw_ref = str(rowval(row, 1, "referrer") or "").strip()
             # Extract clean domain for display (e.g. "https://m.facebook.com/x" -> "m.facebook.com")
             domain = ""

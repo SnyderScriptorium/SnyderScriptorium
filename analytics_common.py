@@ -59,6 +59,41 @@ _UTM_LABELS = {
 }
 
 
+# Referrer-spam domains: bots hit the site with a forged Referer header hoping
+# their domain shows up in traffic-source reports. No real visitor ever
+# carries one of these referrers, so they are safe to filter and block.
+_SPAM_PATTERNS = (
+    # Seen in Scriptorium traffic reports (Oct 2026)
+    "zainzuri",
+    "popcash",
+    "asdfix",
+    # Classic referrer-spam families
+    "darodar",
+    "buttons-for-website",
+    "semalt",
+    "ilovevitaly",
+    "econom.co",
+    "priceg.com",
+    "7makemoneyonline",
+    "blackhatworth",
+    "hulfingtonpost",
+    "o-o-6-o-o",
+    "get-free-traffic",
+    "guardlink",
+    "best-seo-solution",
+    "googlsucks",
+    "webmonetizer",
+    "videos-for-your-business",
+    "success-seo",
+)
+
+
+def is_spam_referrer(referrer):
+    """True when the referrer matches a known referrer-spam domain."""
+    r = (referrer or "").lower()
+    return bool(r) and any(p in r for p in _SPAM_PATTERNS)
+
+
 def utm_source_label(utm_source):
     """Map a utm_source query param to a human-readable traffic source."""
     u = (utm_source or "").strip().lower()
@@ -79,6 +114,8 @@ def traffic_source_label(referrer, utm_source=None):
     utm = utm_source_label(utm_source)
     if utm:
         return utm
+    if is_spam_referrer(referrer):
+        return "Spam"
     r = (referrer or "").lower()
     if not r:
         return "Direct"

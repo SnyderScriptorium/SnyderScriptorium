@@ -2,7 +2,7 @@ import hashlib
 import re
 import uuid
 from flask import request, session, g
-from analytics_common import classify_path, traffic_source_label
+from analytics_common import classify_path, traffic_source_label, is_spam_referrer
 from database import get_db
 
 PUBLIC_CATEGORIES = {
@@ -117,6 +117,9 @@ def register(app):
 
         visitor_key = _visitor_key()
         referrer = request.referrer or ''
+        # Referrer-spam bots: never record the view at all.
+        if is_spam_referrer(referrer):
+            return None
         utm_source = (request.args.get('utm_source') or '').strip()[:64]
         conn = None
         try:
