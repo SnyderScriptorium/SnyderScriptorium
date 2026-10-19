@@ -606,14 +606,32 @@ def store_book(slug):
 
 @store_bp.route("/sitemap.xml")
 def sitemap():
-    """Search-engine sitemap: static pages plus every active book for sale."""
+    """Search-engine sitemap: static pages, blog content, plus every active book for sale."""
     conn = get_db()
     rows = active_products(conn)
-    conn.close()
     urls = []
     for endpoint in ("the_hearth", "about", "contact"):
         urls.append(url_for(endpoint, _external=True))
     urls.append(url_for("store.store_home", _external=True))
+    # Blog section pages (public content Google should discover)
+    for endpoint in ("the_blog", "bookreviews", "book_curations", "curiosity_cabinet"):
+        try:
+            urls.append(url_for(endpoint, _external=True))
+        except Exception:
+            pass
+    # Every public blog post
+    try:
+        for prow in conn.execute(
+            "SELECT id FROM published_posts WHERE access_level = 'public'"
+        ).fetchall():
+            pid = prow["id"] if isinstance(prow, dict) else prow[0]
+            try:
+                urls.append(url_for("view_post", post_id=pid, _external=True))
+            except Exception:
+                pass
+    except Exception:
+        pass
+    conn.close()
     for row in rows:
         item = public_dict(row)
         if item.get("slug"):

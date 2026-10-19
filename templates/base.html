@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}The Snyder Scriptorium{% endblock %}</title>
     <meta name="description" content="{% block meta_description %}Snyder Scriptorium — an antique, vintage, and new bookstore, and the writing of K.W. Snyder.{% endblock %}">
+    <link rel="canonical" href="{% block canonical %}https://www.snyderscriptorium.com{{ request.path }}{% endblock %}">
+    <meta property="og:site_name" content="Snyder Scriptorium">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{{ self.meta_description() }}{% endblock %}">
+    <meta property="og:url" content="https://www.snyderscriptorium.com{{ request.path }}">
+    {% block og_image %}{% endblock %}
 
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=20260814-3">
@@ -81,7 +88,7 @@
 
 <header class="site-header">
     <div class="site-title">
-        <h1>The Snyder Scriptorium</h1>
+        <p class="site-name">The Snyder Scriptorium</p>
     </div>
 
     <nav class="site-navigation" aria-label="Main navigation">

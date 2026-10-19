@@ -28,7 +28,8 @@ body {
 }
 
 .site-title { grid-column: 2; grid-row: 1; }
-.site-title h1 {
+.site-title h1,
+.site-title .site-name {
     margin: 0;
     color: #24333B;
     font-family: "Cormorant Garamond", "Times New Roman", Times, Georgia, serif;
