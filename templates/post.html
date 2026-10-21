@@ -1,6 +1,13 @@
 {% extends "base.html" %}
-{% block title %}{{ post['title'] }} — Snyder Scriptorium{% endblock %}
-{% block meta_description %}{{ post['content']|striptags|truncate(160)|trim }}{% endblock %}
+{% block title %}{% if post['id'] == 57 %}What Is the Most Expensive Book Ever Sold? ($38.1 Million Record){% else %}{{ post['title'] }}{% endif %} — Snyder Scriptorium{% endblock %}
+{% block meta_description %}{% if post['id'] == 57 %}The Codex Sassoon sold for $38.1 million at Sotheby's in May 2023 — the most expensive book ever sold. See the previous record holders and the priciest printed book.{% else %}{{ post['content']|striptags|truncate(160)|trim }}{% endif %}{% endblock %}
+{% block head %}
+{% set dp = post['date_published']|string %}
+{% set iso_date = dp[6:10] ~ '-' ~ dp[0:2] ~ '-' ~ dp[3:5] if dp|length >= 10 and dp[2] == '/' and dp[5] == '/' else dp[0:10] %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","headline":{{ post['title']|tojson }},"description":{{ self.meta_description()|trim|striptags|tojson }},"datePublished":{{ iso_date|tojson }},"mainEntityOfPage":"https://www.snyderscriptorium.com/blog/post/{{ post['id'] }}","author":{"@type":"Person","name":"K. W. Snyder"},"publisher":{"@type":"Organization","name":"Snyder Scriptorium"}}
+</script>
+{% endblock %}
 {% block content %}
 <article class="content-section" style="max-width:780px;margin:0 auto;">
   <p>
