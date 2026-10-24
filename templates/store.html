@@ -177,6 +177,7 @@
         <button class="filter-done" id="filterDoneBtn" type="button">Show books</button>
     </aside>
     <div class="store-main">
+    <button class="shelf-see-all" id="backToShelvesBtn" type="button">&larr; Back to shelves</button>
     <h2 id="storeMainTitle" class="store-main-title">All Books</h2>
     <div id="storeGrid" class="store-grid">
         {% for p in products %}
@@ -323,7 +324,7 @@
 
   function setSection(s,scroll){
     section=s;genres.clear();page=1;
-    buildConditionBtns();buildGenreFilters();apply();showBooksView();
+    buildConditionBtns();buildGenreFilters();apply();showGridView();
     if(scroll!==false) gridTop();
   }
 
@@ -471,10 +472,24 @@
     renderPages(totalPages);
   }
 
-  function showBooksView(){
+  /* Rows view: the landing view — shelf rows only. The full grid lives in
+     the grid view, reached by a row's See all button. */
+  function showRowsView(){
     onReviewsTab=false;
     setActiveTab('store');
     if(shelfRows) shelfRows.hidden=false;
+    if(storeControls) storeControls.hidden=true;
+    if(storeLayout) storeLayout.hidden=true;
+    if(storeRequest) storeRequest.hidden=true;
+    if(storeSubscribe) storeSubscribe.hidden=true;
+    if(storeReviews) storeReviews.hidden=true;
+  }
+  function showBooksView(){ showRowsView(); }
+  /* Grid view: the whole page is that section's books. */
+  function showGridView(){
+    onReviewsTab=false;
+    setActiveTab('store');
+    if(shelfRows) shelfRows.hidden=true;
     if(storeControls) storeControls.hidden=false;
     if(storeLayout) storeLayout.hidden=false;
     if(storeRequest) storeRequest.hidden=false;
@@ -503,8 +518,10 @@
     if(filterBackdrop) filterBackdrop.classList.remove('open');
   }
 
-  if(storeTabBtn) storeTabBtn.addEventListener('click',()=>{showBooksView();gridTop();});
+  if(storeTabBtn) storeTabBtn.addEventListener('click',()=>{showBooksView();window.scrollTo({top:0,behavior:'smooth'});});
   if(reviewsTabBtn) reviewsTabBtn.addEventListener('click',showReviewsView);
+  var backBtn=document.getElementById('backToShelvesBtn');
+  if(backBtn) backBtn.addEventListener('click',()=>{showRowsView();window.scrollTo({top:0,behavior:'smooth'});});
   letters.forEach(btn=>btn.addEventListener('click',()=>{
     letter=btn.dataset.letter||'';
     page=1;
