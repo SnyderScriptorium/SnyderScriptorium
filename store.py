@@ -2,7 +2,7 @@ import os
 import re
 import time
 import threading
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from xml.sax.saxutils import escape as xml_escape
 
@@ -1253,15 +1253,55 @@ SHIPPING_FIRST_BOOK_CENTS = 447
 SHIPPING_EXTRA_BOOK_CENTS = 75
 
 
-def shipping_cents(total_qty):
-    """Media Mail shipping for an order holding total_qty books."""
+def shipping_cents(total_qty, promo_code=None, on_date=None):
+    """Media Mail shipping for an order holding total_qty books.
+
+    A valid promo code zeroes shipping (see below). Validation is
+    server-side and re-checked at checkout time — the browser never
+    decides what shipping costs."""
     try:
         qty = int(total_qty or 0)
     except (TypeError, ValueError):
         qty = 0
     if qty < 1:
         return 0
+    if promo_code_valid(promo_code, on_date):
+        return 0
     return SHIPPING_FIRST_BOOK_CENTS + SHIPPING_EXTRA_BOOK_CENTS * (qty - 1)
+
+
+# Time-boxed promo: code SHIP = free Media Mail shipping from Black Friday
+# (the day after Thanksgiving, Nov 27, 2026) through Dec 1, 2026, inclusive.
+# Dates are Eastern. Outside the window the code does nothing.
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - very old Python
+    ZoneInfo = None
+
+PROMO_FREE_SHIPPING_CODE = "SHIP"
+PROMO_FREE_SHIPPING_START = date(2026, 11, 27)
+PROMO_FREE_SHIPPING_END = date(2026, 12, 1)
+
+
+def _promo_today():
+    if ZoneInfo is not None:
+        try:
+            return datetime.now(ZoneInfo("America/New_York")).date()
+        except Exception:
+            pass
+    return date.today()
+
+
+def promo_free_shipping_active(on_date=None):
+    """True only inside the Nov 27 – Dec 1, 2026 promo window."""
+    day = on_date or _promo_today()
+    return PROMO_FREE_SHIPPING_START <= day <= PROMO_FREE_SHIPPING_END
+
+
+def promo_code_valid(code, on_date=None):
+    """True only for code SHIP inside the promo window."""
+    return (str(code or "").strip().upper() == PROMO_FREE_SHIPPING_CODE
+            and promo_free_shipping_active(on_date))
 
 
 # --- PayPal checkout ------------------------------------------------------
@@ -1372,7 +1412,7 @@ def paypal_start_checkout():
     if price_cents < 1:
         conn.close()
         return jsonify({"error": "That book has no price set."}), 409
-    ship_cents = shipping_cents(1)
+    ship_cents = shipping_cents(1, _get_promo_code())
     total_cents = price_cents + ship_cents
     now = now_string()
     cursor = conn.execute(
@@ -1814,6 +1854,12 @@ def _save_cart(cart):
     session["store_cart"] = cart
 
 
+def _get_promo_code():
+    """The session promo code, if any. Re-validated wherever money is computed."""
+    code = session.get("store_promo_code")
+    return code if isinstance(code, str) else ""
+
+
 def _cart_line_items(conn, cart):
     """Build priced line items for a cart dict.
 
@@ -1875,14 +1921,38 @@ def api_cart():
     finally:
         conn.close()
     count = sum(usable.values())
-    ship_cents = shipping_cents(count)
+    promo_code = _get_promo_code()
+    ship_cents = shipping_cents(count, promo_code)
     return jsonify({
         "items": lines,
         "subtotal_cents": subtotal_cents,
         "shipping_cents": ship_cents,
         "total_cents": subtotal_cents + ship_cents,
         "count": count,
+        "promo_code": promo_code if promo_code_valid(promo_code) else "",
+        "promo_applied": promo_code_valid(promo_code),
     })
+
+
+@store_bp.route("/api/store/cart/promo", methods=["POST"])
+def api_cart_promo():
+    """Apply (or clear) a promo code, stored in the session.
+
+    Validation is server-side and re-checked at checkout time, so a code
+    applied inside the window cannot leak free shipping outside it."""
+    if not STORE_VISIBLE:
+        return jsonify({"error": "The store is not available."}), 404
+    data = _request_data()
+    code = (data.get("code") or "").strip()
+    if not code:
+        session.pop("store_promo_code", None)
+        return jsonify({"applied": False, "promo_code": ""})
+    if code.upper() == PROMO_FREE_SHIPPING_CODE and not promo_free_shipping_active():
+        return jsonify({"error": "Code SHIP runs Nov 27 – Dec 1, 2026."}), 400
+    if code.upper() != PROMO_FREE_SHIPPING_CODE:
+        return jsonify({"error": "That code isn't recognized."}), 400
+    session["store_promo_code"] = PROMO_FREE_SHIPPING_CODE
+    return jsonify({"applied": True, "promo_code": PROMO_FREE_SHIPPING_CODE})
 
 
 @store_bp.route("/api/store/cart/add", methods=["POST"])
@@ -1969,7 +2039,7 @@ def api_cart_checkout():
         conn.close()
         return jsonify({"error": "Your cart has no priced items."}), 409
     total_qty = sum(line["qty"] for line in lines)
-    ship_cents = shipping_cents(total_qty)
+    ship_cents = shipping_cents(total_qty, _get_promo_code())
     total_cents = subtotal_cents + ship_cents
     now = now_string()
     cursor = conn.execute(
@@ -2062,4 +2132,5 @@ def api_cart_checkout():
     conn.close()
     # Only clear the cart once the PayPal order exists.
     _save_cart({})
+    session.pop("store_promo_code", None)
     return jsonify({"approval_url": approval_url})

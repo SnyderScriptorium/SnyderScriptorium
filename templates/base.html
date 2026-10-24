@@ -90,6 +90,18 @@
             padding: 9px 12px;
         }
         .shipping-banner strong { font-weight: 600; }
+        /* Promo announcement bar: sits under the shipping banner. Hidden by
+           script once the promo window has passed. */
+        .promo-banner {
+            background: #F0E8D9;
+            color: #5C4033;
+            text-align: center;
+            font-size: .92rem;
+            line-height: 1.4;
+            padding: 8px 12px;
+            border-bottom: 1px solid #C9B78F;
+        }
+        .promo-banner strong { font-weight: 600; }
         @media (max-width: 700px) {
             .site-header { width: 100% !important; padding: 18px 10px 0 !important; }
             .site-navigation { width: 100% !important; }
@@ -101,6 +113,8 @@
 <body>
 
 <div class="shipping-banner" role="note">📦 Flat-Rate Media Mail Shipping: Only <strong>$4.47</strong> + <strong>$0.75</strong> for each additional book!</div>
+<div class="promo-banner" id="promoBanner" role="note">🎄 Free shipping Black Friday (Nov 27) through Dec 1 with code <strong>SHIP</strong>!</div>
+<script>(function(){try{var d=new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));if(d.getFullYear()>2026||(d.getFullYear()===2026&&(d.getMonth()>11||(d.getMonth()===11&&d.getDate()>1)))){var b=document.getElementById('promoBanner');if(b)b.style.display='none';}}catch(e){}})();</script>
 
 <header class="site-header">
     <div class="site-title">

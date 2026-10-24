@@ -104,6 +104,10 @@
                 <strong>Buy this book now</strong><br>
                 <span class="store-buy-price">${{ product.price }}</span> — secure checkout
                 <p class="store-buy-shipping">+ ${{ "%.2f"|format(shipping_cents / 100) }} shipping (US Media Mail)</p>
+                <div class="store-buy-promo" style="display:flex;gap:8px;margin-top:12px;max-width:420px;">
+                    <input id="storePromoCode" type="text" placeholder="Promo code" aria-label="Promo code" autocomplete="off" style="flex:1;padding:11px;border:1px solid #C9B78F;border-radius:5px;background:#fff;font:inherit;color:#2f2924;min-width:0;">
+                    <button class="store-buy-button store-cart-button" id="storePromoApply" type="button" style="width:auto;margin-top:0;padding:11px 16px;">Apply</button>
+                </div>
                 <button class="store-buy-button" id="storeBuyNow" type="button">Buy Now</button>
                 <button class="store-buy-button store-cart-button" id="storeAddToCart" type="button">Add to Cart</button>
                 <p class="store-buy-note" id="storeBuyNote"></p>
@@ -145,6 +149,23 @@
     }).catch(function(err){
       note.textContent = 'Something went wrong: ' + (err && err.message ? err.message : 'cart error');
       cartBtn.disabled = false;
+    });
+  });
+
+  var promoInput = document.getElementById('storePromoCode');
+  var promoBtn = document.getElementById('storePromoApply');
+  if(promoBtn) promoBtn.addEventListener('click', function(){
+    var code = (promoInput.value || '').trim();
+    note.textContent = code ? 'Applying…' : 'Code cleared.';
+    fetch('/api/store/cart/promo', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ code: code })
+    }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); }).then(function(res){
+      if(!res.ok) throw new Error((res.d && res.d.error) || 'Could not apply code.');
+      note.textContent = res.d.applied ? 'Free shipping applied (SHIP).' : 'Code cleared.';
+    }).catch(function(err){
+      note.textContent = err && err.message ? err.message : 'Could not apply code.';
     });
   });
 

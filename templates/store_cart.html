@@ -30,6 +30,10 @@
 .store-cart-checkout:disabled{opacity:.55;cursor:default}
 .store-cart-continue{display:inline-block;padding:13px 22px;border:1px solid #5C4033;border-radius:5px;background:#FFFDF8;color:#5C4033;font:inherit;font-size:1.02rem;text-decoration:none}
 .store-cart-note{color:#6F6257;font-size:.9rem;min-height:1.2em;margin:12px 0 0;text-align:right}
+.store-cart-promo{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.store-cart-promo input{padding:9px 11px;border:1px solid #C9B78F;border-radius:5px;background:#fff;font:inherit;color:#2f2924;max-width:150px}
+.store-cart-promo button{padding:9px 16px;border:1px solid #5C4033;border-radius:5px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer}
+.store-cart-promo-msg{color:#5C4033;font-size:.9rem;min-height:1.2em;margin:0 0 12px;text-align:right}
 .store-cart-policies{background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:18px 20px;margin-top:18px;text-align:left}
 .store-cart-policies h3{color:#5C4033;font-weight:600;font-size:1rem;margin:0 0 8px}
 .store-cart-policies p{color:#6F6257;font-size:.92rem;margin:0 0 10px;line-height:1.5}
@@ -56,6 +60,11 @@
             <div class="store-cart-subtotal">Subtotal: <strong id="cartSubtotal">$0.00</strong></div>
             <div class="store-cart-shipping">Shipping (US Media Mail): <strong id="cartShipping">$0.00</strong></div>
             <div class="store-cart-total">Total: <strong id="cartTotal">$0.00</strong></div>
+            <div class="store-cart-promo">
+                <input id="promoCode" type="text" placeholder="Promo code" aria-label="Promo code" autocomplete="off">
+                <button id="promoApplyBtn" type="button">Apply code</button>
+            </div>
+            <p class="store-cart-promo-msg" id="promoMsg"></p>
             <div class="store-cart-actions">
                 <a class="store-cart-continue" href="{{ url_for('store.store_home') }}">Continue shopping</a>
                 <button class="store-cart-checkout" id="cartCheckoutBtn" type="button">Check Out with PayPal</button>
@@ -81,6 +90,9 @@
   var totalEl = document.getElementById('cartTotal');
   var checkoutBtn = document.getElementById('cartCheckoutBtn');
   var note = document.getElementById('cartNote');
+  var promoInput = document.getElementById('promoCode');
+  var promoBtn = document.getElementById('promoApplyBtn');
+  var promoMsg = document.getElementById('promoMsg');
 
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
@@ -117,6 +129,12 @@
     subtotalEl.textContent = money(cart.subtotal_cents || 0);
     shippingEl.textContent = money(cart.shipping_cents || 0);
     totalEl.textContent = money(cart.total_cents || 0);
+    if(cart.promo_applied){
+      promoMsg.textContent = 'Free shipping applied (SHIP).';
+      if(promoInput && !promoInput.value) promoInput.value = cart.promo_code || 'SHIP';
+    } else if(cart.promo_code){
+      promoMsg.textContent = '';
+    }
     linesBox.querySelectorAll('.store-cart-remove').forEach(function(btn){
       btn.addEventListener('click', function(){ removeLine(btn); });
     });
@@ -139,6 +157,22 @@
       load();
     }).catch(function(){ btn.disabled = false; });
   }
+
+  promoBtn.addEventListener('click', function(){
+    var code = (promoInput.value || '').trim();
+    promoMsg.textContent = code ? 'Applying…' : 'Code cleared.';
+    fetch('/api/store/cart/promo', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ code: code })
+    }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); }).then(function(res){
+      if(!res.ok) throw new Error((res.d && res.d.error) || 'Could not apply code.');
+      promoMsg.textContent = res.d.applied ? 'Free shipping applied (SHIP).' : 'Code cleared.';
+      load();
+    }).catch(function(err){
+      promoMsg.textContent = err && err.message ? err.message : 'Could not apply code.';
+    });
+  });
 
   checkoutBtn.addEventListener('click', function(){
     checkoutBtn.disabled = true;
