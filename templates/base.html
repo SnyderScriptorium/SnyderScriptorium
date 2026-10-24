@@ -100,7 +100,7 @@
 </head>
 <body>
 
-<div class="shipping-banner" role="note">📦 Flat-Rate Media Mail Shipping: Only <strong>$4.47</strong> + <strong>$0.75</strong> for each additional book!</div>
+{% if request.path.startswith('/store') %}<div class="shipping-banner" role="note">📦 Flat-Rate Media Mail Shipping: Only <strong>$4.47</strong> + <strong>$0.75</strong> for each additional book!</div>{% endif %}
 
 <header class="site-header">
     <div class="site-title">
