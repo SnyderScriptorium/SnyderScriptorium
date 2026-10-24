@@ -77,6 +77,19 @@
             vertical-align: middle;
         }
         .store-cart-badge[hidden] { display: none !important; }
+        /* Global shipping announcement bar: pinned to the very top of every page. */
+        .shipping-banner {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: #5C4033;
+            color: #FFFDF8;
+            text-align: center;
+            font-size: .92rem;
+            line-height: 1.4;
+            padding: 9px 12px;
+        }
+        .shipping-banner strong { font-weight: 600; }
         @media (max-width: 700px) {
             .site-header { width: 100% !important; padding: 18px 10px 0 !important; }
             .site-navigation { width: 100% !important; }
@@ -86,6 +99,8 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+
+<div class="shipping-banner" role="note">📦 Flat-Rate Media Mail Shipping: Only <strong>$4.47</strong> + <strong>$0.75</strong> for each additional book!</div>
 
 <header class="site-header">
     <div class="site-title">
