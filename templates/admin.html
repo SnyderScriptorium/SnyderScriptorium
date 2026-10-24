@@ -311,7 +311,7 @@ ctx.stroke();ctx.fillStyle="#5C4033";
 points.forEach(function(p,i){var x=left+(points.length===1?cw/2:(i/(points.length-1))*cw),y=top+ch-(Number(p.views)/dataMax)*ch;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();});
 ctx.fillStyle="#6F6257";ctx.textAlign="center";
 var stride=Math.max(1,Math.ceil(points.length/8));
-points.forEach(function(p,i){if(i%stride===0||i===points.length-1){var x=left+(points.length===1?cw/2:(i/(points.length-1))*cw);ctx.fillText(String(p.date||"").slice(5),x,h-8);}});
+points.forEach(function(p,i){if(i%stride===0||i===points.length-1){var x=left+(points.length===1?cw/2:(i/(points.length-1))*cw);var d=String(p.date||"");var lbl=d.slice(5);if(d.indexOf("T")>=0){var hh=parseInt(d.slice(11,13),10);lbl=(hh%12===0?12:hh%12)+" "+(hh<12?"AM":"PM");}ctx.fillText(lbl,x,h-8);}});
 ctx.textAlign="left";
 }
 async function loadStoreStats(period){period=period||window.statsPeriod||"30";window.statsPeriod=period;

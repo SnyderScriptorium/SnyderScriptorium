@@ -32,12 +32,29 @@ def _store_data(period):
         store_views = int(views_row["n"] or 0)
         store_unique_visitors = int(unique_row["n"] or 0)
 
-        daily_rows = conn.execute(
-            f"""SELECT substr(pv.viewed_at, 1, 10) AS day, COUNT(*) AS n
-                FROM page_views pv{where}{store_filter}
-                GROUP BY day ORDER BY day""", params
-        ).fetchall()
-        store_daily = [{"date": r["day"], "views": int(r["n"] or 0)} for r in daily_rows]
+        if normalized == "day":
+            # Same hourly shape as the Overview's Today graph: one point per
+            # Eastern hour (12 AM-11 PM), zeros included, so the Store day
+            # graph is a curve instead of a single dot.
+            from collections import Counter
+            ts_rows = conn.execute(
+                f"""SELECT pv.viewed_at AS ts
+                    FROM page_views pv{where}{store_filter}""", params
+            ).fetchall()
+            hour_counts = Counter()
+            for _r in ts_rows:
+                _dt = analytics._parse_view_time(_r["ts"])
+                if _dt is not None:
+                    hour_counts[_dt.astimezone(analytics.EASTERN).strftime("%Y-%m-%dT%H:00")] += 1
+            hour_keys = analytics.build_time_buckets("day", hour_counts, {})
+            store_daily = [{"date": k, "views": hour_counts.get(k, 0)} for k in hour_keys]
+        else:
+            daily_rows = conn.execute(
+                f"""SELECT substr(pv.viewed_at, 1, 10) AS day, COUNT(*) AS n
+                    FROM page_views pv{where}{store_filter}
+                    GROUP BY day ORDER BY day""", params
+            ).fetchall()
+            store_daily = [{"date": r["day"], "views": int(r["n"] or 0)} for r in daily_rows]
 
         book_rows = conn.execute(
             f"""SELECT sp.id, sp.title, sp.author,
