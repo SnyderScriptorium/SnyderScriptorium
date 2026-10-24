@@ -114,7 +114,7 @@
     </div>
 
     <div class="shelf-rows" id="shelfRows">
-    {% for sec, shelf_title in [('', 'All Books'), ('New', 'Brand New'), ('Used', 'Used'), ('Vintage', 'Vintage'), ('Antique', 'Antique')] %}
+    {% for sec, shelf_title in [('New', 'Brand New'), ('Used', 'Used'), ('Vintage', 'Vintage'), ('', 'All Books')] %}
         {% if sec == '' %}{% set shelf_books = products|list %}{% else %}{% set shelf_books = products|selectattr('section', 'equalto', sec)|list %}{% endif %}
         {% set ns = namespace(n=0) %}
         {% for p in shelf_books %}{% if p.stock_quantity|int > 0 %}{% set ns.n = ns.n + 1 %}{% endif %}{% endfor %}
