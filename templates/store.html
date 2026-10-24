@@ -64,7 +64,20 @@
 .store-request-row input{padding:10px 12px;border:1px solid #C9B78F;border-radius:6px;background:#fff;font:inherit;color:#2f2924;min-width:200px}
 .store-request-btn{padding:10px 20px;border:1px solid #5C4033;border-radius:5px;background:#5C4033;color:#fff;font:inherit;cursor:pointer}
 .store-request-btn:hover{filter:brightness(.94)}
-@media(max-width:650px){.store-layout{display:block}.filter-open-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border:1px solid #5C4033;border-radius:6px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer;width:100%}.filter-sidebar{display:none;position:fixed;top:0;left:0;bottom:0;width:min(85vw,320px);z-index:70;border-radius:0;border:0;border-right:1px solid #C9B78F;max-height:none}.filter-sidebar.open{display:block}.filter-done{display:block}.filter-backdrop.open{display:block;position:fixed;inset:0;background:rgba(40,30,20,.45);z-index:65}.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 30%;border-right:1px solid rgba(255,255,255,.2);border-bottom:1px solid rgba(255,255,255,.2);min-height:44px;padding:8px 6px;font-size:.9rem}.store-grid{grid-template-columns:repeat(2,1fr);gap:8px}.store-card{padding:8px 6px}.store-cover{margin-bottom:8px}.store-card h2{font-size:.85rem;line-height:1.2}.store-author{font-size:.78rem;margin-bottom:4px}.store-publine{font-size:.72rem;margin-bottom:4px}.store-section{font-size:.68rem;margin-bottom:2px}.store-condition{display:none}.store-price{font-size:.95rem;margin-top:6px;padding-top:6px}.store-stock{font-size:.72rem}.store-button{padding:5px 6px;font-size:.78rem;margin-top:8px}}
+.shelf-rows{margin-bottom:28px}
+.shelf-row{margin-bottom:26px}
+.shelf-row-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+.shelf-row-head h2{font-family:Georgia,serif;font-weight:400;color:#5C4033;margin:0;font-size:1.3rem}
+.shelf-see-all{background:none;border:0;color:#8A6D3B;font:inherit;font-size:.95rem;cursor:pointer;text-decoration:underline;padding:6px;white-space:nowrap}
+.shelf-track{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;scrollbar-width:none}
+.shelf-track::-webkit-scrollbar{display:none}
+.shelf-card{flex:0 0 168px;scroll-snap-align:start;background:#FFFDF8;border:1px solid #C9B78F;border-radius:8px;padding:10px;text-decoration:none;color:inherit;display:flex;flex-direction:column}
+.shelf-cover{width:100%;aspect-ratio:2/3;object-fit:cover;border:1px solid #D9C79E;border-radius:4px;margin-bottom:10px;background:#EFE7D8}
+.shelf-cover.placeholder{display:grid;place-items:center;font-family:Georgia,serif;color:#75695D;font-size:2rem}
+.shelf-title{font-size:.95rem;color:#5C4033;line-height:1.25;margin-bottom:2px}
+.shelf-author{font-size:.82rem;color:#6F6257;margin-bottom:8px}
+.shelf-price{margin-top:auto;font-weight:600;color:#5C4033}
+@media(max-width:650px){.shelf-card{flex:0 0 132px}.store-layout{display:block}.filter-open-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border:1px solid #5C4033;border-radius:6px;background:#FFFDF8;color:#5C4033;font:inherit;cursor:pointer;width:100%}.filter-sidebar{display:none;position:fixed;top:0;left:0;bottom:0;width:min(85vw,320px);z-index:70;border-radius:0;border:0;border-right:1px solid #C9B78F;max-height:none}.filter-sidebar.open{display:block}.filter-done{display:block}.filter-backdrop.open{display:block;position:fixed;inset:0;background:rgba(40,30,20,.45);z-index:65}.store-search-row{flex-direction:column}.store-search,.store-clear{width:100%}.collection-link{flex:1 1 30%;border-right:1px solid rgba(255,255,255,.2);border-bottom:1px solid rgba(255,255,255,.2);min-height:44px;padding:8px 6px;font-size:.9rem}.store-grid{grid-template-columns:repeat(2,1fr);gap:8px}.store-card{padding:8px 6px}.store-cover{margin-bottom:8px}.store-card h2{font-size:.85rem;line-height:1.2}.store-author{font-size:.78rem;margin-bottom:4px}.store-publine{font-size:.72rem;margin-bottom:4px}.store-section{font-size:.68rem;margin-bottom:2px}.store-condition{display:none}.store-price{font-size:.95rem;margin-top:6px;padding-top:6px}.store-stock{font-size:.72rem}.store-button{padding:5px 6px;font-size:.78rem;margin-top:8px}}
 </style>
 {% endblock %}
 
@@ -98,6 +111,45 @@
             {% endfor %}
         </div>
         <p id="storeFilterNote" class="store-filter-note"></p>
+    </div>
+
+    <div class="shelf-rows" id="shelfRows">
+    {% for sec, shelf_title in [('New', 'Brand New'), ('Used', 'Used'), ('Vintage', 'Vintage'), ('Antique', 'Antique')] %}
+        {% set shelf_books = products|selectattr('section', 'equalto', sec)|list %}
+        {% set ns = namespace(n=0) %}
+        {% for p in shelf_books %}{% if p.stock_quantity|int > 0 %}{% set ns.n = ns.n + 1 %}{% endif %}{% endfor %}
+        {% if ns.n > 0 %}
+        <section class="shelf-row" aria-label="{{ shelf_title }}">
+            <div class="shelf-row-head">
+                <h2>{{ shelf_title }}</h2>
+                <button class="shelf-see-all" type="button" data-shelf-section="{{ sec }}">See all &rarr;</button>
+            </div>
+            <div class="shelf-track">
+                {% set ns = namespace(n=0) %}
+                {% for p in shelf_books %}
+                {% if p.stock_quantity|int > 0 and ns.n < 12 %}
+                {% set ns.n = ns.n + 1 %}
+                {% if preview %}
+                    {% set detail_url = url_for('store.admin_store_preview_book', slug=p.slug) %}
+                {% else %}
+                    {% set detail_url = url_for('store.store_book', slug=p.slug) %}
+                {% endif %}
+                <a class="shelf-card" href="{{ detail_url }}">
+                    {% if p.cover_image_url %}
+                        <img class="shelf-cover" src="{{ p.cover_image_url }}" alt="Photograph of {{ p.title }}" loading="lazy">
+                    {% else %}
+                        <div class="shelf-cover placeholder" aria-label="No photo available">✦</div>
+                    {% endif %}
+                    <span class="shelf-title">{{ p.title }}</span>
+                    <span class="shelf-author">{{ p.author or 'The Scriptorium' }}</span>
+                    <span class="shelf-price">${{ p.price }}</span>
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    {% endfor %}
     </div>
 
     <div class="store-layout" id="storeLayout">
@@ -220,6 +272,7 @@
   const storeRequest=document.getElementById('storeRequest');
   const storeSubscribe=document.getElementById('storeSubscribe');
   const storeReviews=document.getElementById('storeReviews');
+  const shelfRows=document.getElementById('shelfRows');
   const PAGE_SIZE=20;
   const PRICE_BANDS=[
     {id:'u5',label:'Under $5',test:p=>p<5},
@@ -421,6 +474,7 @@
   function showBooksView(){
     onReviewsTab=false;
     setActiveTab('store');
+    if(shelfRows) shelfRows.hidden=false;
     if(storeControls) storeControls.hidden=false;
     if(storeLayout) storeLayout.hidden=false;
     if(storeRequest) storeRequest.hidden=false;
@@ -431,6 +485,7 @@
     onReviewsTab=true;
     setActiveTab('reviews');
     closeFilters();
+    if(shelfRows) shelfRows.hidden=true;
     if(storeControls) storeControls.hidden=true;
     if(storeLayout) storeLayout.hidden=true;
     if(storeRequest) storeRequest.hidden=true;
@@ -533,6 +588,22 @@
     }).then(function (d) { renderReviews(Array.isArray(d) ? d : []); })
       .catch(function () { renderReviews([]); });
   }
+})();
+
+/* ---- Shelf rows: "See all" applies that section's filter and jumps to the grid ---- */
+(function(){
+  document.querySelectorAll('.shelf-see-all').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var sec = btn.getAttribute('data-shelf-section');
+      var condBtn = null;
+      document.querySelectorAll('#filterCondBtns .filter-cond-btn').forEach(function(b){
+        if (b.textContent.trim() === sec) condBtn = b;
+      });
+      if (condBtn) condBtn.click();
+      var grid = document.getElementById('storeGrid');
+      if (grid) grid.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
 })();
 </script>
 {% endblock %}
