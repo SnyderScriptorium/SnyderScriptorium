@@ -14,5 +14,16 @@
     <p class="private-label">No book curations have been published yet.</p>
     {% endfor %}
   </div>
+  {% if pages > 1 %}
+  <nav class="blog-pager" aria-label="Page navigation">
+    {% if page > 1 %}
+    <a class="blog-pager-btn" href="{{ url_for(request.endpoint, page=page - 1) }}">← Previous</a>
+    {% endif %}
+    <span class="blog-pager-info">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}
+    <a class="blog-pager-btn" href="{{ url_for(request.endpoint, page=page + 1) }}">Next →</a>
+    {% endif %}
+  </nav>
+  {% endif %}
 </section>
 {% endblock %}

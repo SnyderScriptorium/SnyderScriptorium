@@ -315,7 +315,18 @@ def public_category(category, template):
     conn = get_db()
     posts = conn.execute("SELECT * FROM published_posts WHERE category = ? AND access_level = 'public' ORDER BY id DESC", (category,)).fetchall()
     conn.close()
-    return render_template(template, posts=posts, category_name=category_label(category))
+    try:
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    page = max(1, page)
+    per_page = 10
+    total = len(posts)
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, pages)
+    page_posts = posts[(page - 1) * per_page:page * per_page]
+    return render_template(template, posts=page_posts, category_name=category_label(category),
+                           page=page, pages=pages, total=total)
 
 
 @app.route("/blog/bookcurations")

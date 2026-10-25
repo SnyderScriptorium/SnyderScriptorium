@@ -141,6 +141,10 @@ body {
 .blog-block:hover { transform: translateY(-2px); box-shadow: 0 5px 12px rgba(0,0,0,.08); }
 .blog-block h2 { margin: 0 0 7px; color: #5C4033; font-weight: 500; }
 .blog-block p { margin: 0; }
+.blog-pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 25px; }
+.blog-pager-btn { display: inline-block; padding: 10px 18px; background: #5C4033; color: #FFFDF8; border-radius: 5px; text-decoration: none; }
+.blog-pager-btn:hover { filter: brightness(.94); }
+.blog-pager-info { color: #6F6257; font-size: .95rem; }
 .private-label { display: inline-block; margin-top: 8px; color: #6F6257; font-size: .9rem; font-style: italic; }
 
 .site-footer { max-width: 950px; margin: 0 auto; padding: 0 20px 30px; text-align: center; color: #6F6257; font-size: .9rem; }
