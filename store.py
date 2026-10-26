@@ -417,6 +417,7 @@ def serve_store_image(image_id):
     response = make_response(bytes(data))
     response.headers["Content-Type"] = row["mime"] or "image/jpeg"
     response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    response.headers["X-Robots-Tag"] = "noindex"
     return response
 
 
@@ -633,7 +634,7 @@ def sitemap():
 @store_bp.route("/robots.txt")
 def robots():
     resp = make_response(
-        "User-agent: *\nAllow: /\n\nSitemap: %s\n"
+        "User-agent: *\nAllow: /\nDisallow: /contact?\n\nSitemap: %s\n"
         % url_for("store.sitemap", _external=True)
     )
     resp.headers["Content-Type"] = "text/plain"
