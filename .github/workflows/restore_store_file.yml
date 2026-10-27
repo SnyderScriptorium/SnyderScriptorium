@@ -1,20 +1,23 @@
 name: Repair store.py after accidental truncation
 
+# IMPORTANT: this is intentionally manual-only. The previous version ran on
+# every push and could overwrite unrelated store.py changes. Emergency repairs
+# must now be started deliberately from the Actions tab after confirming that
+# store.py is actually damaged.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   repair-store-file:
-    if: ${{ !contains(github.event.head_commit.message, 'Restore full store.py') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Restore full store.py and add gallery sequence guard
         shell: bash
         run: |
