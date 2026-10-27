@@ -31,6 +31,11 @@
     <div class="member-auth-panel{% if tab == 'signup' %} is-active{% endif %}" role="tabpanel" id="panel-signup" aria-labelledby="tab-signup" data-panel="signup">
       {% if error and tab == 'signup' %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
       <p class="member-auth-note">This account is for K. W. Snyder Writing. It is the account that will be connected to your membership subscription and your private writing-library access.</p>
+      <div id="membership-terms" style="margin:18px 0;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);text-align:left;">
+        <h3 style="margin-top:0;">Membership Terms &amp; Conditions</h3>
+        <p class="member-auth-note">Please read these before creating your account.</p>
+        {% include 'blog_templates/_membership_terms_body.html' %}
+      </div>
       <form class="member-auth-form" method="POST" action="{{ url_for('member_signup') }}" autocomplete="on">
         <label for="signup-email">Email</label>
         <input id="signup-email" type="email" name="email" autocomplete="email" required>
@@ -38,7 +43,7 @@
         <input id="signup-password" type="password" name="password" minlength="8" autocomplete="new-password" required>
         <label class="member-auth-terms" for="signup-terms">
           <input id="signup-terms" type="checkbox" name="terms_agreed" value="yes" required>
-          <span>I agree to the <a href="{{ url_for('membership_terms') }}" target="_blank" rel="noopener">Membership Terms &amp; Conditions</a>.</span>
+          <span>I agree to the <a href="#membership-terms">Membership Terms &amp; Conditions</a> above.</span>
         </label>
         <div class="member-auth-actions">
           <button class="member-auth-button" type="submit">Create Account</button>
