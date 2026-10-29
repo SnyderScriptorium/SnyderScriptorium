@@ -557,7 +557,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
                 f"""SELECT sp.id, sp.title, sp.author, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
                     FROM page_views pv
                     LEFT JOIN store_products sp ON sp.id = pv.content_id
-                        OR ('/store/book/' || sp.slug) = RTRIM(pv.path, '/')
+                        OR (pv.content_id IS NULL AND ('/store/book/' || sp.slug) = RTRIM(pv.path, '/'))
                     {_book_where}{_book_and} pv.path LIKE '/store/book/%'
                     GROUP BY sp.id, sp.title, sp.author
                     ORDER BY views DESC LIMIT 50""",
