@@ -274,7 +274,7 @@
   const storeSubscribe=document.getElementById('storeSubscribe');
   const storeReviews=document.getElementById('storeReviews');
   const shelfRows=document.getElementById('shelfRows');
-  const PAGE_SIZE=20;
+  const PAGE_SIZE=30;
   const PRICE_BANDS=[
     {id:'u5',label:'Under $5',test:p=>p<5},
     {id:'b510',label:'$5 to $10',test:p=>p>=5&&p<=10},
@@ -383,9 +383,11 @@
   }
 
   function clearAllFilters(){
-    genres.clear();priceBands.clear();stockOnly=false;
+    section='';letter='';query='';genres.clear();priceBands.clear();stockOnly=false;
     if(inStockOnly) inStockOnly.checked=false;
-    buildPriceFilters();buildGenreFilters();page=1;apply();
+    if(search) search.value='';
+    letters.forEach(x=>x.classList.toggle('active',x.dataset.letter===''));
+    buildConditionBtns();buildPriceFilters();buildGenreFilters();page=1;apply();
   }
 
   function activeFilterCount(){
