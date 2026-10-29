@@ -34,6 +34,14 @@ jobs:
               '/find-us',
               '/admin/find-us',
               '/api/find-us',
+              '/api/paypal/create-subscription',
+              '/api/paypal/attach-subscription',
+              '/api/paypal/cancel-subscription',
+              '/api/paypal/webhook',
+              '/kwsnyderwriting/membership/return',
+              '/kwsnyderwriting/membership/cancel',
+              '/admin/subscribers',
+              '/admin/subscriber-dashboard',
           }
           missing = required - routes
           if missing:
@@ -56,6 +64,12 @@ jobs:
           response = client.get('/api/store/admin/products', follow_redirects=False)
           if response.status_code != 401 or not response.is_json or 'error' not in response.get_json():
               raise SystemExit('ADMIN API LOGIN REGRESSION: /api/store/admin/products must return JSON HTTP 401 when logged out.')
+          response = client.get('/admin/subscribers', follow_redirects=False)
+          if response.status_code != 302 or '/admin/login' not in response.headers.get('Location', ''):
+              raise SystemExit('ADMIN SUBSCRIBER REGRESSION: /admin/subscribers must redirect logged-out users.')
+          response = client.get('/admin', follow_redirects=False)
+          if response.headers.get('Cache-Control') != 'no-store, no-cache, must-revalidate, max-age=0':
+              raise SystemExit('ADMIN CACHE REGRESSION: admin responses must not be cached.')
           with client.session_transaction() as sess:
               sess['admin_logged_in'] = True
               sess['admin_auth_version'] = '2026-08-16-1'
