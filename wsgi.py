@@ -13,17 +13,14 @@ from store_reviews import reviews_bp, ensure_review_tables
 if "reviews" not in app.blueprints:
     app.register_blueprint(reviews_bp)
 
-ensure_review_tables()
-
-# Build the base schema first; the inbox module then adds its member/blocking
-# columns against tables that are guaranteed to exist.
+# Build the base schema before any feature module initializes its own tables.
 init_db()
+ensure_store_tables()
+ensure_review_tables()
 
 # Wire the live admin inbox/member actions after app.py and the base database
 # have been loaded.
 import inbox_admin_routes  # noqa: F401,E402
-
-ensure_store_tables()
 
 # Repair bookstore ID sequences after the tables exist. This is deliberately
 # in the production WSGI path so stale PostgreSQL sequences cannot block a new
