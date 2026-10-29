@@ -162,22 +162,19 @@ def route_kw_domain():
 
 @app.route("/")
 def the_hearth():
-    # Featured shelf: top 5 by researched current market demand (Oct 2026).
-    # Picks: King (It: Welcome to Derry + new book wave), Sandford (new Prey
-    # novel + Rules of Prey TV series), Hillerman (Dark Winds on Netflix),
-    # Connelly (new Bosch novel + Ballard S2), McManus (fresh paperback +
-    # BookTok buzz). Re-research periodically as demand shifts.
+    # Featured shelf: K_W.'s picks (Oct 28, 2026). In Five Years is not
+    # stocked yet, so Suitable for Hanging holds its slot until it arrives.
     shelf_books = []
     try:
         conn = get_db()
         featured_slugs = [
+            '101-essays-that-will-change-the-way-you-think',
+            'the-mountain-is-you',
+            'how-to-kill-a-guy-in-ten-dates',
+            'the-courage-to-be-disliked',
+            'suitable-for-hanging',
+            'the-hollow-places',
             'you-like-it-darker',
-            'the-devil-s-code',
-            'a-thief-of-time',
-            'city-of-bones',
-            'you-ll-be-the-death-of-me',
-            'vision-in-white',
-            'timeline',
         ]
         placeholders = ','.join('?' for _ in featured_slugs)
         rows = conn.execute(
