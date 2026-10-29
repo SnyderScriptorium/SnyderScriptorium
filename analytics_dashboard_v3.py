@@ -496,7 +496,7 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
         _store_params = [start.isoformat()] if start else []
         _store_and = " AND" if _store_where else " WHERE"
         # Store = /store and /store/book/* paths (more reliable than category)
-        _store_filter = f"{_store_and} (pv.path = '/store' OR pv.path LIKE '/store/%')"
+        _store_filter = f"{_store_and} (pv.path IN ('/store', '/store/') OR pv.path LIKE '/store/book/%')"
         try:
             store_views = int(rowval(conn.execute(
                 f"SELECT COUNT(*) AS n FROM page_views pv{_store_where}{_store_filter}",
@@ -554,19 +554,20 @@ def _report_uncached(period, content_page=1, source_page=1, drill_path=None):
             _book_where = " WHERE pv.viewed_at >= ?" if start else ""
             _book_and = " AND" if _book_where else " WHERE"
             store_book_rows = conn.execute(
-                f"""SELECT sp.title, sp.author, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
+                f"""SELECT sp.id, sp.title, sp.author, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
                     FROM page_views pv
                     LEFT JOIN store_products sp ON sp.id = pv.content_id
-                        OR (pv.content_id IS NULL AND '/store/book/' || sp.slug = RTRIM(pv.path, '/'))
+                        OR ('/store/book/' || sp.slug) = RTRIM(pv.path, '/')
                     {_book_where}{_book_and} pv.path LIKE '/store/book/%'
                     GROUP BY sp.id, sp.title, sp.author
                     ORDER BY views DESC LIMIT 50""",
                 _store_params).fetchall()
             store_books = [{
-                "title": rowval(r, 0, "title") or "(unknown)",
-                "author": rowval(r, 1, "author") or "",
-                "views": int(rowval(r, 2, "views") or 0),
-                "unique_visitors": int(rowval(r, 3, "uniques") or 0),
+                "id": rowval(r, 0, "id"),
+                "title": rowval(r, 1, "title") or "(unknown book)",
+                "author": rowval(r, 2, "author") or "",
+                "views": int(rowval(r, 3, "views") or 0),
+                "unique_visitors": int(rowval(r, 4, "uniques") or 0),
             } for r in store_book_rows]
         except Exception:
             store_books = []
@@ -638,6 +639,7 @@ def register(app):
             "store_views": data.get("store_views", 0),
             "unique_visitors": data.get("store_unique_visitors", 0),
             "top_books": top_books,
+            "viewed_books": top_books,
             "store_paths": data.get("store_paths") or [],
             "store_daily": data.get("store_daily") or [],
         })
