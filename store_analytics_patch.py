@@ -19,7 +19,7 @@ def _store_data(period):
         where = " WHERE pv.viewed_at >= ?" if start else ""
         params = [start.isoformat()] if start else []
         extra = " AND" if where else " WHERE"
-        store_filter = f"{extra} (pv.path = '/store' OR pv.path LIKE '/store/book/%')"
+        store_filter = f"{extra} (pv.path IN ('/store', '/store/') OR pv.path LIKE '/store/book/%')"
 
         views_row = conn.execute(
             f"SELECT COUNT(*) AS n FROM page_views pv{where}{store_filter}", params
