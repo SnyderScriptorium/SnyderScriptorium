@@ -35,7 +35,8 @@ import repair_store_sequences  # noqa: F401,E402
 from analytics_dashboard_v3 import register as register_analytics_v3  # noqa: E402
 register_analytics_v3(app)
 
-# Apply the live storefront analytics corrections after the dashboard routes
-# exist. This keeps the shared dashboard intact while making Store metrics
-# fresh and book-level reporting reliable.
-import store_analytics_patch  # noqa: F401,E402
+# Register the same canonical pageview writer used by Gunicorn. Its
+# registration guard prevents accidental duplicate callbacks if startup paths
+# are ever composed in tests or deployment tooling.
+from canonical_analytics_tracker import register as register_canonical_analytics  # noqa: E402
+register_canonical_analytics(app)
