@@ -991,7 +991,7 @@ def admin_product_stats():
             stats = conn.execute(
                 "SELECT sp.id AS content_id, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques "
                 "FROM page_views pv JOIN store_products sp "
-                "ON sp.id = pv.content_id OR ('/store/book/' || sp.slug) = RTRIM(pv.path, '/') "
+                "ON sp.id = pv.content_id OR (pv.content_id IS NULL AND ('/store/book/' || sp.slug) = RTRIM(pv.path, '/')) "
                 "WHERE pv.path LIKE '/store/book/%' AND sp.id IN (" + placeholders + ") "
                 "GROUP BY sp.id",
                 tuple(ids),
@@ -1000,7 +1000,7 @@ def admin_product_stats():
             stats = conn.execute(
                 """SELECT sp.id AS content_id, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
                    FROM page_views pv JOIN store_products sp
-                     ON sp.id = pv.content_id OR ('/store/book/' || sp.slug) = RTRIM(pv.path, '/')
+                     ON sp.id = pv.content_id OR (pv.content_id IS NULL AND ('/store/book/' || sp.slug) = RTRIM(pv.path, '/'))
                    WHERE pv.path LIKE '/store/book/%'
                    GROUP BY sp.id"""
             ).fetchall()
