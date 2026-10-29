@@ -36,7 +36,7 @@ jobs:
             echo "store.py is unexpectedly short ($line_count lines); recovery is justified."
             damaged=1
           fi
-          for required in "def admin_create_product" "def admin_product_stats" "def store_book" "def checkout" "def admin_update_product"; do
+          for required in "def admin_create_product" "def admin_product_stats" "def store_book" "def api_cart_checkout" "def admin_update_product"; do
             if ! grep -Fq "$required" store.py; then
               echo "Missing required store handler: $required"
               damaged=1
