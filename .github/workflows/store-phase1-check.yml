@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile Python modules
-        run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py inbox_admin_routes.py draft_request_guard.py gunicorn.conf.py
+        run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py canonical_analytics_tracker.py store_analytics_patch.py inbox_admin_routes.py draft_request_guard.py gunicorn.conf.py
       - name: Check bookstore admin JavaScript syntax
         run: node --check static/admin_store.js
       - name: Load application and verify store, Find Us, and admin gates
