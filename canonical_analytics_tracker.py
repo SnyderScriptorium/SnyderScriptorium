@@ -110,6 +110,11 @@ def _eligible_public_html_request(response):
 
 
 def register(app):
+    # Multiple startup paths (Gunicorn and the WSGI/CI entry point) must never
+    # attach the canonical pageview writer twice to the same Flask app.
+    if app.extensions.get("snyder_canonical_analytics_registered"):
+        return
+
     # Record pageviews after Flask has generated the response. This prevents
     # redirects, 404/500 pages, POST actions, JSON/API responses, and maintenance
     # pages from inflating human pageview totals.
@@ -158,3 +163,4 @@ def register(app):
                 httponly=True, samesite='Lax', secure=True
             )
         return response
+    app.extensions["snyder_canonical_analytics_registered"] = True
