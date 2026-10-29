@@ -22,6 +22,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # Never overwrite a healthy store.py just because this manual
+          # workflow was clicked. Restore only if syntax is broken, the file
+          # is unexpectedly short, or core store handlers are missing.
+          damaged=0
+          if ! python -m py_compile store.py 2>/dev/null; then
+            echo "store.py does not compile; recovery is justified."
+            damaged=1
+          fi
+          line_count="$(wc -l < store.py)"
+          if [ "$line_count" -lt 1500 ]; then
+            echo "store.py is unexpectedly short ($line_count lines); recovery is justified."
+            damaged=1
+          fi
+          for required in "def admin_create_product" "def admin_product_stats" "def store_book" "def api_cart_checkout" "def admin_update_product"; do
+            if ! grep -Fq "$required" store.py; then
+              echo "Missing required store handler: $required"
+              damaged=1
+            fi
+          done
+          if [ "$damaged" -eq 0 ]; then
+            echo "Refusing to overwrite store.py: no configured damage signal was found."
+            exit 1
+          fi
+
           git checkout d92249113d709b851e3adceee01dcf162c993d6c -- store.py
           python - <<'PY'
           from pathlib import Path

@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile Python modules
-        run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py inbox_admin_routes.py draft_request_guard.py gunicorn.conf.py
+        run: python -m compileall -q app.py database.py store.py wsgi.py analytics_dashboard_v3.py canonical_analytics_tracker.py analytics_common.py inbox_admin_routes.py draft_request_guard.py gunicorn.conf.py
       - name: Check bookstore admin JavaScript syntax
         run: node --check static/admin_store.js
       - name: Load application and verify store, Find Us, and admin gates
@@ -34,6 +34,14 @@ jobs:
               '/find-us',
               '/admin/find-us',
               '/api/find-us',
+              '/api/paypal/create-subscription',
+              '/api/paypal/attach-subscription',
+              '/api/paypal/cancel-subscription',
+              '/api/paypal/webhook',
+              '/kwsnyderwriting/membership/return',
+              '/kwsnyderwriting/membership/cancel',
+              '/admin/subscribers',
+              '/admin/subscriber-dashboard',
           }
           missing = required - routes
           if missing:
@@ -56,6 +64,12 @@ jobs:
           response = client.get('/api/store/admin/products', follow_redirects=False)
           if response.status_code != 401 or not response.is_json or 'error' not in response.get_json():
               raise SystemExit('ADMIN API LOGIN REGRESSION: /api/store/admin/products must return JSON HTTP 401 when logged out.')
+          response = client.get('/admin/subscribers', follow_redirects=False)
+          if response.status_code != 302 or '/admin/login' not in response.headers.get('Location', ''):
+              raise SystemExit('ADMIN SUBSCRIBER REGRESSION: /admin/subscribers must redirect logged-out users.')
+          response = client.get('/admin', follow_redirects=False)
+          if response.headers.get('Cache-Control') != 'no-store, no-cache, must-revalidate, max-age=0':
+              raise SystemExit('ADMIN CACHE REGRESSION: admin responses must not be cached.')
           with client.session_transaction() as sess:
               sess['admin_logged_in'] = True
               sess['admin_auth_version'] = '2026-08-16-1'
@@ -105,7 +119,26 @@ jobs:
       - name: Verify analytics helpers
         run: |
           python - <<'PY'
+          import sys
+          import wsgi
+          from canonical_analytics_tracker import register as register_canonical_analytics
           from analytics_dashboard_v3 import chart_scale, label
+
+          # There must be exactly one canonical pageview writer. Re-registering
+          # through another startup path must remain idempotent.
+          def tracker_count():
+              return sum(
+                  1 for callback in wsgi.app.after_request_funcs.get(None, [])
+                  if callback.__name__ == "canonical_analytics_tracker"
+              )
+          assert tracker_count() == 1, f"Expected one tracker callback, got {tracker_count()}"
+          register_canonical_analytics(wsgi.app)
+          assert tracker_count() == 1, f"Duplicate tracker callback registered: {tracker_count()}"
+          assert "store_analytics_patch" not in sys.modules
+          assert not any(
+              "store_analytics_patch" in name
+              for name in sys.modules
+          )
           assert chart_scale(1)[1] == [0, 1]
           assert chart_scale(6)[1] == [0, 1, 2, 3, 4, 5, 6]
           assert chart_scale(9)[1] == [0, 2, 4, 6, 8, 10]

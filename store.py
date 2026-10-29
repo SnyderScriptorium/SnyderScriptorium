@@ -989,16 +989,20 @@ def admin_product_stats():
         if ids:
             placeholders = ", ".join(["?"] * len(ids))
             stats = conn.execute(
-                "SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques "
-                "FROM page_views WHERE page_type = 'store_book' AND category = 'store' "
-                "AND content_id IN (" + placeholders + ") GROUP BY content_id",
+                "SELECT sp.id AS content_id, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques "
+                "FROM page_views pv JOIN store_products sp "
+                "ON sp.id = pv.content_id OR (pv.content_id IS NULL AND ('/store/book/' || sp.slug) = RTRIM(pv.path, '/')) "
+                "WHERE pv.path LIKE '/store/book/%' AND sp.id IN (" + placeholders + ") "
+                "GROUP BY sp.id",
                 tuple(ids),
             ).fetchall()
         else:
             stats = conn.execute(
-                """SELECT content_id, COUNT(*) AS views, COUNT(DISTINCT visitor_key) AS uniques
-                   FROM page_views WHERE page_type = 'store_book' AND category = 'store'
-                   GROUP BY content_id"""
+                """SELECT sp.id AS content_id, COUNT(*) AS views, COUNT(DISTINCT pv.visitor_key) AS uniques
+                   FROM page_views pv JOIN store_products sp
+                     ON sp.id = pv.content_id OR (pv.content_id IS NULL AND ('/store/book/' || sp.slug) = RTRIM(pv.path, '/'))
+                   WHERE pv.path LIKE '/store/book/%'
+                   GROUP BY sp.id"""
             ).fetchall()
         stat_map = {str(r["content_id"]): {"views": r["views"], "uniques": r["uniques"]} for r in stats}
     except Exception:
