@@ -1,5 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}K. W. Snyder Writing — Membership{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='member_auth.css') }}">
+{% endblock %}
 {% block content %}
 <section class="content-section private-library-page">
   <div class="page-heading">
@@ -14,6 +17,7 @@
     {% if session.get('member_logged_in') %}
       <p class="private-label">You are signed in. Your current membership status is shown below.</p>
       <p><strong>Status:</strong> {{ member_status|default('inactive')|replace('_',' ')|title }}</p>
+      {% if error %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
 
       {% if member_status == 'active' %}
         <div class="member-auth-actions" style="justify-content:center;margin-top:14px;display:flex;flex-direction:column;align-items:center;gap:10px;">
@@ -31,25 +35,55 @@
         <p style="margin-top:12px;">If you have already subscribed, please allow the payment provider a moment to confirm your membership.</p>
       {% endif %}
     {% else %}
-      <div class="member-auth-actions" style="justify-content:center;margin-top:14px;">
-        <a class="member-auth-button member-auth-link-button" href="{{ url_for('member_login') }}">Sign In</a>
-        <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Account</a>
+      {% set tab = active_tab|default('signup') %}
+      <div class="member-auth-tabs" role="tablist" aria-label="Membership terms, sign up, or log in">
+        <button type="button" class="member-auth-tab{% if tab == 'terms' %} is-active{% endif %}" role="tab" aria-selected="{{ 'true' if tab == 'terms' else 'false' }}" data-tab="terms" id="tab-terms" aria-controls="panel-terms">Terms &amp; Conditions</button>
+        <button type="button" class="member-auth-tab{% if tab == 'signup' %} is-active{% endif %}" role="tab" aria-selected="{{ 'true' if tab == 'signup' else 'false' }}" data-tab="signup" id="tab-signup" aria-controls="panel-signup">Sign Up</button>
+        <button type="button" class="member-auth-tab{% if tab == 'signin' %} is-active{% endif %}" role="tab" aria-selected="{{ 'true' if tab == 'signin' else 'false' }}" data-tab="signin" id="tab-signin" aria-controls="panel-signin">Log In</button>
       </div>
-      <div id="subscribe-box" style="margin-top:18px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);">
-        <h3 style="margin-top:0;">Subscribe — $1/month</h3>
-        <p style="margin-bottom:12px;">Checkout is handled securely by PayPal. You can cancel anytime.</p>
-        <a class="member-auth-button" href="{{ url_for('member_signup') }}">Subscribe with PayPal</a>
-        <p style="margin-top:10px;margin-bottom:0;">Create your account first — the full terms are right there on the signup page — then you'll land straight back here to subscribe.</p>
+
+      <div class="member-auth-card">
+        <div class="member-auth-panel{% if tab == 'terms' %} is-active{% endif %}" role="tabpanel" id="panel-terms" aria-labelledby="tab-terms" data-panel="terms">
+          <div style="padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);text-align:left;">
+            <h3 style="margin-top:0;">Membership Terms &amp; Conditions</h3>
+            <p class="member-auth-note">Please read these before signing up.</p>
+            {% include 'blog_templates/_membership_terms_body.html' %}
+          </div>
+        </div>
+
+        <div class="member-auth-panel{% if tab == 'signup' %} is-active{% endif %}" role="tabpanel" id="panel-signup" aria-labelledby="tab-signup" data-panel="signup">
+          {% if error and tab == 'signup' %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
+          <p class="member-auth-note">One step: your email, your password, the terms, and the $1/month PayPal subscription. When that's done, you have an account — sign in and enter the private library.</p>
+          <p class="member-auth-note">Read the full terms in the Terms &amp; Conditions tab above before you agree.</p>
+          <form class="member-auth-form" method="POST" action="{{ url_for('member_signup_subscribe') }}" autocomplete="on">
+            <label for="front-signup-email">Email</label>
+            <input id="front-signup-email" type="email" name="email" autocomplete="email" required>
+            <label for="front-signup-password">Password</label>
+            <input id="front-signup-password" type="password" name="password" minlength="8" autocomplete="new-password" required>
+            <label class="member-auth-terms" for="front-signup-terms">
+              <input id="front-signup-terms" type="checkbox" name="terms_agreed" value="yes" required>
+              <span>I agree to the Membership Terms &amp; Conditions.</span>
+            </label>
+            <p class="member-auth-note">Subscribe — $1/month. Checkout is handled securely by PayPal. You can cancel anytime.</p>
+            <div class="member-auth-actions">
+              <button class="member-auth-button" type="submit">Subscribe with PayPal</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="member-auth-panel{% if tab == 'signin' %} is-active{% endif %}" role="tabpanel" id="panel-signin" aria-labelledby="tab-signin" data-panel="signin">
+          {% if error and tab == 'signin' %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
+          <form class="member-auth-form" method="POST" action="{{ url_for('member_login') }}" autocomplete="on">
+            <label for="front-signin-email">Email</label>
+            <input id="front-signin-email" type="email" name="email" autocomplete="email" required>
+            <label for="front-signin-password">Password</label>
+            <input id="front-signin-password" type="password" name="password" autocomplete="current-password" required>
+            <div class="member-auth-actions">
+              <button class="member-auth-button" type="submit">Sign In</button>
+            </div>
+          </form>
+        </div>
       </div>
-    {% endif %}
-
-    {% if member_status != 'active' %}
-    <div class="membership-terms-notice" style="margin-top:28px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);text-align:left;">
-      <h2 style="margin-top:0;">Before You Subscribe</h2>
-      <p style="margin-bottom:10px;">Please review the Membership Terms &amp; Conditions before completing your subscription.</p>
-      <p style="margin:0"><a href="{{ url_for('membership_terms') }}">Read the Membership Terms &amp; Conditions</a></p>
-    </div>
-
     {% endif %}
   </div>
 </section>
@@ -62,6 +96,21 @@
     try{ return new URLSearchParams(window.location.search).get(name); }
     catch(e){ return null; }
   }
+  var tabs = document.querySelectorAll('.member-auth-tab');
+  var panels = document.querySelectorAll('.member-auth-panel');
+  function activate(name) {
+    tabs.forEach(function (t) {
+      var on = t.getAttribute('data-tab') === name;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    panels.forEach(function (p) {
+      p.classList.toggle('is-active', p.getAttribute('data-panel') === name);
+    });
+  }
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () { activate(t.getAttribute('data-tab')); });
+  });
   var msg=document.getElementById('subscribe-msg');
   var errBox=document.getElementById('subscribe-error');
   function showError(t){ if(errBox){ errBox.textContent=t; } }
@@ -91,8 +140,6 @@
         .catch(function(){ showError('Could not start checkout. Please try again.'); btn.disabled=false; });
     });
   }
-  var box=document.getElementById('paypal-status');
-  if(box && !box.textContent.trim()) box.textContent='PayPal checkout is not configured on the server yet.';
 })();
 </script>
 {% endblock %}

@@ -391,7 +391,10 @@ def kwsnyderwriting_membership():
         conn.close()
         if row:
             member_status = row["subscription_status"]
-    return render_template("blog_templates/kwsnyderwriting_membership.html", member_status=member_status)
+    tab = request.args.get("tab", "signup")
+    if tab not in ("terms", "signup", "signin"):
+        tab = "signup"
+    return render_template("blog_templates/kwsnyderwriting_membership.html", member_status=member_status, active_tab=tab)
 
 
 @app.route("/kwsnyderwriting/login", methods=["GET", "POST"])
@@ -411,8 +414,8 @@ def member_login():
             if member["subscription_status"] == "active":
                 return redirect(url_for("kwsnyderwriting_entry"))
             return redirect(url_for("kwsnyderwriting_membership"))
-        return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signin", error="The email or password was not recognized.")
-    return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signin")
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signin", member_status=None, error="The email or password was not recognized.")
+    return redirect(url_for("kwsnyderwriting_membership", tab="signin"))
 
 
 @app.route("/kwsnyderwriting/signup", methods=["GET", "POST"])
@@ -439,7 +442,71 @@ def member_signup():
         session["member_id"] = member_id
         session["member_reauth_ok"] = True
         return redirect(url_for("kwsnyderwriting_membership", signup=1))
-    return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup")
+    return redirect(url_for("kwsnyderwriting_membership", tab="signup"))
+
+
+@app.route("/kwsnyderwriting/signup-subscribe", methods=["POST"])
+def member_signup_subscribe():
+    """One-motion signup + subscribe from the membership front page.
+
+    The visitor enters an email, a password, and agrees to the terms, then
+    goes straight to PayPal. The account is created (inactive) and signed
+    in first so the $1 subscription can attach to it, then PayPal approval
+    returns to the existing membership return handler, which verifies the
+    $1 plan and activates the account. Fail-closed on the $1 plan, same
+    guard as the standalone subscribe button. If PayPal cannot start, the
+    account still exists and the member can sign in and use Subscribe.
+    """
+    from paypal_member_routes import _verified_intro_plan_id
+    from paypal_subscriptions import paypal_request
+
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    if not email or len(password) < 8:
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="Please provide an email and a password of at least 8 characters.")
+    if not request.form.get("terms_agreed"):
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="Please agree to the Membership Terms & Conditions to subscribe.")
+    conn = get_db()
+    try:
+        cur = conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
+        member_id = cur.lastrowid
+        conn.commit()
+    except IntegrityError:
+        conn.close()
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="An account with that email already exists. Please log in instead.")
+    conn.close()
+    session.clear()
+    session.permanent = False
+    session["member_logged_in"] = True
+    session["member_id"] = member_id
+    session["member_reauth_ok"] = True
+    plan_id = _verified_intro_plan_id()
+    if not plan_id:
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status="inactive", error="Your account was created, but the $1 membership plan is not verified with PayPal right now. Please use Subscribe below to try again.")
+    base = request.host_url.rstrip("/")
+    try:
+        subscription = paypal_request("POST", "/v1/billing/subscriptions", {
+            "plan_id": plan_id,
+            "application_context": {
+                "brand_name": "Snyder Scriptorium",
+                "return_url": base + "/kwsnyderwriting/membership/return",
+                "cancel_url": base + "/kwsnyderwriting/membership/cancel",
+                "user_action": "SUBSCRIBE_NOW",
+                "shipping_preference": "NO_SHIPPING",
+            },
+        })
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("PayPal subscription creation failed during signup-subscribe")
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status="inactive", error="Your account was created, but PayPal could not start the subscription. Please use Subscribe below to try again.")
+    approval_url = ""
+    for link in subscription.get("links", []) or []:
+        if link.get("rel") == "approve" and link.get("href"):
+            approval_url = link["href"]
+            break
+    if not approval_url:
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status="inactive", error="Your account was created, but PayPal did not return an approval link. Please use Subscribe below to try again.")
+    return redirect(approval_url)
 
 
 @app.route("/kwsnyderwriting/logout")
