@@ -35,6 +35,12 @@
         <a class="member-auth-button member-auth-link-button" href="{{ url_for('member_login') }}">Sign In</a>
         <a class="member-auth-link" href="{{ url_for('member_signup') }}">Create Account</a>
       </div>
+      <div id="subscribe-box" style="margin-top:18px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);">
+        <h3 style="margin-top:0;">Subscribe — $1/month</h3>
+        <p style="margin-bottom:12px;">Checkout is handled securely by PayPal. You can cancel anytime.</p>
+        <a class="member-auth-button" href="{{ url_for('member_signup') }}">Subscribe with PayPal</a>
+        <p style="margin-top:10px;margin-bottom:0;">Create your account first — the full terms are right there on the signup page — then you'll land straight back here to subscribe.</p>
+      </div>
     {% endif %}
 
     {% if member_status != 'active' %}
@@ -60,7 +66,9 @@
   var errBox=document.getElementById('subscribe-error');
   function showError(t){ if(errBox){ errBox.textContent=t; } }
   if(msg){
-    if(param('subscribed')==='1'){
+    if(param('signup')==='1'){
+      msg.textContent='Account created — you are signed in. Click Subscribe with PayPal below.';
+    }else if(param('subscribed')==='1'){
       msg.textContent='Thank you \u2014 your membership is now active. Welcome to the private library.';
     }else if(param('cancelled')==='1'){
       msg.textContent='You left PayPal before completing the subscription. No charge was made \u2014 you can try again whenever you like.';

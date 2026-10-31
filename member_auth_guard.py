@@ -12,13 +12,14 @@ def register_member_auth_guard(app):
         if not path.startswith("/kwsnyderwriting"):
             return None
 
-        # Only the authentication entry points remain public. The membership
-        # page itself is protected so a visitor must sign in before seeing the
-        # subscription offer.
+        # Only the authentication entry points and the membership page
+        # itself remain public, so a visitor can see the subscription
+        # offer and subscribe. Only the private library stays behind login.
         public_paths = {
             "/kwsnyderwriting/login",
             "/kwsnyderwriting/signup",
             "/kwsnyderwriting/logout",
+            "/kwsnyderwriting/membership",
         }
         if path in public_paths:
             return None

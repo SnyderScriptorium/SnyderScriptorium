@@ -426,13 +426,19 @@ def member_signup():
             return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="Please agree to the Membership Terms & Conditions to create your account.")
         conn = get_db()
         try:
-            conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
+            cur = conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
+            member_id = cur.lastrowid
             conn.commit()
         except IntegrityError:
             conn.close()
             return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="An account with that email already exists.")
         conn.close()
-        return redirect(url_for("member_login"))
+        session.clear()
+        session.permanent = False
+        session["member_logged_in"] = True
+        session["member_id"] = member_id
+        session["member_reauth_ok"] = True
+        return redirect(url_for("kwsnyderwriting_membership", signup=1))
     return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup")
 
 
