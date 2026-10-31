@@ -20,6 +20,7 @@ def register_member_auth_guard(app):
             "/kwsnyderwriting/signup",
             "/kwsnyderwriting/logout",
             "/kwsnyderwriting/membership",
+            "/kwsnyderwriting/signup-subscribe",
         }
         if path in public_paths:
             return None
