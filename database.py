@@ -259,6 +259,7 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS blocked_senders (email TEXT PRIMARY KEY,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY,p256dh TEXT NOT NULL,auth TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS email_subscribers (email TEXT PRIMARY KEY,subscribed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,active INTEGER NOT NULL DEFAULT 1)",
+                "CREATE TABLE IF NOT EXISTS site_sync_tokens (id BIGSERIAL PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, label TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, last_used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0)",
             ]
             for statement in statements:
                 conn.execute(statement)
@@ -303,6 +304,7 @@ def init_db():
             conn.execute("CREATE TABLE IF NOT EXISTS blocked_senders (email TEXT PRIMARY KEY,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY,p256dh TEXT NOT NULL,auth TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS email_subscribers (email TEXT PRIMARY KEY,subscribed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,active INTEGER NOT NULL DEFAULT 1)")
+            conn.execute("CREATE TABLE IF NOT EXISTS site_sync_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT UNIQUE NOT NULL, label TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, last_used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0)")
 
             def add_columns(table, columns):
                 existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}

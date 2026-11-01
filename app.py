@@ -1,4 +1,6 @@
+import hashlib
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -1184,6 +1186,197 @@ def delete_chapter(book_id, chapter_id):
     if cur.rowcount == 0:
         return jsonify({"error": "Chapter not found"}), 404
     return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# ScriptSmith website sync (token-authenticated, NOT the admin session).
+#
+# Only a ScriptSmith holding a token minted from the admin page can use
+# these routes. Tokens are stored as SHA-256 hashes only; the plaintext
+# token is returned exactly once, at mint time, and is never stored,
+# logged, or included in any error response.
+# ---------------------------------------------------------------------------
+
+def _site_sync_token_row():
+    """Validate the Bearer token; return its row, or None when invalid."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[7:].strip()
+    if not token:
+        return None
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, label, created_at, last_used_at, revoked FROM site_sync_tokens WHERE token_hash = ?",
+            (token_hash,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row or row["revoked"]:
+        return None
+    return row
+
+
+def _require_site_sync_token():
+    """Return (row, error_response); error_response is None when valid."""
+    row = _site_sync_token_row()
+    if row is None:
+        return None, (jsonify({"error": "Invalid or revoked sync token."}), 401)
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE site_sync_tokens SET last_used_at = ? WHERE id = ?",
+            (now_string(), row["id"]),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return row, None
+
+
+@app.route("/api/site-sync/tokens", methods=["GET"])
+@admin_required
+def list_site_sync_tokens():
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, label, created_at, last_used_at, revoked FROM site_sync_tokens ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    # Hashes are never returned; only metadata the admin needs to manage them.
+    return jsonify({"tokens": [dict(row) for row in rows]})
+
+
+@app.route("/api/site-sync/tokens", methods=["POST"])
+@admin_required
+def mint_site_sync_token():
+    data = request.get_json() or {}
+    label = str(data.get("label", "")).strip() or "ScriptSmith"
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO site_sync_tokens(token_hash, label, created_at, revoked) VALUES (?, ?, ?, 0)",
+        (token_hash, label, now_string()),
+    )
+    conn.commit()
+    token_id = cur.lastrowid
+    conn.close()
+    # Plaintext is returned exactly once, here. It is never stored or logged.
+    return jsonify({"success": True, "id": token_id, "label": label, "token": token}), 201
+
+
+@app.route("/api/site-sync/tokens/<int:token_id>/revoke", methods=["POST"])
+@admin_required
+def revoke_site_sync_token(token_id):
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE site_sync_tokens SET revoked = 1 WHERE id = ?", (token_id,)
+    )
+    conn.commit()
+    conn.close()
+    if cur.rowcount == 0:
+        return jsonify({"error": "Token not found."}), 404
+    return jsonify({"success": True})
+
+
+@app.route("/api/site-sync/manuscripts", methods=["GET"])
+def site_sync_list_manuscripts():
+    _, error = _require_site_sync_token()
+    if error:
+        return error
+    conn = get_db()
+    books = conn.execute(
+        "SELECT b.id, b.title, (SELECT COUNT(*) FROM manuscript_chapters c WHERE c.book_id = b.id) AS chapter_count FROM manuscript_books b ORDER BY b.id DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify({"books": [dict(row) for row in books]})
+
+
+@app.route("/api/site-sync/manuscripts/<int:book_id>", methods=["GET"])
+def site_sync_get_manuscript(book_id):
+    _, error = _require_site_sync_token()
+    if error:
+        return error
+    conn = get_db()
+    book = conn.execute("SELECT * FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number", (book_id,)).fetchall()
+    conn.close()
+    if not book:
+        return jsonify({"error": "Book not found."}), 404
+    return jsonify({"book": dict(book), "chapters": [dict(row) for row in chapters]})
+
+
+@app.route("/api/site-sync/manuscripts", methods=["POST"])
+def site_sync_create_manuscript():
+    _, error = _require_site_sync_token()
+    if error:
+        return error
+    data = request.get_json() or {}
+    title = str(data.get("title", "")).strip()
+    description = str(data.get("description", ""))
+    if not title:
+        return jsonify({"error": "A title is required."}), 400
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO manuscript_books(title, description, date_created, updated_at) VALUES (?, ?, ?, ?)",
+        (title, description, now_string(), now_string()),
+    )
+    conn.commit()
+    book_id = cur.lastrowid
+    conn.close()
+    return jsonify({"success": True, "id": book_id}), 201
+
+
+@app.route("/api/site-sync/manuscripts/<int:book_id>/chapters", methods=["PUT"])
+def site_sync_replace_chapters(book_id):
+    _, error = _require_site_sync_token()
+    if error:
+        return error
+    data = request.get_json() or {}
+    chapters = data.get("chapters", [])
+    if not isinstance(chapters, list):
+        return jsonify({"error": "chapters must be a list."}), 400
+    conn = get_db()
+    book = conn.execute("SELECT id FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
+    if not book:
+        conn.close()
+        return jsonify({"error": "Book not found."}), 404
+    existing = conn.execute(
+        "SELECT id, chapter_number FROM manuscript_chapters WHERE book_id = ? ORDER BY chapter_number",
+        (book_id,),
+    ).fetchall()
+    for index, chapter in enumerate(chapters):
+        number = index + 1
+        chapter = chapter if isinstance(chapter, dict) else {}
+        title = str(chapter.get("title", "Untitled Chapter")).strip() or "Untitled Chapter"
+        content = str(chapter.get("content", ""))
+        if index < len(existing):
+            # Preserve the existing row (and its published flag). Renumbering
+            # in ascending order is safe against the UNIQUE(book_id,
+            # chapter_number) constraint: each target number was either free
+            # or freed by an earlier row's move.
+            conn.execute(
+                "UPDATE manuscript_chapters SET chapter_number = ?, title = ?, content = ?, updated_at = ? WHERE id = ?",
+                (number, title, content, now_string(), existing[index]["id"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO manuscript_chapters(book_id, chapter_number, title, content, published, date_created, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
+                (book_id, number, title, content, now_string(), now_string()),
+            )
+    if len(existing) > len(chapters):
+        conn.execute(
+            "DELETE FROM manuscript_chapters WHERE book_id = ? AND chapter_number > ?",
+            (book_id, len(chapters)),
+        )
+    conn.execute(
+        "UPDATE manuscript_books SET updated_at = ? WHERE id = ?", (now_string(), book_id)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "chapter_count": len(chapters)})
 
 
 @app.route("/api/about", methods=["GET"])
