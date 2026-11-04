@@ -384,6 +384,34 @@ def sitemap_blog():
     return Response("\n".join(lines), mimetype="application/xml")
 
 
+@app.route("/sitemap-pages.xml")
+def sitemap_pages():
+    """Search-engine sitemap for the public static pages that neither
+    /sitemap.xml (home/store/books) nor /sitemap-blog.xml (blog/posts)
+    covers: Find Us, Merch, the membership landing + terms, and the
+    ScriptSmith policy pages. Lives here (not in store.py) so the store
+    restore workflow can't wipe it. Deliberately excludes member-gated
+    library pages, admin pages, cart/checkout, search results, and
+    redirect/utility pages — those must never be indexed."""
+    def esc(s):
+        return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace('"', "&quot;"))
+    urls = [url_for("find_us", _external=True),
+            url_for("merch_shop", _external=True),
+            url_for("kwsnyderwriting_membership", _external=True),
+            url_for("membership_terms", _external=True),
+            url_for("scriptsmith_privacy", _external=True),
+            url_for("scriptsmith_terms", _external=True)]
+    seen = set()
+    unique = [u for u in urls if not (u in seen or seen.add(u))]
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u in unique:
+        lines.append("  <url><loc>%s</loc></url>" % esc(u))
+    lines.append("</urlset>")
+    return Response("\n".join(lines), mimetype="application/xml")
+
+
 @app.route("/kwsnyderwriting/membership")
 def kwsnyderwriting_membership():
     # Public page: visitors can browse what the membership is before signing up.
