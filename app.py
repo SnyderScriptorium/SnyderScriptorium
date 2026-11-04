@@ -132,7 +132,7 @@ def record_member_content_view(content_type, content_id, title):
     try:
         conn.execute(
             "INSERT INTO member_content_views(member_id, content_type, content_id, title, path) VALUES (?, ?, ?, ?, ?)",
-            (str(content_type)[:40], content_id, str(title or "")[:500], request.path),
+            (member_id, str(content_type)[:40], content_id, str(title or "")[:500], request.path),
         )
         conn.commit()
     finally:
