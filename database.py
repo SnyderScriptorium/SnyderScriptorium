@@ -255,6 +255,7 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS inbox_messages (id BIGSERIAL PRIMARY KEY,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id BIGINT,book_id BIGINT,chapter_id BIGINT,member_id BIGINT,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text)",
                 "CREATE TABLE IF NOT EXISTS page_views (id BIGSERIAL PRIMARY KEY,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id BIGINT,category TEXT,viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT,classified INTEGER NOT NULL DEFAULT 0)",
+                "CREATE TABLE IF NOT EXISTS member_content_views (id BIGSERIAL PRIMARY KEY,member_id BIGINT NOT NULL REFERENCES members(id) ON DELETE CASCADE,content_type TEXT NOT NULL,content_id BIGINT,title TEXT NOT NULL DEFAULT '',path TEXT NOT NULL,viewed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS find_us_events (id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,date TEXT NOT NULL,start_time TEXT NOT NULL DEFAULT '',end_time TEXT NOT NULL DEFAULT '',location TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',website_url TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',is_active INTEGER NOT NULL DEFAULT 1,is_featured INTEGER NOT NULL DEFAULT 0,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS blocked_senders (email TEXT PRIMARY KEY,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY,p256dh TEXT NOT NULL,auth TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
@@ -288,6 +289,8 @@ def init_db():
             # backfill script (scripts/backfill_page_views.py).
             conn.execute("CREATE INDEX IF NOT EXISTS idx_page_views_classified ON page_views(classified)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_page_views_viewed_at ON page_views(viewed_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_member_content_views_viewed_at ON member_content_views(viewed_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_member_content_views_member ON member_content_views(member_id)")
         else:
             _log_phase("ensuring tables (sqlite)")
             conn.execute("CREATE TABLE IF NOT EXISTS drafts (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,category TEXT NOT NULL,content TEXT NOT NULL,date_created TEXT NOT NULL)")
@@ -299,6 +302,7 @@ def init_db():
             conn.execute("CREATE TABLE IF NOT EXISTS inbox_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,message_type TEXT NOT NULL DEFAULT 'contact',name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',subject TEXT NOT NULL DEFAULT '',message TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'new',is_read INTEGER NOT NULL DEFAULT 0,post_id INTEGER,book_id INTEGER,chapter_id INTEGER,member_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS site_content (key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS page_views (id INTEGER PRIMARY KEY AUTOINCREMENT,path TEXT NOT NULL,page_type TEXT NOT NULL DEFAULT 'page',content_id INTEGER,category TEXT,viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,visitor_key TEXT,referrer TEXT,traffic_source TEXT,classified INTEGER NOT NULL DEFAULT 0)")
+            conn.execute("CREATE TABLE IF NOT EXISTS member_content_views (id INTEGER PRIMARY KEY AUTOINCREMENT,member_id INTEGER NOT NULL,content_type TEXT NOT NULL,content_id INTEGER,title TEXT NOT NULL DEFAULT '',path TEXT NOT NULL,viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_page_views_classified ON page_views(classified)")
             conn.execute("CREATE TABLE IF NOT EXISTS find_us_events (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,date TEXT NOT NULL,start_time TEXT NOT NULL DEFAULT '',end_time TEXT NOT NULL DEFAULT '',location TEXT NOT NULL DEFAULT '',address TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',website_url TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',is_active INTEGER NOT NULL DEFAULT 1,is_featured INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS blocked_senders (email TEXT PRIMARY KEY,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
@@ -316,6 +320,8 @@ def init_db():
             add_columns("subscriptions", [("provider", "TEXT"), ("subscription_id", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_started", "TEXT"), ("date_ends", "TEXT")])
             add_columns("page_views", [("page_type", "TEXT NOT NULL DEFAULT 'page'"), ("content_id", "INTEGER"), ("category", "TEXT"), ("viewed_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"), ("visitor_key", "TEXT"), ("referrer", "TEXT"), ("traffic_source", "TEXT"), ("classified", "INTEGER NOT NULL DEFAULT 0")])
             add_columns("site_content", [("updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP")])
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_member_content_views_viewed_at ON member_content_views(viewed_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_member_content_views_member ON member_content_views(member_id)")
 
         conn.execute(
             "INSERT INTO site_content(key,value,updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING",
