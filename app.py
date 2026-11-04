@@ -80,13 +80,25 @@ def member_has_access():
         return False
     conn = get_db()
     try:
-        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
+        row = conn.execute(
+            "SELECT m.subscription_status, m.status AS account_status, s.date_ends "
+            "FROM members m LEFT JOIN subscriptions s ON s.member_id = m.id "
+            "WHERE m.id = ? ORDER BY s.id DESC LIMIT 1",
+            (member_id,),
+        ).fetchone()
     finally:
-        # Always release the connection, even if the query raises. A leaked
-        # connection can exhaust the database's connection limit and wedge
-        # the whole site.
         conn.close()
-    g._member_has_access = bool(row and row["subscription_status"] == "active")
+    paid_through = None
+    if row and row["date_ends"]:
+        try:
+            paid_through = datetime.fromisoformat(str(row["date_ends"]).replace("Z", "+00:00"))
+            if paid_through.tzinfo is None:
+                paid_through = paid_through.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            paid_through = None
+    allowed_status = row and row["subscription_status"] in {"active", "cancelled", "past_due"}
+    account_ok = row and str(row["account_status"] or "active").lower() == "active"
+    g._member_has_access = bool(allowed_status and account_ok and paid_through and paid_through > datetime.now(timezone.utc))
     return g._member_has_access
 
 
@@ -108,6 +120,24 @@ def member_required(view):
             return redirect(url_for("kwsnyderwriting_membership"))
         return view(*args, **kwargs)
     return wrapped
+
+def record_member_content_view(content_type, content_id, title):
+    """Record a successful protected-content response for an authenticated member."""
+    if session.get("member_preview") is True and require_admin():
+        return
+    member_id = session.get("member_id")
+    if not member_id or not member_has_access():
+        return
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO member_content_views(member_id, content_type, content_id, title, path) VALUES (?, ?, ?, ?, ?)",
+            (str(content_type)[:40], content_id, str(title or "")[:500], request.path),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
 
 
 def category_label(category):
@@ -408,14 +438,40 @@ def member_login():
         member = conn.execute("SELECT * FROM members WHERE email = ?", (email,)).fetchone()
         conn.close()
         if member and check_password_hash(member["password_hash"], password):
+            # A valid password is not proof of a current paid membership.
+            conn = get_db()
+            try:
+                entitlement = conn.execute(
+                    "SELECT m.subscription_status, m.status AS account_status, s.date_ends "
+                    "FROM members m LEFT JOIN subscriptions s ON s.member_id = m.id "
+                    "WHERE m.id = ? ORDER BY s.id DESC LIMIT 1",
+                    (member["id"],),
+                ).fetchone()
+            finally:
+                conn.close()
+            paid_through = None
+            if entitlement and entitlement["date_ends"]:
+                try:
+                    paid_through = datetime.fromisoformat(str(entitlement["date_ends"]).replace("Z", "+00:00"))
+                    if paid_through.tzinfo is None:
+                        paid_through = paid_through.replace(tzinfo=timezone.utc)
+                except (TypeError, ValueError):
+                    paid_through = None
+            status_ok = entitlement and entitlement["subscription_status"] in {"active", "cancelled", "past_due"}
+            account_ok = entitlement and str(entitlement["account_status"] or "active").lower() == "active"
+            if not (status_ok and account_ok and paid_through and paid_through > datetime.now(timezone.utc)):
+                session.clear()
+                return render_template(
+                    "blog_templates/kwsnyderwriting_membership.html",
+                    active_tab="signin", member_status="inactive",
+                    error="Your membership payment is not currently verified as paid. Please subscribe or contact us if you believe this is an error.",
+                )
             session.clear()
             session.permanent = False
             session["member_logged_in"] = True
             session["member_id"] = member["id"]
             session["member_reauth_ok"] = True
-            if member["subscription_status"] == "active":
-                return redirect(url_for("kwsnyderwriting_entry"))
-            return redirect(url_for("kwsnyderwriting_membership"))
+            return redirect(url_for("kwsnyderwriting_entry"))
         return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signin", member_status=None, error="The email or password was not recognized.")
     return redirect(url_for("kwsnyderwriting_membership", tab="signin"))
 
@@ -545,6 +601,7 @@ def view_member_post(post_id):
     conn.close()
     if not post:
         abort(404)
+    record_member_content_view("post", post_id, post["title"])
     return render_template("post.html", post=post, back_url=url_for("kwsnyderwriting_section", section=post["category"]))
 
 
@@ -558,6 +615,7 @@ def kwsnyderwriting_section(section):
     conn = get_db()
     posts = conn.execute("SELECT * FROM published_posts WHERE category = ? AND access_level = 'members' ORDER BY id DESC", (category,)).fetchall()
     conn.close()
+    record_member_content_view("section", None, title)
     return render_template("blog_templates/kwsnyderwriting_section.html", posts=posts, section_title=title, section_slug=section)
 
 
@@ -585,6 +643,7 @@ def view_novel(book_id):
     conn.close()
     if not book:
         abort(404)
+    record_member_content_view("novel", book_id, book["title"])
     return render_template("blog_templates/novel.html", book=book, chapters=chapters)
 
 
@@ -599,6 +658,7 @@ def view_chapter(book_id, chapter_id):
     conn.close()
     if not chapter or not book:
         abort(404)
+    record_member_content_view("chapter", chapter_id, f"{book['title']} — Chapter {chapter['chapter_number']}: {chapter['title']}")
     return render_template("blog_templates/chapter.html", book=book, chapter=chapter, previous=prev_chapter, next=next_chapter)
 
 
@@ -709,6 +769,28 @@ def admin_logout():
 @admin_required
 def admin_inbox():
     return render_template("admin_inbox.html")
+
+
+@app.route("/api/admin/member-reading-views", methods=["GET"])
+@admin_required
+def admin_member_reading_views():
+    """Recent successful private-writing opens, attributable to member accounts."""
+    try:
+        limit = min(500, max(1, int(request.args.get("limit", "200"))))
+    except (TypeError, ValueError):
+        limit = 200
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT v.id, v.viewed_at, v.content_type, v.content_id, v.title, v.path, "
+            "m.id AS member_id, m.email AS member_email "
+            "FROM member_content_views v JOIN members m ON m.id = v.member_id "
+            "ORDER BY v.viewed_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return jsonify({"views": [dict(row) for row in rows], "count": len(rows)})
+    finally:
+        conn.close()
 
 
 @app.route("/api/inbox", methods=["GET"])
