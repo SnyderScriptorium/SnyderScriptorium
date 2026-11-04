@@ -49,12 +49,22 @@ def _store_data(period):
             hour_keys = analytics.build_time_buckets("day", hour_counts, {})
             store_daily = [{"date": k, "views": hour_counts.get(k, 0)} for k in hour_keys]
         else:
-            daily_rows = conn.execute(
-                f"""SELECT substr(pv.viewed_at, 1, 10) AS day, COUNT(*) AS n
-                    FROM page_views pv{where}{store_filter}
-                    GROUP BY day ORDER BY day""", params
+            # Bucket in Python, not with substr(): viewed_at is TEXT in
+            # SQLite but TIMESTAMPTZ in Postgres, and substr() on a
+            # timestamptz throws on Postgres, 500ing the Store endpoint
+            # for every non-day period. Python bucketing also keeps
+            # Eastern dates correct (the Postgres session runs in UTC).
+            from collections import Counter
+            ts_rows = conn.execute(
+                f"""SELECT pv.viewed_at AS ts
+                    FROM page_views pv{where}{store_filter}""", params
             ).fetchall()
-            store_daily = [{"date": r["day"], "views": int(r["n"] or 0)} for r in daily_rows]
+            day_counts = Counter()
+            for _r in ts_rows:
+                _dt = analytics._parse_view_time(_r["ts"])
+                if _dt is not None:
+                    day_counts[_dt.astimezone(analytics.EASTERN).date().isoformat()] += 1
+            store_daily = [{"date": d, "views": day_counts[d]} for d in sorted(day_counts)]
 
         book_rows = conn.execute(
             f"""SELECT sp.id, sp.title, sp.author,
