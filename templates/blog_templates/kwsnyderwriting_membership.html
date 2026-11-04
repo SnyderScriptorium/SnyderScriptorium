@@ -19,11 +19,20 @@
       <p><strong>Status:</strong> {{ member_status|default('inactive')|replace('_',' ')|title }}</p>
       {% if error %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
 
-      {% if member_status == 'active' %}
+      {% if has_access %}
         <div class="member-auth-actions" style="justify-content:center;margin-top:14px;display:flex;flex-direction:column;align-items:center;gap:10px;">
           <a class="member-auth-button" href="{{ url_for('kwsnyderwriting_entry') }}">Enter the Private Library</a>
+          {% if member_status == 'cancelled' and paid_through_display %}
+          <p style="margin-top:6px;">Your subscription is cancelled, so it will not renew — but your access continues through {{ paid_through_display }}.</p>
+          {% elif member_status == 'past_due' and paid_through_display %}
+          <p style="margin-top:6px;">There was a problem with your latest payment — your access continues through {{ paid_through_display }}.</p>
+          {% elif paid_through_display %}
+          <p style="margin-top:6px;">Your access is paid through {{ paid_through_display }}.</p>
+          {% endif %}
           <a class="member-auth-link" href="{{ url_for('member_logout') }}">Sign Out</a>
         </div>
+      {% elif member_status == 'pending_payment' %}
+        <p style="margin-top:12px;">Your subscription is approved — we are confirming your $1 payment with PayPal. Access opens as soon as it is verified. <a href="{{ url_for('kwsnyderwriting_membership') }}">Check again</a>.</p>
       {% else %}
         <div id="subscribe-box" style="margin-top:18px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);">
           <h3 style="margin-top:0;">Subscribe — $1/month</h3>
@@ -119,6 +128,8 @@
       msg.textContent='Account created — you are signed in. Click Subscribe with PayPal below.';
     }else if(param('subscribed')==='1'){
       msg.textContent='Thank you \u2014 your membership is now active. Welcome to the private library.';
+    }else if(param('verifying')==='1'){
+      msg.textContent='Thank you \u2014 your subscription is approved and your $1 payment is being confirmed with PayPal. Access opens as soon as it is verified; refresh this page to check again.';
     }else if(param('cancelled')==='1'){
       msg.textContent='You left PayPal before completing the subscription. No charge was made \u2014 you can try again whenever you like.';
     }else if(param('error')){

@@ -169,9 +169,8 @@ def classify_path(path, store_slug_to_id=None):
         return ("store_book", "store", slug_map.get(m.group(1)))
     if path == "/kwsnyderwriting":
         return ("member_section", "kwsnyderwriting", None)
-    m = re.match(r"^/kwsnyderwriting/section/([^/]+)$", path)
-    if m:
-        return ("post_list", "kwsnyderwriting", None)
+    if path in ("/kwsnyderwriting/short-stories", "/kwsnyderwriting/poems", "/kwsnyderwriting/vignettes"):
+        return ("member_section", "kwsnyderwriting", None)
     m = re.match(r"^/kwsnyderwriting/post/(\d+)", path)
     if m:
         return ("member_post", "kwsnyderwriting", int(m.group(1)))

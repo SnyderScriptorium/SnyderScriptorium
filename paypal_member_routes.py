@@ -5,6 +5,13 @@ from datetime import datetime, timezone
 from flask import Blueprint, current_app, jsonify, redirect, request, session
 
 from database import get_db
+from member_payments import (
+    fmt_utc,
+    get_member_access,
+    utcnow,
+    verify_and_record_subscription_payments,
+    void_payment,
+)
 from paypal_subscriptions import get_subscription, paypal_request, verify_webhook
 
 paypal_member = Blueprint("paypal_member", __name__)
@@ -40,15 +47,23 @@ def _iso_or_now(value=None):
     return value or datetime.now(timezone.utc).isoformat()
 
 
-def _status_for_member(paypal_status):
-    return "active" if paypal_status == "ACTIVE" else "inactive"
-
-
 def _save_subscription(member_id, subscription_id, status, started=None, ends=None):
+    """Upsert the member's subscription record and status string.
+
+    The paid-through date lives in the verified payment ledger, never in
+    this status string. When a caller passes no start/end (cancellation
+    and failure events carry no billing dates), the previously stored
+    dates are preserved rather than overwritten with NULL, so a
+    cancellation can never erase the paid period it follows.
+    """
     conn = get_db()
     try:
-        existing = conn.execute("SELECT id FROM subscriptions WHERE member_id = ? ORDER BY id DESC LIMIT 1", (member_id,)).fetchone()
+        existing = conn.execute("SELECT id, date_started, date_ends FROM subscriptions WHERE member_id = ? ORDER BY id DESC LIMIT 1", (member_id,)).fetchone()
         if existing:
+            if started is None:
+                started = existing["date_started"]
+            if ends is None:
+                ends = existing["date_ends"]
             conn.execute("UPDATE subscriptions SET provider = ?, subscription_id = ?, status = ?, date_started = ?, date_ends = ? WHERE id = ?", ("paypal", subscription_id, status, started, ends, existing["id"]))
         else:
             conn.execute("INSERT INTO subscriptions(member_id, provider, subscription_id, status, date_started, date_ends) VALUES (?, ?, ?, ?, ?, ?)", (member_id, "paypal", subscription_id, status, started, ends))
@@ -136,11 +151,19 @@ def create_subscription():
 
     conn = get_db()
     try:
-        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
-        if row and row["subscription_status"] == "active":
-            return jsonify({"ok": False, "error": "This account already has an active membership."}), 409
+        row = conn.execute("SELECT subscription_status, status FROM members WHERE id = ?", (member_id,)).fetchone()
     finally:
         conn.close()
+    if row and row["status"] == "blocked":
+        return jsonify({"ok": False, "error": "This account has been blocked."}), 403
+    try:
+        access = get_member_access(member_id)
+    except Exception:
+        access = {"has_access": False}
+    if access["has_access"]:
+        return jsonify({"ok": False, "error": "This account already has an active membership."}), 409
+    if row and row["subscription_status"] == "pending_payment":
+        return jsonify({"ok": False, "error": "A subscription is already waiting for PayPal to confirm its payment. Please allow a moment, then refresh the membership page."}), 409
 
     plan_id = _verified_intro_plan_id()
     if not plan_id:
@@ -176,7 +199,15 @@ def create_subscription():
 
 @paypal_member.get("/kwsnyderwriting/membership/return")
 def membership_return():
-    """PayPal sends the buyer back here after approving the subscription."""
+    """PayPal sends the buyer back here after approving the subscription.
+
+    A browser redirect is never proof of payment. The subscription is
+    fetched from PayPal, its plan must be the verified $1 plan, and a
+    captured $1.00 USD payment must be found in the subscription's
+    transactions before the account is activated. If the payment has not
+    cleared yet, the account waits in pending_payment: the membership page
+    rechecks on the next visit and the payment webhook completes it.
+    """
     if not session.get("member_logged_in") or not session.get("member_id"):
         return redirect("/kwsnyderwriting/login")
     subscription_id = request.args.get("subscription_id", "").strip()
@@ -193,15 +224,27 @@ def membership_return():
     if subscription.get("plan_id") != plan_id:
         logger.warning("Subscription %s is not on the verified $1 plan; not attaching.", subscription_id)
         return redirect("/kwsnyderwriting/membership?error=wrong_plan")
-    status = _status_for_member(str(subscription.get("status") or "").upper())
+    member_id = session["member_id"]
     started = subscription.get("start_time") or subscription.get("create_time") or _iso_or_now()
     ends = (subscription.get("billing_info") or {}).get("next_billing_time")
     try:
-        _save_subscription(session["member_id"], subscription_id, status, started, ends)
+        verify_and_record_subscription_payments(member_id, subscription_id, subscription=subscription, source="return")
+    except Exception:
+        logger.exception("Could not verify payment after PayPal return")
+        return redirect("/kwsnyderwriting/membership?error=verify_failed")
+    try:
+        access = get_member_access(member_id)
+    except Exception:
+        access = {"has_access": False}
+    status = "active" if access["has_access"] else "pending_payment"
+    try:
+        _save_subscription(member_id, subscription_id, status, started, ends)
     except Exception:
         logger.exception("Could not save subscription after PayPal return")
         return redirect("/kwsnyderwriting/membership?error=save_failed")
-    return redirect("/kwsnyderwriting/membership?subscribed=1")
+    if status == "active":
+        return redirect("/kwsnyderwriting/membership?subscribed=1")
+    return redirect("/kwsnyderwriting/membership?verifying=1")
 
 
 @paypal_member.get("/kwsnyderwriting/membership/cancel")
@@ -215,10 +258,19 @@ def attach_subscription():
     if not session.get("member_logged_in") or not session.get("member_id"):
         return jsonify({"ok": False, "error": "Please sign in to your K. W. Snyder Writing account first."}), 401
 
+    member_id = session["member_id"]
     payload = request.get_json(silent=True) or {}
     subscription_id = str(payload.get("subscriptionID") or "").strip()
     if not subscription_id:
         return jsonify({"ok": False, "error": "PayPal did not return a subscription ID."}), 400
+
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT status FROM members WHERE id = ?", (member_id,)).fetchone()
+    finally:
+        conn.close()
+    if row and row["status"] == "blocked":
+        return jsonify({"ok": False, "error": "This account has been blocked."}), 403
 
     try:
         subscription = get_subscription(subscription_id)
@@ -226,27 +278,47 @@ def attach_subscription():
         logger.exception("PayPal subscription verification failed")
         return jsonify({"ok": False, "error": f"PayPal could not verify the subscription yet: {exc}"}), 502
 
-    plan_id = configured_plan_id()
+    # The $1-only rule applies here too: a subscription on any other plan
+    # (including the legacy $3/$4/$5 plans) must never attach as a $1
+    # membership, whatever the runtime plan config happens to hold.
+    plan_id = _verified_intro_plan_id()
     if not plan_id:
-        return jsonify({"ok": False, "error": "The PayPal membership plan is not configured on the server."}), 503
+        return jsonify({"ok": False, "error": "The $1 membership plan is not verified with PayPal right now. Please try again later."}), 503
     if subscription.get("plan_id") != plan_id:
-        return jsonify({"ok": False, "error": "The PayPal subscription does not match the K. W. Snyder Writing membership plan."}), 400
+        return jsonify({"ok": False, "error": "The PayPal subscription does not match the $1 K. W. Snyder Writing membership plan."}), 400
 
     paypal_status = str(subscription.get("status") or "").upper()
     if paypal_status not in {"APPROVAL_PENDING", "APPROVED", "ACTIVE", "SUSPENDED", "CANCELLED", "EXPIRED"}:
         return jsonify({"ok": False, "error": "PayPal returned an unexpected subscription status."}), 400
 
-    status = _status_for_member(paypal_status)
     started = subscription.get("start_time") or subscription.get("create_time") or _iso_or_now()
     ends = (subscription.get("billing_info") or {}).get("next_billing_time")
-    _save_subscription(session["member_id"], subscription_id, status, started, ends)
+    try:
+        verify_and_record_subscription_payments(member_id, subscription_id, subscription=subscription, source="attach")
+    except Exception:
+        logger.exception("PayPal payment verification failed during attach")
+        return jsonify({"ok": False, "error": "PayPal could not verify a payment for this subscription yet."}), 502
+    try:
+        access = get_member_access(member_id)
+    except Exception:
+        access = {"has_access": False}
+    status = "active" if access["has_access"] else "pending_payment"
+    _save_subscription(member_id, subscription_id, status, started, ends)
 
-    return jsonify({"ok": True, "subscriptionID": subscription_id, "paypalStatus": paypal_status, "memberStatus": status, "active": status == "active"})
+    return jsonify({"ok": True, "subscriptionID": subscription_id, "paypalStatus": paypal_status, "memberStatus": status, "active": status == "active", "verifying": status == "pending_payment"})
 
 
 @paypal_member.post("/api/paypal/cancel-subscription")
 def cancel_subscription():
-    """Cancel only the PayPal subscription belonging to the signed-in member."""
+    """Cancel only the PayPal subscription belonging to the signed-in member.
+
+    Cancelling stops future billing. It never revokes the paid period:
+    the member keeps access through the end of their verified paid
+    interval, and the stored billing dates are preserved, not erased, by
+    the cancellation. The subscription is found through this member's own
+    record, so it stays cancellable whatever plan it is on (including a
+    legacy plan) — the plan check that used to block those cancels is gone.
+    """
     member_id = session.get("member_id")
     if not session.get("member_logged_in") or not member_id:
         return jsonify({"ok": False, "error": "Please sign in to your K. W. Snyder Writing account first."}), 401
@@ -269,9 +341,6 @@ def cancel_subscription():
     except Exception as exc:
         logger.exception("Could not retrieve PayPal subscription before cancellation")
         return jsonify({"ok": False, "error": f"PayPal could not verify your subscription: {exc}"}), 502
-
-    if current.get("plan_id") != configured_plan_id():
-        return jsonify({"ok": False, "error": "This subscription does not match the K. W. Snyder Writing membership plan."}), 400
 
     paypal_status = str(current.get("status") or "").upper()
     if paypal_status in {"CANCELLED", "EXPIRED"}:
@@ -299,6 +368,28 @@ def cancel_subscription():
 
 @paypal_member.post("/api/paypal/webhook")
 def paypal_webhook():
+    """Handle PayPal subscription webhooks with verified-payment gating.
+
+    Rules this handler enforces:
+
+    * The webhook signature is verified first; a failed signature is a 400
+      and nothing is applied, so a forged event can never move a member.
+    * Events are deduplicated by PayPal event id. A redelivery never
+      double-records a payment or double-extends a paid period. Events are
+      recorded only after successful handling, so a transient PayPal API
+      failure (502) still lets PayPal retry the same event later.
+    * ACTIVATED alone never grants access. A subscription reported ACTIVE
+      with no captured $1.00 USD payment behind it lands the member in
+      pending_payment, not active.
+    * Payment events grant access only after the subscription's
+      transactions are fetched from PayPal and a COMPLETED $1.00 USD
+      payment is found and recorded on the ledger.
+    * Cancellation, suspension, expiry, and failed-payment events only
+      change the status string. They never erase a verified paid interval,
+      so a cancelled member keeps access through the paid period.
+    * Refunds and reversals void the matching payment interval, ending
+      access once that interval was the one covering the member.
+    """
     event = request.get_json(silent=True) or {}
     if not event:
         return jsonify({"ok": False, "error": "Missing PayPal webhook payload."}), 400
@@ -306,48 +397,216 @@ def paypal_webhook():
         return jsonify({"ok": False, "error": "PayPal webhook verification failed."}), 400
 
     event_type = str(event.get("event_type") or "").strip()
+    event_id = str(event.get("id") or "").strip()
     resource = event.get("resource") or {}
-    subscription_id = str(resource.get("id") or resource.get("billing_agreement_id") or resource.get("subscription_id") or "").strip()
+
+    if event_id:
+        conn = get_db()
+        try:
+            seen = conn.execute("SELECT id FROM paypal_webhook_events WHERE paypal_event_id = ?", (event_id,)).fetchone()
+        finally:
+            conn.close()
+        if seen:
+            return jsonify({"ok": True, "handled": True, "duplicate": True}), 200
+
+    def _record_event(subscription_id):
+        if not event_id:
+            return
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO paypal_webhook_events(paypal_event_id, event_type, subscription_id, received_at) VALUES (?, ?, ?, ?)",
+                (event_id, event_type, subscription_id, fmt_utc(utcnow())),
+            )
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            conn.close()
+
+    # Refunds/reversals are resolved through the payment ledger, not the
+    # subscription table: their resource carries a sale id, not a
+    # subscription id.
+    if event_type in {"PAYMENT.SALE.REFUNDED", "PAYMENT.SALE.REVERSED"}:
+        sale_id = str(resource.get("sale_id") or resource.get("id") or "").strip()
+        member_id = None
+        subscription_id = ""
+        if sale_id:
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT member_id, subscription_id FROM member_payments WHERE paypal_transaction_id = ? AND status = 'verified' ORDER BY id DESC LIMIT 1",
+                    (sale_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+            if row:
+                member_id = row["member_id"]
+                subscription_id = row["subscription_id"] or ""
+        if not member_id:
+            _record_event(subscription_id)
+            return jsonify({"ok": True, "handled": False, "reason": "payment_not_found"}), 200
+        conn = get_db()
+        try:
+            voided = void_payment(conn, member_id, sale_id, "refunded" if event_type == "PAYMENT.SALE.REFUNDED" else "reversed")
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            conn.close()
+            return jsonify({"ok": False, "error": "Could not void the payment."}), 502
+        conn.close()
+        _record_event(subscription_id)
+        return jsonify({"ok": True, "handled": True, "event": event_type, "voided": voided}), 200
+
+    # Subscription resolution order matters: for PAYMENT.SALE.* events the
+    # resource id is the SALE id, not the subscription id — the
+    # subscription lives in billing_agreement_id. For
+    # BILLING.SUBSCRIPTION.* events the resource id IS the subscription
+    # id and billing_agreement_id is absent, so the same order resolves
+    # both. (BILLING.SUBSCRIPTION.PAYMENT.COMPLETED carries no
+    # subscription id in its resource; its companion SALE.COMPLETED event
+    # does, so an unresolvable PAYMENT.COMPLETED is safely a no-op.)
+    subscription_id = str(resource.get("billing_agreement_id") or resource.get("subscription_id") or resource.get("id") or "").strip()
     if not subscription_id:
-        return jsonify({"ok": True, "handled": False}), 200
-
-    status_map = {
-        "BILLING.SUBSCRIPTION.ACTIVATED": "active",
-        "PAYMENT.SALE.COMPLETED": "active",
-        "BILLING.SUBSCRIPTION.PAYMENT.FAILED": "past_due",
-        "BILLING.SUBSCRIPTION.SUSPENDED": "paused",
-        "BILLING.SUBSCRIPTION.CANCELLED": "cancelled",
-        "BILLING.SUBSCRIPTION.EXPIRED": "expired",
-    }
-
-    if event_type == "BILLING.SUBSCRIPTION.UPDATED":
-        paypal_status = str(resource.get("status") or "").upper()
-        status = {"SUSPENDED": "paused", "CANCELLED": "cancelled", "EXPIRED": "expired", "ACTIVE": "active"}.get(paypal_status, "past_due" if paypal_status else None)
-    else:
-        status = status_map.get(event_type)
-    if status is None:
-        return jsonify({"ok": True, "handled": False}), 200
-
-    try:
-        subscription = get_subscription(subscription_id)
-    except Exception:
-        logger.exception("Could not retrieve PayPal subscription for webhook")
-        return jsonify({"ok": False, "error": "Could not retrieve the PayPal subscription."}), 502
-    if subscription.get("plan_id") != configured_plan_id():
         return jsonify({"ok": True, "handled": False}), 200
 
     conn = get_db()
     try:
         row = conn.execute("SELECT member_id FROM subscriptions WHERE provider = ? AND subscription_id = ? ORDER BY id DESC LIMIT 1", ("paypal", subscription_id)).fetchone()
+        member_row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (row["member_id"],)).fetchone() if row else None
     finally:
         conn.close()
     if not row:
+        _record_event(subscription_id)
         return jsonify({"ok": True, "handled": False, "reason": "subscription_not_attached"}), 200
+    member_id = row["member_id"]
+    current_status = member_row["subscription_status"] if member_row else None
 
-    started = subscription.get("start_time") or subscription.get("create_time")
-    ends = (subscription.get("billing_info") or {}).get("next_billing_time")
-    _save_subscription(row["member_id"], subscription_id, status, started, ends)
-    return jsonify({"ok": True, "handled": True, "event": event_type, "status": status}), 200
+    payment_events = {"PAYMENT.SALE.COMPLETED", "BILLING.SUBSCRIPTION.PAYMENT.COMPLETED"}
+    revoke_map = {
+        "BILLING.SUBSCRIPTION.SUSPENDED": "paused",
+        "BILLING.SUBSCRIPTION.CANCELLED": "cancelled",
+        "BILLING.SUBSCRIPTION.EXPIRED": "expired",
+        "BILLING.SUBSCRIPTION.PAYMENT.FAILED": "past_due",
+    }
+
+    if event_type in payment_events or event_type in {"BILLING.SUBSCRIPTION.ACTIVATED", "BILLING.SUBSCRIPTION.UPDATED"}:
+        # Granting paths need a live PayPal fetch. Any failure here is a
+        # 502 without recording, so PayPal retries the event later.
+        try:
+            subscription = get_subscription(subscription_id)
+        except Exception:
+            logger.exception("Could not retrieve PayPal subscription for webhook")
+            return jsonify({"ok": False, "error": "Could not retrieve the PayPal subscription."}), 502
+        paypal_status = str(subscription.get("status") or "").upper()
+        started = subscription.get("start_time") or subscription.get("create_time")
+        ends = (subscription.get("billing_info") or {}).get("next_billing_time")
+
+        if event_type in payment_events:
+            # A payment for a non-$1 plan never activates a $1 membership.
+            plan_id = _verified_intro_plan_id()
+            if not plan_id:
+                return jsonify({"ok": False, "error": "The $1 membership plan is not verified with PayPal right now."}), 502
+            if subscription.get("plan_id") != plan_id:
+                _record_event(subscription_id)
+                return jsonify({"ok": True, "handled": False, "reason": "wrong_plan"}), 200
+            try:
+                verify_and_record_subscription_payments(member_id, subscription_id, subscription=subscription, source="webhook")
+            except Exception:
+                logger.exception("Could not verify payment for webhook")
+                return jsonify({"ok": False, "error": "Could not verify the payment."}), 502
+            try:
+                access = get_member_access(member_id)
+            except Exception:
+                access = {"has_access": False}
+            if not access["has_access"]:
+                # The payment has not appeared in PayPal's transactions
+                # yet. Leave every status untouched; the membership-page
+                # recheck picks it up on the member's next visit.
+                _record_event(subscription_id)
+                return jsonify({"ok": True, "handled": True, "event": event_type, "status": current_status, "payment_not_verified": True}), 200
+            # Never resurrect a cancelled/expired status string with a
+            # payment: the ledger already grants access through the paid
+            # interval, and the status must keep saying no future billing.
+            status = current_status if current_status in {"cancelled", "expired"} else "active"
+            _save_subscription(member_id, subscription_id, status, started, ends)
+            _record_event(subscription_id)
+            return jsonify({"ok": True, "handled": True, "event": event_type, "status": status}), 200
+
+        if event_type == "BILLING.SUBSCRIPTION.ACTIVATED":
+            plan_id = _verified_intro_plan_id()
+            if not plan_id:
+                return jsonify({"ok": False, "error": "The $1 membership plan is not verified with PayPal right now."}), 502
+            if subscription.get("plan_id") != plan_id:
+                _record_event(subscription_id)
+                return jsonify({"ok": True, "handled": False, "reason": "wrong_plan"}), 200
+            try:
+                verify_and_record_subscription_payments(member_id, subscription_id, subscription=subscription, source="webhook")
+            except Exception:
+                logger.exception("Could not verify payment for activation webhook")
+                return jsonify({"ok": False, "error": "Could not verify the payment."}), 502
+            try:
+                access = get_member_access(member_id)
+            except Exception:
+                access = {"has_access": False}
+            # ACTIVATED without a captured payment is pending, never active.
+            status = "active" if access["has_access"] else "pending_payment"
+            _save_subscription(member_id, subscription_id, status, started, ends)
+            _record_event(subscription_id)
+            return jsonify({"ok": True, "handled": True, "event": event_type, "status": status}), 200
+
+        # BILLING.SUBSCRIPTION.UPDATED: only the status string moves, and
+        # an ACTIVE report still needs a verified payment behind it.
+        mapped = {"SUSPENDED": "paused", "CANCELLED": "cancelled", "EXPIRED": "expired"}.get(paypal_status)
+        if mapped:
+            _save_subscription(member_id, subscription_id, mapped, started, ends)
+            _record_event(subscription_id)
+            return jsonify({"ok": True, "handled": True, "event": event_type, "status": mapped}), 200
+        if paypal_status == "ACTIVE":
+            plan_id = _verified_intro_plan_id()
+            if not plan_id:
+                return jsonify({"ok": False, "error": "The $1 membership plan is not verified with PayPal right now."}), 502
+            if subscription.get("plan_id") != plan_id:
+                _record_event(subscription_id)
+                return jsonify({"ok": True, "handled": False, "reason": "wrong_plan"}), 200
+            try:
+                verify_and_record_subscription_payments(member_id, subscription_id, subscription=subscription, source="webhook")
+            except Exception:
+                logger.exception("Could not verify payment for update webhook")
+                return jsonify({"ok": False, "error": "Could not verify the payment."}), 502
+            try:
+                access = get_member_access(member_id)
+            except Exception:
+                access = {"has_access": False}
+            if access["has_access"]:
+                _save_subscription(member_id, subscription_id, "active", started, ends)
+                _record_event(subscription_id)
+                return jsonify({"ok": True, "handled": True, "event": event_type, "status": "active"}), 200
+            if current_status in {"inactive", None}:
+                _save_subscription(member_id, subscription_id, "pending_payment", started, ends)
+                _record_event(subscription_id)
+                return jsonify({"ok": True, "handled": True, "event": event_type, "status": "pending_payment"}), 200
+            _record_event(subscription_id)
+            return jsonify({"ok": True, "handled": True, "event": event_type, "status": current_status, "payment_not_verified": True}), 200
+        _record_event(subscription_id)
+        return jsonify({"ok": True, "handled": False, "reason": "unknown_paypal_status"}), 200
+
+    if event_type in revoke_map:
+        # Revoking events need no PayPal fetch: the signature is verified
+        # and the subscription is attached to this member, which is enough
+        # to move the status string. Paid intervals are untouched.
+        _save_subscription(member_id, subscription_id, revoke_map[event_type])
+        _record_event(subscription_id)
+        return jsonify({"ok": True, "handled": True, "event": event_type, "status": revoke_map[event_type]}), 200
+
+    _record_event(subscription_id)
+    return jsonify({"ok": True, "handled": False}), 200
 
 
 def register_paypal_member(app):

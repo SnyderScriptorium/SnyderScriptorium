@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Member Reading — Snyder Scriptorium</title>
+<style>
+body{font-family:Georgia,serif;background:#E8D9B5;color:#24333B;padding:20px;margin:0}
+.wrap{max-width:1100px;margin:auto;background:#F7F1E6;padding:25px;border:1px solid #C9B78F;border-radius:10px}
+h1{margin-top:0} h2{margin-top:32px}
+table{width:100%;border-collapse:collapse;background:#FFFDF8}
+th,td{padding:9px 11px;border-bottom:1px solid #E4D8C2;text-align:left;vertical-align:top}
+th{background:#EFE7D8;color:#5C4033}
+.cards{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.card{padding:14px;background:#FFFDF8;border:1px solid #C9B78F;border-radius:7px;min-width:150px}
+.card b{font-size:1.5rem;display:block}
+.note{padding:12px;background:#EFE7D8;border:1px solid #C9B78F;border-radius:7px}
+.muted{color:#6B5B45} a{color:#5C4033}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Member Reading</h1>
+<p class="muted">Which authenticated members are opening which pieces of private writing, and which access attempts were blocked. General visitors, membership-page visits, and bots never appear here as reads.</p>
+
+{% if tracking_since %}
+<p class="note"><strong>Reliable member-level tracking began {{ tracking_since }}.</strong> Reads before that date were recorded without a member id and are not shown here as confirmed member reads. Blocked attempts before that date were not recorded at all.</p>
+{% else %}
+<p class="note">Member-level tracking start date is not recorded yet. Reads shown here carry a member id and are confirmed reads.</p>
+{% endif %}
+
+<div class="cards">
+<div class="card"><b>{{ total_reads }}</b>Confirmed member reads</div>
+<div class="card"><b>{{ total_blocked }}</b>Blocked attempts</div>
+<div class="card"><b>{{ distinct_readers }}</b>Members who have read</div>
+</div>
+
+<h2>Top readers</h2>
+{% if top_readers %}
+<table><thead><tr><th>Member</th><th>Reads</th></tr></thead><tbody>
+{% for r in top_readers %}<tr><td>{{ r.email }}</td><td>{{ r.reads }}</td></tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="muted">No confirmed member reads yet.</p>{% endif %}
+
+<h2>Recent successful reads</h2>
+{% if reads %}
+<table><thead><tr><th>When</th><th>Member</th><th>What they opened</th><th>Path</th></tr></thead><tbody>
+{% for r in reads %}<tr>
+<td>{{ r.viewed_at }}</td>
+<td>{{ r.member_email or 'Unknown member' }}</td>
+<td>{{ r.content_label }}</td>
+<td class="muted">{{ r.path }}</td>
+</tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="muted">No confirmed member reads yet.</p>{% endif %}
+
+<h2>Recent blocked attempts</h2>
+<p class="muted">Visitors and unpaid, expired, or blocked accounts turned away from private writing. These are not reads.</p>
+{% if blocked %}
+<table><thead><tr><th>When</th><th>Who</th><th>What they tried to open</th><th>Path</th></tr></thead><tbody>
+{% for r in blocked %}<tr>
+<td>{{ r.viewed_at }}</td>
+<td>{{ r.member_email or 'Not signed in' }}</td>
+<td>{{ r.content_label }}</td>
+<td class="muted">{{ r.path }}</td>
+</tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="muted">No blocked attempts recorded.</p>{% endif %}
+
+<p><a href="/admin/subscribers">← Subscriber Dashboard</a> &nbsp; <a href="/admin">← Control Panel</a></p>
+</div>
+</body>
+</html>

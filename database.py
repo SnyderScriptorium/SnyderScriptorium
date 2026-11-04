@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+from datetime import datetime, timezone
 
 DATABASE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "scriptorium.db")
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
@@ -197,6 +198,7 @@ def _repair_sequences(conn):
         "members", "subscriptions", "inbox_messages", "page_views",
         "find_us_events", "store_products", "store_orders", "store_images",
         "store_order_items", "email_subscribers",
+        "member_payments", "paypal_webhook_events",
     ]
     for table in tables:
         try:
@@ -260,6 +262,8 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY,p256dh TEXT NOT NULL,auth TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)",
                 "CREATE TABLE IF NOT EXISTS email_subscribers (email TEXT PRIMARY KEY,subscribed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,active INTEGER NOT NULL DEFAULT 1)",
                 "CREATE TABLE IF NOT EXISTS site_sync_tokens (id BIGSERIAL PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, label TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, last_used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0)",
+                "CREATE TABLE IF NOT EXISTS member_payments (id BIGSERIAL PRIMARY KEY, member_id BIGINT NOT NULL REFERENCES members(id) ON DELETE CASCADE, subscription_id TEXT, paypal_transaction_id TEXT UNIQUE, amount TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT 'USD', status TEXT NOT NULL DEFAULT 'verified', event_type TEXT NOT NULL DEFAULT '', period_start TEXT, period_end TEXT, source TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT '')",
+                "CREATE TABLE IF NOT EXISTS paypal_webhook_events (id BIGSERIAL PRIMARY KEY, paypal_event_id TEXT UNIQUE NOT NULL, event_type TEXT NOT NULL DEFAULT '', subscription_id TEXT, received_at TEXT NOT NULL DEFAULT '', processed INTEGER NOT NULL DEFAULT 1)",
             ]
             for statement in statements:
                 conn.execute(statement)
@@ -282,6 +286,10 @@ def init_db():
                 "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS referrer TEXT",
                 "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS traffic_source TEXT",
                 "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS classified INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS member_id BIGINT",
+                "ALTER TABLE page_views ADD COLUMN IF NOT EXISTS access_result TEXT",
+                "ALTER TABLE members ADD COLUMN IF NOT EXISTS paid_through_at TEXT",
+                "ALTER TABLE members ADD COLUMN IF NOT EXISTS last_verified_payment_at TEXT",
             ]:
                 conn.execute(statement)
             # Keeps the "any unclassified rows?" check cheap for the on-demand
@@ -305,6 +313,8 @@ def init_db():
             conn.execute("CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint TEXT PRIMARY KEY,p256dh TEXT NOT NULL,auth TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("CREATE TABLE IF NOT EXISTS email_subscribers (email TEXT PRIMARY KEY,subscribed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,active INTEGER NOT NULL DEFAULT 1)")
             conn.execute("CREATE TABLE IF NOT EXISTS site_sync_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT UNIQUE NOT NULL, label TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, last_used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0)")
+            conn.execute("CREATE TABLE IF NOT EXISTS member_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER NOT NULL, subscription_id TEXT, paypal_transaction_id TEXT UNIQUE, amount TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT 'USD', status TEXT NOT NULL DEFAULT 'verified', event_type TEXT NOT NULL DEFAULT '', period_start TEXT, period_end TEXT, source TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT '', FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE)")
+            conn.execute("CREATE TABLE IF NOT EXISTS paypal_webhook_events (id INTEGER PRIMARY KEY AUTOINCREMENT, paypal_event_id TEXT UNIQUE NOT NULL, event_type TEXT NOT NULL DEFAULT '', subscription_id TEXT, received_at TEXT NOT NULL DEFAULT '', processed INTEGER NOT NULL DEFAULT 1)")
 
             def add_columns(table, columns):
                 existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
@@ -312,14 +322,22 @@ def init_db():
                     if name not in existing:
                         conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
-            add_columns("members", [("subscription_status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_created", "TEXT NOT NULL DEFAULT ''"), ("status", "TEXT NOT NULL DEFAULT 'active'"), ("blocked_at", "TEXT")])
+            add_columns("members", [("subscription_status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_created", "TEXT NOT NULL DEFAULT ''"), ("status", "TEXT NOT NULL DEFAULT 'active'"), ("blocked_at", "TEXT"), ("paid_through_at", "TEXT"), ("last_verified_payment_at", "TEXT")])
             add_columns("subscriptions", [("provider", "TEXT"), ("subscription_id", "TEXT"), ("status", "TEXT NOT NULL DEFAULT 'inactive'"), ("date_started", "TEXT"), ("date_ends", "TEXT")])
-            add_columns("page_views", [("page_type", "TEXT NOT NULL DEFAULT 'page'"), ("content_id", "INTEGER"), ("category", "TEXT"), ("viewed_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"), ("visitor_key", "TEXT"), ("referrer", "TEXT"), ("traffic_source", "TEXT"), ("classified", "INTEGER NOT NULL DEFAULT 0")])
+            add_columns("page_views", [("page_type", "TEXT NOT NULL DEFAULT 'page'"), ("content_id", "INTEGER"), ("category", "TEXT"), ("viewed_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"), ("visitor_key", "TEXT"), ("referrer", "TEXT"), ("traffic_source", "TEXT"), ("classified", "INTEGER NOT NULL DEFAULT 0"), ("member_id", "INTEGER"), ("access_result", "TEXT")])
             add_columns("site_content", [("updated_at", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP")])
 
         conn.execute(
             "INSERT INTO site_content(key,value,updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING",
             ("about_content", "The Snyder Scriptorium is a growing home for books, writing, curiosity, and the stories that bring people together.", "01/01/1970 12:00 AM"),
+        )
+        # First-boot stamp for member-level read tracking. The member-reads
+        # report shows this date so nobody mistakes pre-repair traffic for
+        # confirmed per-member reads (the old tracker recorded no member id).
+        # ON CONFLICT DO NOTHING keeps the original deploy date forever.
+        conn.execute(
+            "INSERT INTO site_content(key,value,updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO NOTHING",
+            ("member_read_tracking_since", datetime.now(timezone.utc).strftime("%Y-%m-%d"), datetime.now(timezone.utc).isoformat()),
         )
         _log_phase("normalizing legacy data")
         _normalize_legacy_data(conn)

@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import get_db as database_get_db, init_db as database_init_db, IntegrityError, using_postgres
+from member_payments import get_member_access, parse_time, recheck_member_payments
 from analytics_common import is_spam_referrer
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -78,15 +79,16 @@ def member_has_access():
     if not member_id:
         g._member_has_access = False
         return False
-    conn = get_db()
+    # The verdict comes from verified payments, never from a session flag
+    # or a PayPal status string. A stale session, a cancelled subscription
+    # with time left, and an expired subscription are all decided here, on
+    # every request, from the database. Fail closed on any lookup error.
     try:
-        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
-    finally:
-        # Always release the connection, even if the query raises. A leaked
-        # connection can exhaust the database's connection limit and wedge
-        # the whole site.
-        conn.close()
-    g._member_has_access = bool(row and row["subscription_status"] == "active")
+        access = get_member_access(member_id)
+    except Exception:
+        g._member_has_access = False
+        return False
+    g._member_has_access = bool(access["has_access"])
     return g._member_has_access
 
 
@@ -387,16 +389,41 @@ def kwsnyderwriting_membership():
     # Public page: visitors can browse what the membership is before signing up.
     # Only the private library itself stays behind login.
     member_status = None
+    has_access = False
+    paid_through_display = None
     if session.get("member_logged_in") and session.get("member_id"):
+        member_id = session["member_id"]
         conn = get_db()
-        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (session["member_id"],)).fetchone()
+        row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
         conn.close()
         if row:
             member_status = row["subscription_status"]
+        # A subscription approved at PayPal but not yet verified: give this
+        # visit a chance to complete verification instead of waiting on a
+        # webhook retry. Failures stay silent here; the account simply
+        # remains pending until PayPal confirms the payment.
+        if member_status == "pending_payment":
+            try:
+                recheck_member_payments(member_id)
+            except Exception:
+                pass
+            conn = get_db()
+            row = conn.execute("SELECT subscription_status FROM members WHERE id = ?", (member_id,)).fetchone()
+            conn.close()
+            if row:
+                member_status = row["subscription_status"]
+        try:
+            access = get_member_access(member_id)
+            has_access = bool(access["has_access"])
+            if access.get("paid_through_at"):
+                parsed = parse_time(access["paid_through_at"])
+                paid_through_display = parsed.strftime("%B %d, %Y").replace(" 0", " ") if parsed else access["paid_through_at"]
+        except Exception:
+            has_access = False
     tab = request.args.get("tab", "signup")
     if tab not in ("terms", "signup", "signin"):
         tab = "signup"
-    return render_template("blog_templates/kwsnyderwriting_membership.html", member_status=member_status, active_tab=tab)
+    return render_template("blog_templates/kwsnyderwriting_membership.html", member_status=member_status, active_tab=tab, has_access=has_access, paid_through_display=paid_through_display)
 
 
 @app.route("/kwsnyderwriting/login", methods=["GET", "POST"])
@@ -408,12 +435,20 @@ def member_login():
         member = conn.execute("SELECT * FROM members WHERE email = ?", (email,)).fetchone()
         conn.close()
         if member and check_password_hash(member["password_hash"], password):
+            # Blocked accounts never receive a member session, even with a
+            # correct password. (The global before_request bounce in
+            # inbox_admin_routes is the second layer; this is the first.)
+            if member["status"] == "blocked" or member["blocked_at"]:
+                return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signin", member_status=None, error="This account has been blocked. Please contact us if you believe this is a mistake.")
             session.clear()
             session.permanent = False
             session["member_logged_in"] = True
             session["member_id"] = member["id"]
             session["member_reauth_ok"] = True
-            if member["subscription_status"] == "active":
+            # Entry is decided by verified paid access, not by a status
+            # string: a cancelled member with time left still enters, and
+            # an expired member does not.
+            if member_has_access():
                 return redirect(url_for("kwsnyderwriting_entry"))
             return redirect(url_for("kwsnyderwriting_membership"))
         return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signin", member_status=None, error="The email or password was not recognized.")
@@ -455,9 +490,11 @@ def member_signup_subscribe():
     goes straight to PayPal. The account is created (inactive) and signed
     in first so the $1 subscription can attach to it, then PayPal approval
     returns to the existing membership return handler, which verifies the
-    $1 plan and activates the account. Fail-closed on the $1 plan, same
-    guard as the standalone subscribe button. If PayPal cannot start, the
-    account still exists and the member can sign in and use Subscribe.
+    $1 plan AND a captured $1 payment before activating the account. If
+    no payment has cleared yet, the account waits in pending_payment until
+    PayPal confirms it. Fail-closed on the $1 plan, same guard as the
+    standalone subscribe button. If PayPal cannot start, the account still
+    exists and the member can sign in and use Subscribe.
     """
     from paypal_member_routes import _verified_intro_plan_id
     from paypal_subscriptions import paypal_request
@@ -545,7 +582,12 @@ def view_member_post(post_id):
     conn.close()
     if not post:
         abort(404)
-    return render_template("post.html", post=post, back_url=url_for("kwsnyderwriting_section", section=post["category"]))
+    # The section route takes slugs (short-stories, poems, vignettes),
+    # not category codes (kw_short_stories, ...) — passing the category
+    # code made every member post's back link 404.
+    section_slug = {"kw_short_stories": "short-stories", "kw_poems": "poems", "kw_vignettes": "vignettes"}.get(post["category"])
+    back_url = url_for("kwsnyderwriting_section", section=section_slug) if section_slug else url_for("kwsnyderwriting_entry")
+    return render_template("post.html", post=post, back_url=back_url)
 
 
 @app.route("/kwsnyderwriting/<section>")
@@ -581,7 +623,7 @@ def admin_exit_member_preview():
 def view_novel(book_id):
     conn = get_db()
     book = conn.execute("SELECT * FROM manuscript_books WHERE id = ?", (book_id,)).fetchone()
-    chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? AND published = 1 ORDER BY chapter_number").fetchall()
+    chapters = conn.execute("SELECT * FROM manuscript_chapters WHERE book_id = ? AND published = 1 ORDER BY chapter_number", (book_id,)).fetchall()
     conn.close()
     if not book:
         abort(404)

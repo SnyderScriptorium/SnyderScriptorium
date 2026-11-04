@@ -699,6 +699,113 @@ def register(app):
             request.args.get("period", "30d"), request.args.get("content_page", 1),
             request.args.get("source_page", 1), request.args.get("drilldown")))
 
+    @app.get("/admin/member-reads")
+    @admin_required
+    def admin_member_reads():
+        """Per-member private-library reading report.
+
+        Successful reads (access_result='ok') and blocked attempts
+        (access_result='blocked') are shown separately, with the member
+        who opened what and when. General visitors, membership-page
+        visits, bots, and failed attempts never appear as reads. Rows
+        recorded before member-level tracking began carry no member id
+        and are never presented as confirmed member reads; the
+        tracking-start date is shown so the gap is explicit.
+        """
+        conn = get_db()
+        try:
+            tracking_since = None
+            row = conn.execute("SELECT value FROM site_content WHERE key = 'member_read_tracking_since'").fetchone()
+            if row:
+                tracking_since = dict(row).get("value")
+
+            def count(sql):
+                r = conn.execute(sql).fetchone()
+                return int(dict(r).get("n") or 0) if r else 0
+
+            total_reads = count("SELECT COUNT(*) AS n FROM page_views WHERE category = 'kwsnyderwriting' AND access_result = 'ok'")
+            total_blocked = count("SELECT COUNT(*) AS n FROM page_views WHERE category = 'kwsnyderwriting' AND access_result = 'blocked'")
+            distinct_readers = count("SELECT COUNT(DISTINCT member_id) AS n FROM page_views WHERE category = 'kwsnyderwriting' AND access_result = 'ok' AND member_id IS NOT NULL")
+
+            def load(access_result):
+                rows = conn.execute(
+                    "SELECT path, page_type, content_id, viewed_at, member_id FROM page_views "
+                    "WHERE category = 'kwsnyderwriting' AND access_result = ? ORDER BY viewed_at DESC LIMIT 200",
+                    (access_result,),
+                ).fetchall()
+                return [dict(r) for r in rows]
+
+            reads = load("ok")
+            blocked = load("blocked")
+            top_rows = conn.execute(
+                "SELECT member_id, COUNT(*) AS n FROM page_views WHERE category = 'kwsnyderwriting' "
+                "AND access_result = 'ok' AND member_id IS NOT NULL GROUP BY member_id ORDER BY n DESC LIMIT 10"
+            ).fetchall()
+            top_rows = [dict(r) for r in top_rows]
+
+            member_ids = sorted({r["member_id"] for r in reads + blocked if r.get("member_id")} | {r["member_id"] for r in top_rows})
+            emails = {}
+            if member_ids:
+                placeholders = ",".join("?" for _ in member_ids)
+                for m in conn.execute(f"SELECT id, email FROM members WHERE id IN ({placeholders})", tuple(member_ids)).fetchall():
+                    d = dict(m)
+                    emails[d["id"]] = d["email"]
+
+            def titles_for(page_type, table, id_col="id"):
+                ids = sorted({r["content_id"] for r in reads + blocked if r["page_type"] == page_type and r.get("content_id")})
+                found = {}
+                if ids:
+                    placeholders = ",".join("?" for _ in ids)
+                    for t in conn.execute(f"SELECT {id_col}, title FROM {table} WHERE {id_col} IN ({placeholders})", tuple(ids)).fetchall():
+                        d = dict(t)
+                        found[d[id_col]] = d["title"]
+                return found
+
+            post_titles = titles_for("member_post", "published_posts")
+            novel_titles = titles_for("novel", "manuscript_books")
+            chapter_ids = sorted({r["content_id"] for r in reads + blocked if r["page_type"] == "chapter" and r.get("content_id")})
+            chapter_titles = {}
+            if chapter_ids:
+                placeholders = ",".join("?" for _ in chapter_ids)
+                for c in conn.execute(
+                    f"SELECT c.id, c.title, b.title AS book_title FROM manuscript_chapters c "
+                    f"JOIN manuscript_books b ON b.id = c.book_id WHERE c.id IN ({placeholders})",
+                    tuple(chapter_ids),
+                ).fetchall():
+                    d = dict(c)
+                    chapter_titles[d["id"]] = "%s — %s" % (d["book_title"], d["title"])
+
+            def describe(row):
+                if row["page_type"] == "member_section":
+                    if row["path"] == "/kwsnyderwriting":
+                        return "Library home"
+                    return "Section: " + row["path"].rsplit("/", 1)[-1].replace("-", " ").title()
+                if row["page_type"] == "member_post":
+                    return post_titles.get(row["content_id"]) or row["path"]
+                if row["page_type"] == "novel":
+                    return novel_titles.get(row["content_id"]) or row["path"]
+                if row["page_type"] == "chapter":
+                    return chapter_titles.get(row["content_id"]) or row["path"]
+                return row["path"]
+
+            for row in reads + blocked:
+                row["member_email"] = emails.get(row["member_id"]) if row.get("member_id") else None
+                row["content_label"] = describe(row)
+            top_readers = [{"email": emails.get(r["member_id"], "?"), "reads": int(r["n"])} for r in top_rows]
+
+            return render_template(
+                "admin_member_reads.html",
+                tracking_since=tracking_since,
+                total_reads=total_reads,
+                total_blocked=total_blocked,
+                distinct_readers=distinct_readers,
+                reads=reads,
+                blocked=blocked,
+                top_readers=top_readers,
+            )
+        finally:
+            conn.close()
+
     @app.get("/api/visitor-count")
     def visitor_count():
         # Public all-time distinct-visitor count, same definition as the
