@@ -12,6 +12,12 @@ from member_payments import (
     verify_and_record_subscription_payments,
     void_payment,
 )
+from pending_signups import (
+    PendingActivationError,
+    get_pending,
+    get_pending_by_subscription,
+    try_activate_pending,
+)
 from paypal_subscriptions import get_subscription, paypal_request, verify_webhook
 
 paypal_member = Blueprint("paypal_member", __name__)
@@ -207,9 +213,12 @@ def membership_return():
     transactions before the account is activated. If the payment has not
     cleared yet, the account waits in pending_payment: the membership page
     rechecks on the next visit and the payment webhook completes it.
+
+    For a pending signup (no account exists yet) this is the step that
+    MAKES the account: the member row is only created here, once the
+    payment is verified. If the payment has not cleared yet, the signup
+    stays pending and the membership page rechecks on the next visit.
     """
-    if not session.get("member_logged_in") or not session.get("member_id"):
-        return redirect("/kwsnyderwriting/login")
     subscription_id = request.args.get("subscription_id", "").strip()
     if not subscription_id:
         return redirect("/kwsnyderwriting/membership?error=missing_subscription")
@@ -224,6 +233,32 @@ def membership_return():
     if subscription.get("plan_id") != plan_id:
         logger.warning("Subscription %s is not on the verified $1 plan; not attaching.", subscription_id)
         return redirect("/kwsnyderwriting/membership?error=wrong_plan")
+    # Pending signup: no member session exists yet, and the session may
+    # even have been lost on the way to PayPal -- fall back to the
+    # pending row found by subscription id.
+    pending = None
+    if session.get("pending_signup_id"):
+        pending = get_pending(session["pending_signup_id"])
+    if pending is None:
+        pending = get_pending_by_subscription(subscription_id)
+    if pending is not None and not session.get("member_logged_in"):
+        try:
+            member_id = try_activate_pending(pending["id"], plan_id, subscription=subscription)
+        except PendingActivationError:
+            logger.exception("Could not activate pending signup after PayPal return")
+            return redirect("/kwsnyderwriting/membership?error=verify_failed")
+        if member_id:
+            session.pop("pending_signup_id", None)
+            session.clear()
+            session.permanent = False
+            session["member_logged_in"] = True
+            session["member_id"] = member_id
+            session["member_reauth_ok"] = True
+            return redirect("/kwsnyderwriting/membership?subscribed=1")
+        session["pending_signup_id"] = pending["id"]
+        return redirect("/kwsnyderwriting/membership?verifying=1")
+    if not session.get("member_logged_in") or not session.get("member_id"):
+        return redirect("/kwsnyderwriting/login")
     member_id = session["member_id"]
     started = subscription.get("start_time") or subscription.get("create_time") or _iso_or_now()
     ends = (subscription.get("billing_info") or {}).get("next_billing_time")

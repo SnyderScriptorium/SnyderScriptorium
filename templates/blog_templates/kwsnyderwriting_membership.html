@@ -44,6 +44,25 @@
         <p style="margin-top:12px;">If you have already subscribed, please allow the payment provider a moment to confirm your membership.</p>
       {% endif %}
     {% else %}
+      {% if pending_signup %}
+      <div style="margin-bottom:18px;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);">
+        <h3 style="margin-top:0;">Your signup is waiting on PayPal.</h3>
+        {% if pending_state == 'verifying' %}
+        <p>Your subscription is approved — we are confirming your $1 payment with PayPal. Your account will be created as soon as it is verified.</p>
+        {% elif pending_state == 'cancelled' %}
+        <p>You left PayPal before completing the subscription. No charge was made and no account was created.</p>
+        {% else %}
+        <p>No account has been created yet — that happens only after PayPal confirms your $1 payment.</p>
+        {% endif %}
+        <p class="member-auth-note">Signing up as {{ pending_signup.email }}.</p>
+        <div class="member-auth-actions" style="display:flex;gap:10px;flex-wrap:wrap;">
+          <a class="member-auth-button" href="{{ url_for('kwsnyderwriting_membership') }}">Check again</a>
+          <form method="POST" action="{{ url_for('member_signup_resume') }}" style="display:inline;">
+            <button class="member-auth-button" type="submit">Continue to PayPal</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
       {% set tab = active_tab|default('signup') %}
       <div class="member-auth-tabs" role="tablist" aria-label="Membership terms, sign up, or log in">
         <button type="button" class="member-auth-tab{% if tab == 'terms' %} is-active{% endif %}" role="tab" aria-selected="{{ 'true' if tab == 'terms' else 'false' }}" data-tab="terms" id="tab-terms" aria-controls="panel-terms">Terms &amp; Conditions</button>
@@ -62,7 +81,7 @@
 
         <div class="member-auth-panel{% if tab == 'signup' %} is-active{% endif %}" role="tabpanel" id="panel-signup" aria-labelledby="tab-signup" data-panel="signup">
           {% if error and tab == 'signup' %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
-          <p class="member-auth-note">One step: your email, your password, the terms, and the $1/month PayPal subscription. When that's done, you have an account — sign in and enter the private library.</p>
+          <p class="member-auth-note">One step: your email, your password, the terms, and the $1/month PayPal subscription. Your account is created only after PayPal confirms your $1 payment — no account exists until then.</p>
           <p class="member-auth-note">Read the full terms in the Terms &amp; Conditions tab above before you agree.</p>
           <form class="member-auth-form" method="POST" action="{{ url_for('member_signup_subscribe') }}" autocomplete="on">
             <label for="front-signup-email">Email</label>
@@ -124,9 +143,7 @@
   var errBox=document.getElementById('subscribe-error');
   function showError(t){ if(errBox){ errBox.textContent=t; } }
   if(msg){
-    if(param('signup')==='1'){
-      msg.textContent='Account created — you are signed in. Click Subscribe with PayPal below.';
-    }else if(param('subscribed')==='1'){
+    if(param('subscribed')==='1'){
       msg.textContent='Thank you \u2014 your membership is now active. Welcome to the private library.';
     }else if(param('verifying')==='1'){
       msg.textContent='Thank you \u2014 your subscription is approved and your $1 payment is being confirmed with PayPal. Access opens as soon as it is verified; refresh this page to check again.';

@@ -7,8 +7,16 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort, g, Response, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import get_db as database_get_db, init_db as database_init_db, IntegrityError, using_postgres
+from database import get_db as database_get_db, init_db as database_init_db, using_postgres
 from member_payments import get_member_access, parse_time, recheck_member_payments
+from pending_signups import (
+    SignupEmailTaken,
+    get_pending,
+    member_has_paypal_history,
+    prepare_signup,
+    set_pending_subscription,
+    try_activate_pending,
+)
 from analytics_common import is_spam_referrer
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -419,6 +427,8 @@ def kwsnyderwriting_membership():
     member_status = None
     has_access = False
     paid_through_display = None
+    pending_signup = None
+    pending_state = None
     if session.get("member_logged_in") and session.get("member_id"):
         member_id = session["member_id"]
         conn = get_db()
@@ -448,10 +458,39 @@ def kwsnyderwriting_membership():
                 paid_through_display = parsed.strftime("%B %d, %Y").replace(" 0", " ") if parsed else access["paid_through_at"]
         except Exception:
             has_access = False
+    elif session.get("pending_signup_id"):
+        # A signup waiting on PayPal: no account exists yet. Give this
+        # visit a chance to finish activation if the $1 payment has
+        # cleared since the buyer approved.
+        pending = get_pending(session["pending_signup_id"])
+        if pending and pending.get("subscription_id"):
+            from paypal_member_routes import _verified_intro_plan_id
+            plan_id = _verified_intro_plan_id()
+            if plan_id:
+                try:
+                    member_id = try_activate_pending(pending["id"], plan_id)
+                except Exception:
+                    member_id = None
+                if member_id:
+                    session.pop("pending_signup_id", None)
+                    session.clear()
+                    session.permanent = False
+                    session["member_logged_in"] = True
+                    session["member_id"] = member_id
+                    session["member_reauth_ok"] = True
+                    return redirect(url_for("kwsnyderwriting_membership", subscribed=1))
+        if pending:
+            pending_signup = {"email": pending["email"]}
+            if request.args.get("verifying") == "1":
+                pending_state = "verifying"
+            elif request.args.get("cancelled") == "1":
+                pending_state = "cancelled"
+        else:
+            session.pop("pending_signup_id", None)
     tab = request.args.get("tab", "signup")
     if tab not in ("terms", "signup", "signin"):
         tab = "signup"
-    return render_template("blog_templates/kwsnyderwriting_membership.html", member_status=member_status, active_tab=tab, has_access=has_access, paid_through_display=paid_through_display)
+    return render_template("blog_templates/kwsnyderwriting_membership.html", member_status=member_status, active_tab=tab, has_access=has_access, paid_through_display=paid_through_display, pending_signup=pending_signup, pending_state=pending_state)
 
 
 @app.route("/kwsnyderwriting/login", methods=["GET", "POST"])
@@ -468,6 +507,12 @@ def member_login():
             # inbox_admin_routes is the second layer; this is the first.)
             if member["status"] == "blocked" or member["blocked_at"]:
                 return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signin", member_status=None, error="This account has been blocked. Please contact us if you believe this is a mistake.")
+            # Never-activated accounts never receive a member session: an
+            # account only exists once its $1 PayPal subscription has been
+            # through checkout. These rows come from the old signup flow;
+            # the owner re-signs up with the same email to finish it.
+            if not member_has_paypal_history(member["id"]):
+                return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signin", member_status=None, error="This account was never activated because the $1 PayPal subscription was never completed. Please sign up again with the same email to finish it.")
             session.clear()
             session.permanent = False
             session["member_logged_in"] = True
@@ -492,64 +537,46 @@ def member_signup():
             return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="Please provide an email and a password of at least 8 characters.")
         if not request.form.get("terms_agreed"):
             return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="Please agree to the Membership Terms & Conditions to create your account.")
-        conn = get_db()
         try:
-            cur = conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
-            member_id = cur.lastrowid
-            conn.commit()
-        except IntegrityError:
-            conn.close()
-            return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="An account with that email already exists.")
-        conn.close()
-        session.clear()
-        session.permanent = False
-        session["member_logged_in"] = True
-        session["member_id"] = member_id
-        session["member_reauth_ok"] = True
-        return redirect(url_for("kwsnyderwriting_membership", signup=1))
+            pending_id = prepare_signup(email, generate_password_hash(password))
+        except SignupEmailTaken:
+            return render_template("blog_templates/kwsnyderwriting_auth.html", active_tab="signup", error="An account with that email already exists. Please log in instead.")
+        return _start_pending_paypal(pending_id, "blog_templates/kwsnyderwriting_auth.html", "signup")
     return redirect(url_for("kwsnyderwriting_membership", tab="signup"))
 
 
-@app.route("/kwsnyderwriting/signup-subscribe", methods=["POST"])
-def member_signup_subscribe():
-    """One-motion signup + subscribe from the membership front page.
+def _start_pending_paypal(pending_id, error_template, error_tab):
+    """Send a pending signup to PayPal checkout.
 
-    The visitor enters an email, a password, and agrees to the terms, then
-    goes straight to PayPal. The account is created (inactive) and signed
-    in first so the $1 subscription can attach to it, then PayPal approval
-    returns to the existing membership return handler, which verifies the
-    $1 plan AND a captured $1 payment before activating the account. If
-    no payment has cleared yet, the account waits in pending_payment until
-    PayPal confirms it. Fail-closed on the $1 plan, same guard as the
-    standalone subscribe button. If PayPal cannot start, the account still
-    exists and the member can sign in and use Subscribe.
+    Returns a redirect to PayPal's approval page, or renders the given
+    template with an error when checkout cannot start. No member row
+    exists at this point, and none is created here: the account is only
+    made once PayPal confirms the $1 payment on the return.
     """
     from paypal_member_routes import _verified_intro_plan_id
     from paypal_subscriptions import paypal_request
 
-    email = request.form.get("email", "").strip().lower()
-    password = request.form.get("password", "")
-    if not email or len(password) < 8:
-        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="Please provide an email and a password of at least 8 characters.")
-    if not request.form.get("terms_agreed"):
-        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="Please agree to the Membership Terms & Conditions to subscribe.")
-    conn = get_db()
-    try:
-        cur = conn.execute("INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'inactive', ?)", (email, generate_password_hash(password), now_string()))
-        member_id = cur.lastrowid
-        conn.commit()
-    except IntegrityError:
-        conn.close()
-        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="An account with that email already exists. Please log in instead.")
-    conn.close()
-    session.clear()
-    session.permanent = False
-    session["member_logged_in"] = True
-    session["member_id"] = member_id
-    session["member_reauth_ok"] = True
+    pending = get_pending(pending_id)
+    if not pending:
+        return redirect(url_for("kwsnyderwriting_membership", tab="signup"))
     plan_id = _verified_intro_plan_id()
     if not plan_id:
-        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status="inactive", error="Your account was created, but the $1 membership plan is not verified with PayPal right now. Please use Subscribe below to try again.")
+        return render_template(error_template, active_tab=error_tab, member_status=None, error="Your account has not been created yet — the $1 membership plan is not verified with PayPal right now. Please try again.")
+    # Already paid on an earlier attempt (approved on PayPal, then closed
+    # the tab)? Activate from that subscription instead of charging twice.
+    if pending.get("subscription_id"):
+        try:
+            member_id = try_activate_pending(pending_id, plan_id)
+        except Exception:
+            member_id = None
+        if member_id:
+            session.pop("pending_signup_id", None)
+            session.clear()
+            session.permanent = False
+            session["member_logged_in"] = True
+            session["member_id"] = member_id
+            session["member_reauth_ok"] = True
+            return redirect(url_for("kwsnyderwriting_membership", subscribed=1))
     base = request.host_url.rstrip("/")
     try:
         subscription = paypal_request("POST", "/v1/billing/subscriptions", {
@@ -564,16 +591,56 @@ def member_signup_subscribe():
         })
     except Exception:
         import logging
-        logging.getLogger(__name__).exception("PayPal subscription creation failed during signup-subscribe")
-        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status="inactive", error="Your account was created, but PayPal could not start the subscription. Please use Subscribe below to try again.")
+        logging.getLogger(__name__).exception("PayPal subscription creation failed during signup")
+        return render_template(error_template, active_tab=error_tab, member_status=None, error="Your account has not been created yet — PayPal could not start the subscription. Please try again.")
     approval_url = ""
     for link in subscription.get("links", []) or []:
         if link.get("rel") == "approve" and link.get("href"):
             approval_url = link["href"]
             break
-    if not approval_url:
-        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status="inactive", error="Your account was created, but PayPal did not return an approval link. Please use Subscribe below to try again.")
+    subscription_id = str(subscription.get("id") or "").strip()
+    if not approval_url or not subscription_id:
+        return render_template(error_template, active_tab=error_tab, member_status=None, error="Your account has not been created yet — PayPal did not return an approval link. Please try again.")
+    set_pending_subscription(pending_id, subscription_id)
+    session["pending_signup_id"] = pending_id
     return redirect(approval_url)
+
+
+@app.route("/kwsnyderwriting/signup-resume", methods=["POST"])
+def member_signup_resume():
+    """Retry PayPal checkout for a pending signup (after cancelling at
+    PayPal, or when the first checkout attempt failed). No account
+    exists yet; this only restarts checkout."""
+    pending = get_pending(session.get("pending_signup_id"))
+    if not pending:
+        return redirect(url_for("kwsnyderwriting_membership", tab="signup"))
+    return _start_pending_paypal(pending["id"], "blog_templates/kwsnyderwriting_membership.html", "signup")
+
+
+@app.route("/kwsnyderwriting/signup-subscribe", methods=["POST"])
+def member_signup_subscribe():
+    """One-motion signup + subscribe from the membership front page.
+
+    The visitor enters an email, a password, and agrees to the terms,
+    then goes straight to PayPal. No account is created yet: the signup
+    waits as a pending signup, and the account is only made on the
+    PayPal return once a captured $1 payment is verified. If the buyer
+    abandons PayPal, no account exists and nothing can be signed in to.
+    Fail-closed on the $1 plan, same guard as the standalone subscribe
+    button. If PayPal cannot start, no account exists and the visitor
+    can try again.
+    """
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    if not email or len(password) < 8:
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="Please provide an email and a password of at least 8 characters.")
+    if not request.form.get("terms_agreed"):
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="Please agree to the Membership Terms & Conditions to subscribe.")
+    try:
+        pending_id = prepare_signup(email, generate_password_hash(password))
+    except SignupEmailTaken:
+        return render_template("blog_templates/kwsnyderwriting_membership.html", active_tab="signup", member_status=None, error="An account with that email already exists. Please log in instead.")
+    return _start_pending_paypal(pending_id, "blog_templates/kwsnyderwriting_membership.html", "signup")
 
 
 @app.route("/kwsnyderwriting/logout")
