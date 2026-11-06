@@ -95,6 +95,9 @@ class FakePayPal:
             "billing_info": {"next_billing_time": next_billing} if next_billing else {},
         }
         self.subscriptions[sub_id] = sub
+        # A (re)created subscription starts with no transactions, exactly
+        # as on PayPal; otherwise one test's payment leaks into the next.
+        self.transactions.pop(sub_id, None)
         return sub
 
     def add_txn(self, sub_id, txn_id, time, value="1.00", currency="USD", status="COMPLETED"):
@@ -197,10 +200,35 @@ def member_status(member_id):
     return dict(row) if row else None
 
 
+def member_id(email):
+    c = conn()
+    row = c.execute("SELECT id FROM members WHERE email = ?", (email,)).fetchone()
+    c.close()
+    return dict(row)["id"] if row else None
+
+
+def member_exists(email):
+    return member_id(email) is not None
+
+
+def pending_exists(email):
+    c = conn()
+    row = c.execute("SELECT id FROM pending_signups WHERE email = ?", (email,)).fetchone()
+    c.close()
+    return row is not None
+
+
 def member_session(client, member_id):
     with client.session_transaction() as sess:
         sess["member_logged_in"] = True
         sess["member_id"] = member_id
+
+
+def clear_session(client):
+    """Drop any session left by an earlier scenario (member login,
+    pending signup). The signup scenarios must start as a stranger."""
+    with client.session_transaction() as sess:
+        sess.clear()
 
 
 def admin_session(client):
@@ -552,6 +580,140 @@ def t18_public_writing_public(client):
           ("/kwsnyderwriting/post/%d" % POST_ID) not in r.get_data(as_text=True), "leaked into sitemap")
 
 
+def t20_signup_creates_no_account(client):
+    """20. Signup sends the buyer to PayPal; no account exists yet."""
+    clear_session(client)
+    r = client.post("/kwsnyderwriting/signup-subscribe",
+                    data={"email": "t20@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+    check("t20 to paypal", r.status_code == 302 and "paypal.test/approve" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t20 no member row", not member_exists("t20@example.com"))
+    check("t20 pending row", pending_exists("t20@example.com"))
+    with client.session_transaction() as sess:
+        check("t20 not logged in", not sess.get("member_logged_in"))
+        check("t20 pending session", bool(sess.get("pending_signup_id")))
+    # The abandoned signup cannot read anything or log in.
+    r = client.get("/kwsnyderwriting", headers=UA)
+    check("t20 entry denied", r.status_code == 302, "status=%s" % r.status_code)
+    r = client.post("/kwsnyderwriting/login",
+                    data={"email": "t20@example.com", "password": "password123"}, headers=UA)
+    check("t20 login refused", r.status_code == 200 and b"not recognized" in r.data.lower(),
+          "status=%s" % r.status_code)
+
+
+def t21_return_with_payment_creates_account(client):
+    """21. PayPal return with a verified $1 payment creates the account."""
+    clear_session(client)
+    client.post("/kwsnyderwriting/signup-subscribe",
+                data={"email": "t21@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+    FAKE.make_sub("I-NEWTESTSUB", status="ACTIVE")
+    FAKE.add_txn("I-NEWTESTSUB", "TXN-T21", "2026-11-01T00:00:00Z")
+    r = client.get("/kwsnyderwriting/membership/return?subscription_id=I-NEWTESTSUB", headers=UA)
+    check("t21 return subscribes", r.status_code == 302 and "subscribed=1" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t21 member now exists", member_exists("t21@example.com"))
+    mid = member_id("t21@example.com")
+    st = member_status(mid)
+    check("t21 status active", st["subscription_status"] == "active", str(st))
+    check("t21 pending gone", not pending_exists("t21@example.com"))
+    r = client.get("/kwsnyderwriting/post/%d" % POST_ID, headers=UA)
+    check("t21 post open", r.status_code == 200 and "SECRET MEMBER CONTENT" in r.get_data(as_text=True),
+          "status=%s" % r.status_code)
+
+
+def t22_return_without_payment_no_account(client):
+    """22. PayPal return with no cleared payment creates no account yet;
+    the membership page finishes activation when the payment lands."""
+    clear_session(client)
+    client.post("/kwsnyderwriting/signup-subscribe",
+                data={"email": "t22@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+    FAKE.make_sub("I-NEWTESTSUB", status="ACTIVE")  # no transactions
+    r = client.get("/kwsnyderwriting/membership/return?subscription_id=I-NEWTESTSUB", headers=UA)
+    check("t22 return verifying", r.status_code == 302 and "verifying=1" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t22 no member yet", not member_exists("t22@example.com"))
+    check("t22 pending kept", pending_exists("t22@example.com"))
+    # Payment lands; the next membership visit completes activation.
+    FAKE.add_txn("I-NEWTESTSUB", "TXN-T22", "2026-11-01T00:00:00Z")
+    r = client.get("/kwsnyderwriting/membership?verifying=1", headers=UA)
+    check("t22 membership activates", r.status_code == 302 and "subscribed=1" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t22 member now exists", member_exists("t22@example.com"))
+    mid = member_id("t22@example.com")
+    st = member_status(mid)
+    check("t22 status active", st["subscription_status"] == "active", str(st))
+    r = client.get("/kwsnyderwriting/post/%d" % POST_ID, headers=UA)
+    check("t22 post open", r.status_code == 200 and "SECRET MEMBER CONTENT" in r.get_data(as_text=True),
+          "status=%s" % r.status_code)
+
+
+def t23_plain_signup_creates_no_account(client):
+    """23. The plain signup route also goes to PayPal with no account."""
+    clear_session(client)
+    r = client.post("/kwsnyderwriting/signup",
+                    data={"email": "t23@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+    check("t23 to paypal", r.status_code == 302 and "paypal.test/approve" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t23 no member row", not member_exists("t23@example.com"))
+    check("t23 pending row", pending_exists("t23@example.com"))
+
+
+def t24_never_activated_login_refused(client):
+    """24. A never-activated member (old flow) cannot log in; re-signup
+    with the same email replaces the stale row and completes."""
+    clear_session(client)
+    mid = make_member("t24@example.com")  # inactive, no subscription, no payments
+    c = conn()
+    from werkzeug.security import generate_password_hash
+    c.execute("UPDATE members SET password_hash = ? WHERE id = ?",
+              (generate_password_hash("password123"), mid))
+    c.commit()
+    c.close()
+    r = client.post("/kwsnyderwriting/login",
+                    data={"email": "t24@example.com", "password": "password123"}, headers=UA)
+    check("t24 login refused", r.status_code == 200 and b"never activated" in r.data.lower(),
+          "status=%s" % r.status_code)
+    r = client.post("/kwsnyderwriting/signup-subscribe",
+                    data={"email": "t24@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+    check("t24 re-signup to paypal", r.status_code == 302 and "paypal.test/approve" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t24 stale row replaced", member_id("t24@example.com") is None)
+    check("t24 pending row", pending_exists("t24@example.com"))
+    FAKE.make_sub("I-NEWTESTSUB", status="ACTIVE")
+    FAKE.add_txn("I-NEWTESTSUB", "TXN-T24", "2026-11-01T00:00:00Z")
+    r = client.get("/kwsnyderwriting/membership/return?subscription_id=I-NEWTESTSUB", headers=UA)
+    check("t24 return subscribes", r.status_code == 302 and "subscribed=1" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t24 member active", member_exists("t24@example.com")
+          and member_status(member_id("t24@example.com"))["subscription_status"] == "active")
+
+
+def t25_approved_then_closed_tab_no_double_charge(client):
+    """25. Buyer approves on PayPal then closes the tab: re-submitting
+    signup with the same email activates from the paid subscription
+    instead of starting a second checkout."""
+    clear_session(client)
+    client.post("/kwsnyderwriting/signup-subscribe",
+                data={"email": "t25@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+    FAKE.make_sub("I-NEWTESTSUB", status="ACTIVE")
+    FAKE.add_txn("I-NEWTESTSUB", "TXN-T25", "2026-11-01T00:00:00Z")
+    # Buyer never returned; the payment is on PayPal's books. They sign
+    # up again with the same email instead of coming back via the link.
+    with client.session_transaction() as sess:
+        sess.clear()
+    r = client.post("/kwsnyderwriting/signup-subscribe",
+                    data={"email": "t25@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+    check("t25 activates, no second checkout", r.status_code == 302 and "subscribed=1" in (r.headers.get("Location") or ""),
+          "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+    check("t25 member active", member_exists("t25@example.com")
+          and member_status(member_id("t25@example.com"))["subscription_status"] == "active")
+    c = conn()
+    n = c.execute("SELECT COUNT(*) AS n FROM members WHERE email = ?",
+                  ("t25@example.com",)).fetchone()
+    c.close()
+    check("t25 exactly one member row", dict(n)["n"] == 1, str(dict(n)))
+
+
 def t19_postgres_sql_compatibility():
     """Postgres dialect check: every new SQL string translates cleanly."""
     from database import PostgresConnection
@@ -566,6 +728,13 @@ def t19_postgres_sql_compatibility():
         "UPDATE member_payments SET status = ? WHERE id = ?",
         "INSERT INTO paypal_webhook_events(paypal_event_id, event_type, subscription_id, received_at) VALUES (?, ?, ?, ?)",
         "SELECT id FROM paypal_webhook_events WHERE paypal_event_id = ?",
+        "CREATE TABLE IF NOT EXISTS pending_signups (id BIGSERIAL PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_id TEXT,created_at TEXT NOT NULL DEFAULT '')",
+        "CREATE TABLE IF NOT EXISTS pending_signups (id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_id TEXT,created_at TEXT NOT NULL DEFAULT '')",
+        "SELECT * FROM pending_signups WHERE id = ?",
+        "SELECT * FROM pending_signups WHERE subscription_id = ? ORDER BY id DESC LIMIT 1",
+        "INSERT INTO pending_signups(email, password_hash, subscription_id, created_at) VALUES (?, ?, ?, ?)",
+        "DELETE FROM pending_signups WHERE created_at != '' AND created_at < ?",
+        "SELECT m.id FROM members m JOIN subscriptions s ON s.member_id = m.id WHERE m.email = ? AND s.subscription_id = ? AND s.provider = 'paypal' ORDER BY m.id DESC LIMIT 1",
         "INSERT INTO page_views(path,page_type,content_id,category,visitor_key,referrer,traffic_source,classified,member_id,access_result) VALUES (?,?,?,?,?,?,?,?,?,?)",
         "SELECT path, page_type, content_id, viewed_at, member_id FROM page_views WHERE category = 'kwsnyderwriting' AND access_result = ? ORDER BY viewed_at DESC LIMIT 200",
         "SELECT COUNT(*) AS n FROM page_views WHERE category = 'kwsnyderwriting' AND access_result = 'ok'",
@@ -586,6 +755,9 @@ TESTS = [
     t14_unauthenticated_api, t15_authorized_member_reads_all,
     t16_member_readership_analytics, t17_admin_readership_report,
     t18_public_writing_public, t19_postgres_sql_compatibility,
+    t20_signup_creates_no_account, t21_return_with_payment_creates_account,
+    t22_return_without_payment_no_account, t23_plain_signup_creates_no_account,
+    t24_never_activated_login_refused, t25_approved_then_closed_tab_no_double_charge,
 ]
 
 

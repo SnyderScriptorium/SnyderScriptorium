@@ -198,7 +198,7 @@ def _repair_sequences(conn):
         "members", "subscriptions", "inbox_messages", "page_views",
         "find_us_events", "store_products", "store_orders", "store_images",
         "store_order_items", "email_subscribers",
-        "member_payments", "paypal_webhook_events",
+        "member_payments", "paypal_webhook_events", "pending_signups",
     ]
     for table in tables:
         try:
@@ -264,6 +264,7 @@ def init_db():
                 "CREATE TABLE IF NOT EXISTS site_sync_tokens (id BIGSERIAL PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, label TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, last_used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0)",
                 "CREATE TABLE IF NOT EXISTS member_payments (id BIGSERIAL PRIMARY KEY, member_id BIGINT NOT NULL REFERENCES members(id) ON DELETE CASCADE, subscription_id TEXT, paypal_transaction_id TEXT UNIQUE, amount TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT 'USD', status TEXT NOT NULL DEFAULT 'verified', event_type TEXT NOT NULL DEFAULT '', period_start TEXT, period_end TEXT, source TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT '')",
                 "CREATE TABLE IF NOT EXISTS paypal_webhook_events (id BIGSERIAL PRIMARY KEY, paypal_event_id TEXT UNIQUE NOT NULL, event_type TEXT NOT NULL DEFAULT '', subscription_id TEXT, received_at TEXT NOT NULL DEFAULT '', processed INTEGER NOT NULL DEFAULT 1)",
+                "CREATE TABLE IF NOT EXISTS pending_signups (id BIGSERIAL PRIMARY KEY,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_id TEXT,created_at TEXT NOT NULL DEFAULT '')",
             ]
             for statement in statements:
                 conn.execute(statement)
@@ -315,6 +316,7 @@ def init_db():
             conn.execute("CREATE TABLE IF NOT EXISTS site_sync_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT UNIQUE NOT NULL, label TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, last_used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0)")
             conn.execute("CREATE TABLE IF NOT EXISTS member_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, member_id INTEGER NOT NULL, subscription_id TEXT, paypal_transaction_id TEXT UNIQUE, amount TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT 'USD', status TEXT NOT NULL DEFAULT 'verified', event_type TEXT NOT NULL DEFAULT '', period_start TEXT, period_end TEXT, source TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT '', FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE)")
             conn.execute("CREATE TABLE IF NOT EXISTS paypal_webhook_events (id INTEGER PRIMARY KEY AUTOINCREMENT, paypal_event_id TEXT UNIQUE NOT NULL, event_type TEXT NOT NULL DEFAULT '', subscription_id TEXT, received_at TEXT NOT NULL DEFAULT '', processed INTEGER NOT NULL DEFAULT 1)")
+            conn.execute("CREATE TABLE IF NOT EXISTS pending_signups (id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,subscription_id TEXT,created_at TEXT NOT NULL DEFAULT '')")
 
             def add_columns(table, columns):
                 existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}

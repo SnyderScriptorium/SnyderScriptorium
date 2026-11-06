@@ -30,7 +30,7 @@
 
     <div class="member-auth-panel{% if tab == 'signup' %} is-active{% endif %}" role="tabpanel" id="panel-signup" aria-labelledby="tab-signup" data-panel="signup">
       {% if error and tab == 'signup' %}<p class="member-auth-error" role="alert">{{ error }}</p>{% endif %}
-      <p class="member-auth-note">This account is for K. W. Snyder Writing. It is the account that will be connected to your membership subscription and your private writing-library access.</p>
+      <p class="member-auth-note">This account is for K. W. Snyder Writing. It is the account that will be connected to your membership subscription and your private writing-library access. Your account is created only after the $1 PayPal subscription is confirmed — signing up takes you to PayPal first, and no account exists until the payment clears.</p>
       <div id="membership-terms" style="margin:18px 0;padding:18px;border:1px solid var(--line,#C9B78F);border-radius:8px;background:rgba(255,253,248,.72);text-align:left;">
         <h3 style="margin-top:0;">Membership Terms &amp; Conditions</h3>
         <p class="member-auth-note">Please read these before creating your account.</p>
@@ -46,7 +46,7 @@
           <span>I agree to the <a href="#membership-terms">Membership Terms &amp; Conditions</a> above.</span>
         </label>
         <div class="member-auth-actions">
-          <button class="member-auth-button" type="submit">Create Account</button>
+          <button class="member-auth-button" type="submit">Continue to PayPal — $1/month</button>
         </div>
       </form>
     </div>
