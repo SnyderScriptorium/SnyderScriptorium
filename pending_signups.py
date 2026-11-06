@@ -69,6 +69,14 @@ def _delete_stale_pending(conn):
         )
     except Exception:
         logger.exception("Could not clean up stale pending signups")
+        # A failed statement leaves a PostgreSQL transaction aborted: every
+        # later statement (and the commit) would fail with
+        # InFailedSqlTransaction even though the table may be fine. Roll
+        # back so the signup itself can still proceed.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
 
 
 def member_has_paypal_history(member_id):
@@ -138,6 +146,15 @@ def prepare_signup(email, password_hash):
             (email, password_hash, old_sub, fmt_utc(utcnow())),
         )
         pending_id = cur.lastrowid
+        if not pending_id:
+            # PostgreSQL only reports lastrowid when the INSERT carries
+            # RETURNING id (see database.PostgresConnection). If that ever
+            # misses this table, look the row up by its unique email
+            # instead of sending the buyer back with no checkout started.
+            row = conn.execute(
+                "SELECT id FROM pending_signups WHERE email = ?", (email,)
+            ).fetchone()
+            pending_id = _row_dict(row)["id"] if row else None
         conn.commit()
         return pending_id
     finally:

@@ -747,6 +747,108 @@ def t19_postgres_sql_compatibility():
             check("t19 has %%s: %s" % sql[:60], "%s" in out, out)
 
 
+def t26_postgres_returning_id():
+    """Postgres must RETURNING id for every INSERT whose lastrowid the
+    code reads. Live signup bug, Nov 6 2026: pending_signups was missing
+    from the list, so on Postgres the INSERT returned lastrowid None and
+    the buyer bounced back to the membership page instead of reaching
+    PayPal (silent failure -- no 500, no checkout)."""
+    from database import PostgresConnection
+
+    class _StubCursor:
+        def __init__(self):
+            self.sql = None
+
+        def execute(self, sql, params=()):
+            self.sql = sql
+
+        def fetchone(self):
+            return {"id": 7}
+
+        @property
+        def rowcount(self):
+            return 1
+
+    class _StubConn:
+        def __init__(self):
+            self.cursor_obj = _StubCursor()
+
+        def cursor(self):
+            return self.cursor_obj
+
+    cases = {
+        "pending_signups": "INSERT INTO pending_signups(email, password_hash, subscription_id, created_at) VALUES (?, ?, ?, ?)",
+        "site_sync_tokens": "INSERT INTO site_sync_tokens(token_hash, label, created_at, revoked) VALUES (?, ?, ?, 0)",
+        "members": "INSERT INTO members(email, password_hash, subscription_status, date_created) VALUES (?, ?, 'pending_payment', ?)",
+    }
+    for table, sql in cases.items():
+        stub = _StubConn()
+        pg = PostgresConnection(stub)
+        cur = pg.execute(sql, ("a", "b", "c", "d"))
+        check("t26 RETURNING id: %s" % table, "RETURNING id" in (stub.cursor_obj.sql or ""), stub.cursor_obj.sql)
+        check("t26 lastrowid: %s" % table, cur.lastrowid == 7, str(cur.lastrowid))
+
+
+def t27_signup_recovers_without_lastrowid(client):
+    """Even if the driver reports lastrowid None (Postgres without
+    RETURNING id), prepare_signup finds the row by email and the buyer
+    still reaches PayPal."""
+    import pending_signups
+
+    class _CursorProxy:
+        def __init__(self, real, force_none):
+            self._real = real
+            self._force_none = force_none
+
+        @property
+        def lastrowid(self):
+            return None if self._force_none else self._real.lastrowid
+
+        @property
+        def rowcount(self):
+            return self._real.rowcount
+
+        def fetchone(self):
+            return self._real.fetchone()
+
+        def fetchall(self):
+            return self._real.fetchall()
+
+        def __iter__(self):
+            return iter(self._real)
+
+    class _ConnProxy:
+        def __init__(self, real):
+            self._real = real
+
+        def execute(self, sql, params=()):
+            force_none = sql.strip().upper().startswith("INSERT INTO PENDING_SIGNUPS")
+            return _CursorProxy(self._real.execute(sql, params), force_none)
+
+        def commit(self):
+            return self._real.commit()
+
+        def rollback(self):
+            return self._real.rollback()
+
+        def close(self):
+            return self._real.close()
+
+    real_get_db = pending_signups.get_db
+    pending_signups.get_db = lambda: _ConnProxy(real_get_db())
+    try:
+        clear_session(client)
+        r = client.post("/kwsnyderwriting/signup-subscribe",
+                        data={"email": "t27@example.com", "password": "password123", "terms_agreed": "yes"}, headers=UA)
+        check("t27 to paypal", r.status_code == 302 and "paypal.test/approve" in (r.headers.get("Location") or ""),
+              "status=%s loc=%s" % (r.status_code, r.headers.get("Location")))
+        check("t27 pending row", pending_exists("t27@example.com"))
+        with client.session_transaction() as sess:
+            check("t27 pending session", bool(sess.get("pending_signup_id")))
+    finally:
+        pending_signups.get_db = real_get_db
+
+
 TESTS = [
     t01_new_account_no_payment, t02_verified_initial_payment, t03_active_but_no_payment,
     t04_successful_renewal, t05_failed_renewal, t06_cancelled_with_time_left,
@@ -758,6 +860,7 @@ TESTS = [
     t20_signup_creates_no_account, t21_return_with_payment_creates_account,
     t22_return_without_payment_no_account, t23_plain_signup_creates_no_account,
     t24_never_activated_login_refused, t25_approved_then_closed_tab_no_double_charge,
+    t26_postgres_returning_id, t27_signup_recovers_without_lastrowid,
 ]
 
 
@@ -766,7 +869,7 @@ def main():
     passed, failed = 0, []
     for fn in TESTS:
         try:
-            if fn is t19_postgres_sql_compatibility:
+            if fn in (t19_postgres_sql_compatibility, t26_postgres_returning_id):
                 fn()
             else:
                 fn(client)

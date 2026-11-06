@@ -81,7 +81,7 @@ class PostgresConnection:
             upper.startswith("INSERT INTO")
             and any(f"INSERT INTO {table}" in upper for table in (
                 "DRAFTS", "PUBLISHED_POSTS", "MANUSCRIPT_BOOKS", "MANUSCRIPT_CHAPTERS", "MEMBERS", "SUBSCRIPTIONS", "FIND_US_EVENTS", "STORE_PRODUCTS",
-                "STORE_ORDERS", "STORE_IMAGES",
+                "STORE_ORDERS", "STORE_IMAGES", "PENDING_SIGNUPS", "SITE_SYNC_TOKENS",
             ))
             and "RETURNING" not in upper
         )
